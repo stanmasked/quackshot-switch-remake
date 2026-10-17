@@ -38,6 +38,12 @@ add_test(NAME measured_parallax_planes COMMAND qs_parallax_tests)
 add_executable(qs_camera_phase_tests tests/test_camera_phase.c)
 target_link_libraries(qs_camera_phase_tests PRIVATE qs_core qs_parallax)
 add_test(NAME camera_render_phase COMMAND qs_camera_phase_tests)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME camera_burst_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_camera_burst.py)
+endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)
     find_package(SDL2 QUIET)

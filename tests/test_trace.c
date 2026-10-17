@@ -20,8 +20,10 @@ int main(void) {
                         (155 << 16) | 77));
     CHECK(qs_trace_emit(&trace, 1070, 66, QS_TRACE_CAMERA_PHASE, 1, 0, 1,
                         (157 << 16) | 155));
+    CHECK(qs_trace_emit(&trace, 1080, 67, QS_TRACE_CAMERA_STEP, 1, 0, 1,
+                        (159 << 16) | 157));
     CHECK(!qs_trace_emit(&trace, 1000, 60, (QsTraceEvent)99, 0, 0, 0, 0));
-    for (index = 5; index < QS_TRACE_MAX_RECORDS; index++) {
+    for (index = 6; index < QS_TRACE_MAX_RECORDS; index++) {
         CHECK(qs_trace_emit(&trace, 1010 + index, 60 + index,
                             QS_TRACE_HEARTBEAT, 1, 2, 1, 0));
     }
@@ -45,6 +47,9 @@ int main(void) {
         if (total == 4) CHECK(event == QS_TRACE_CAMERA_PHASE &&
                               (detail >> 16) == 157 &&
                               (detail & 65535) == 155);
+        if (total == 5) CHECK(event == QS_TRACE_CAMERA_STEP &&
+                              (detail >> 16) == 159 &&
+                              (detail & 65535) == 157);
         ++total;
     }
     CHECK(total == QS_TRACE_MAX_RECORDS);

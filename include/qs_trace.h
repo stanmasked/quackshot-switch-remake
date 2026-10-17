@@ -19,7 +19,8 @@ typedef enum {
     QS_TRACE_FAILURE = 10,
     QS_TRACE_SMOKE = 11,
     QS_TRACE_PARALLAX = 12, /* rendered plane A and B px, packed */
-    QS_TRACE_CAMERA_PHASE = 13 /* simulation and render camera px, packed */
+    QS_TRACE_CAMERA_PHASE = 13, /* simulation and render camera px, packed */
+    QS_TRACE_CAMERA_STEP = 14 /* consecutive simulation ticks; current/presented */
 } QsTraceEvent;
 
 typedef struct {

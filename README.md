@@ -45,6 +45,9 @@ Stage 20 also keeps a separately latched one-simulation-tick presentation camera
 in the optional city mode. This is a testable timing **hypothesis**, not yet
 a confirmed recreation of the Mega Drive VDP buffer schedule. See
 [city camera render timing](docs/REFERENCE_CITY_CAMERA_PHASE_RU.md).
+Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
+verified against an independent host-side consecutive-tick oracle with
+negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
 The asset-free city's 2:1 hardware-observed parallax is checked with rendered SDL pixels and guest NRO telemetry. See [parallax baseline](docs/REFERENCE_CITY_PARALLAX_RU.md) and [reverse/odd-even regression](docs/REFERENCE_CITY_PARALLAX_REVERSAL_RU.md).
 
 ## Switch homebrew

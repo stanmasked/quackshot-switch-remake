@@ -154,6 +154,7 @@ python3 - "$out" <<'PY'
 import csv
 import pathlib
 import sys
+from tools.verify_camera_burst import verify_camera_bursts
 
 out = pathlib.Path(sys.argv[1])
 result = out / "result.txt"
@@ -206,6 +207,11 @@ try:
     ):
         result.write_text("INCONCLUSIVE: camera phase not bound to the rendered parallax samples\n")
         sys.exit(1)
+    burst_proof = verify_camera_bursts(records)
+    (out / "camera-burst-summary.txt").write_text(
+        "CAMERA_BURST_GUEST_PASS: " +
+        " ".join(f"{key}={value}" for key, value in sorted(burst_proof.items())) + "\n"
+    )
     phase_gaps = [current - presented for current, presented
                   in zip(camera_current, camera_presented)]
     if not any(gap > 0 for gap in phase_gaps) or not any(gap < 0 for gap in phase_gaps):
@@ -272,6 +278,7 @@ try:
         "last_motion_frame": int(samples[-1]["frame"]),
         "parallax_samples": len(parallax_rows),
         "camera_phase_samples": len(phase_rows),
+        **burst_proof,
         "camera_phase_positive_count": sum(g > 0 for g in phase_gaps),
         "camera_phase_negative_count": sum(g < 0 for g in phase_gaps),
         "camera_phase_max_gap_px": max(map(abs, phase_gaps)),

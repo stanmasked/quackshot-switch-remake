@@ -436,6 +436,11 @@ int main(int argc, char **argv) {
     int running = 1, i, shown_first_frame = 0;
     unsigned probe_frames = 0;
     unsigned next_heartbeat = 600;
+    /* Bounded 24-tick windows after the first forward/reverse camera move.
+     * They let the host verify actual consecutive simulation ticks, not
+     * merely two sparse samples from a long gameplay trace. */
+    int burst_forward_seen = 0, burst_reverse_seen = 0;
+    int burst_forward_left = 0, burst_reverse_left = 0;
     const char *trace_path = getenv("QS_TRACE_PATH");
     const char *motion_path = getenv("QS_MOTION_PATH");
     int smoke = 0, parallax_smoke = 0;
@@ -580,6 +585,7 @@ int main(int argc, char **argv) {
             QsInput in = read_input(pad);
             QsMode old_mode = game.mode;
             int old_stage = game.stage;
+            float camera_before = game.camera_x;
             unsigned input_before = qs_motion_input_bits(game.previous);
             unsigned input_after = qs_motion_input_bits(in);
             qs_step(&game, in);
@@ -591,6 +597,26 @@ int main(int argc, char **argv) {
             if (old_mode != game.mode || old_stage != game.stage)
                 runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL,
                               (int)game.physics_profile);
+            if (qs_parallax_is_reference_city(&game)) {
+                if (!burst_forward_seen && game.camera_x > camera_before) {
+                    burst_forward_seen = 1;
+                    burst_forward_left = 24;
+                } else if (burst_forward_seen && !burst_reverse_seen &&
+                           game.camera_x < camera_before) {
+                    burst_reverse_seen = 1;
+                    burst_reverse_left = 24;
+                }
+                if (burst_forward_left > 0 || burst_reverse_left > 0) {
+                    /* Both halves are the real guest camera state after
+                     * qs_step(). There is no host-generated surrogate. */
+                    runtime_event(&trace, &game, QS_TRACE_CAMERA_STEP,
+                                  pad != NULL,
+                                  (((int)game.camera_x) << 16) |
+                                  (int)game.render_camera_x);
+                    if (burst_forward_left > 0) --burst_forward_left;
+                    else --burst_reverse_left;
+                }
+            }
             if (qs_parallax_is_reference_city(&game) &&
                 ((game.frames % 15u) == 0)) {
                 QsParallax p = qs_parallax_offsets(&game);
