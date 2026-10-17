@@ -97,6 +97,29 @@ class PlayablePhysicsTests(unittest.TestCase):
             (450, 462, "START"), (680, 692, "START"), (850, 862, "START")])
         self.assertLess(max(end for _,end,_ in schedule), 2070)
 
+    def test_observed_private_reference_witness_is_self_consistent(self):
+        import json
+        root = Path(__file__).resolve().parents[1]
+        witness = json.loads((root / "research/observations/user_rom_first_playable_physics_2026-10-17.json").read_text())
+        profile = json.loads((root / "research/reference_profiles/user_rom_2026-10-17.json").read_text())
+        self.assertEqual(witness["source_rom_sha256"], profile["raw_sha256"])
+        self.assertEqual(witness["source_rom_bytes"], profile["rom_size_bytes"])
+        self.assertFalse(witness["original_rom_in_repository"])
+        self.assertFalse(witness["media_assets_in_repository"])
+        obs = witness["measurement"]
+        self.assertEqual(obs["independent_runs"], 6)
+        self.assertTrue(obs["baseline_replay_identical_ram"])
+        self.assertEqual(obs["coordinate_word_storage"], "16-bit little-endian within emulated RAM")
+        self.assertEqual(obs["coordinates"]["world_x_ram_offset"], "0xA2D0")
+        self.assertEqual(obs["coordinates"]["world_y_ram_offset"], "0xA2D4")
+        self.assertEqual(obs["right"]["x_at_frame_2160"] - obs["right"]["x_at_frame_2090"], 114)
+        self.assertAlmostEqual(obs["right"]["measured_steady_world_px_per_frame"], 114 / 70, places=5)
+        self.assertEqual(obs["jump"]["rise_world_px"], 65)
+        self.assertEqual(obs["jump"]["landing_frame"] - obs["measurement_frame_start"]
+                         if "measurement_frame_start" in obs else
+                         obs["jump"]["landing_frame"] - obs["control_frame"], 56)
+        self.assertEqual(obs["plunger"]["first_active_slot_frame"], obs["control_frame"] + 1)
+
     def test_missing_variant_refused(self):
         observed = synthetic_observations()
         del observed["fire"]
