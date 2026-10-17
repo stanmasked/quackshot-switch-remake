@@ -176,18 +176,18 @@ try:
     if len(parallax_rows) < 5 or any(
             int(r["mode"]) != 1 or int(r["stage"]) != 0
             for r in parallax_rows):
-        result.write_text("INCONCLUSIVE: guest did not sample the real reference-city parallax renderer\\n")
+        result.write_text("INCONCLUSIVE: guest did not sample the real reference-city parallax renderer\n")
         sys.exit(1)
     front_scroll = [int(r["detail"]) >> 16 for r in parallax_rows]
     distant_scroll = [int(r["detail"]) & 0xffff for r in parallax_rows]
     if not all(front // 2 == distant for front, distant in zip(front_scroll, distant_scroll)):
-        result.write_text("INCONCLUSIVE: guest A/B parallax scroll ratio differs from 2:1\\n")
+        result.write_text("INCONCLUSIVE: guest A/B parallax scroll ratio differs from 2:1\n")
         sys.exit(1)
     if max(front_scroll) < 10 or max(distant_scroll) < 5:
-        result.write_text("INCONCLUSIVE: actual camera did not scroll enough for independent two-plane proof\\n")
+        result.write_text("INCONCLUSIVE: actual camera did not scroll enough for independent two-plane proof\n")
         sys.exit(1)
     (out / "parallax-summary.txt").write_text(
-        "PARALLAX_GUEST_PASS: samples={} max_foreground={} max_background={} ratio=2:1\\n".format(
+        "PARALLAX_GUEST_PASS: samples={} max_foreground={} max_background={} ratio=2:1\n".format(
             len(front_scroll), max(front_scroll), max(distant_scroll)
         )
     )
