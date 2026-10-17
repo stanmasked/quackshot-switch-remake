@@ -126,7 +126,7 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -232,6 +232,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     changed = [i for i, (a, b) in enumerate(zip(previous_ram, ram)) if a != b]
                     ram_change_counts.update(changed)
                 previous_ram = ram
+                if checkpoint_sink is not None:
+                    # Only callers trusted with the local private ROM can see
+                    # transient RAM bytes. The public JSON never embeds them.
+                    checkpoint_sink(frame, ram)
                 checkpoints.append({
                     "frame": frame,
                     "input": active,
