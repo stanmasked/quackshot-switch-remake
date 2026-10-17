@@ -34,8 +34,18 @@ jobs:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
           SDL_RENDER_DRIVER: software
+          QS_TRACE_PATH: smoke-runtime.csv
         run: |
           ./build-desktop/quackshot-prototype --smoke | tee smoke.log
           grep -q '^SDL_SMOKE_PASS ' smoke.log
+          python3 - <<'PY'
+          import csv
+          with open("smoke-runtime.csv", newline="") as f:
+              records = list(csv.DictReader(f))
+          assert [int(row["event"]) for row in records] == [1,2,3,4,11,9], records
+          assert [int(row["seq"]) for row in records] == list(range(len(records)))
+          assert all(int(row["detail"]) == 0 for row in records), records
+          print("TRACE_SMOKE_PASS: ordered asset-free boot/render/shutdown events")
+          PY
       - name: Test
         run: ctest --test-dir build-desktop --output-on-failure
