@@ -125,13 +125,17 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule):
-    if metadata["need_fullpath"]:
-        raise ValueError("Core requires a filesystem path; refusing to expose private ROM path")
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None):
+    if metadata["need_fullpath"] and private_rom_path is None:
+        raise ValueError("Core requires a private local ROM path")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set()}
     backing = C.create_string_buffer(rom_data)
-    game = GameInfo(None, C.cast(backing, C.c_void_p), len(rom_data), None)
+    # Fullpath-only cores read the ROM privately from the caller's filesystem.
+    # This path is never printed, exported, or included in numerical evidence.
+    private_path_bytes = (str(private_rom_path.resolve()).encode("utf-8")
+                          if metadata["need_fullpath"] else None)
+    game = GameInfo(private_path_bytes, C.cast(backing, C.c_void_p), len(rom_data), None)
     tmp_dir = C.create_string_buffer(b"/tmp")
     keepalive = []
 
@@ -278,7 +282,8 @@ def main():
                 raise ValueError(f"--frames must be 1..{MAX_FRAMES}")
             schedule = parse_script(args.input)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
-            result = run_core(core, metadata, data, checksum, args.frames, schedule)
+            result = run_core(core, metadata, data, checksum, args.frames, schedule,
+                              private_rom_path=args.rom)
         output = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.output:
             args.output.write_text(output, encoding="utf-8")
