@@ -1,6 +1,7 @@
 #include "qs_game.h"
 #include "qs_trace.h"
 #include "qs_motion.h"
+#include "qs_parallax.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +44,8 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
 
 static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
     int row, col, i;
-    int cam = (int)game->camera_x;
+    QsParallax parallax = qs_parallax_offsets(game);
+    int cam = parallax.front_px;
     SDL_Color sky = game->stage == 0 ? color(133, 186, 212)
                   : game->stage == 1 ? color(216, 178, 139)
                   : color(106, 135, 166);
@@ -51,10 +53,26 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                     : game->stage == 1 ? color(142, 105, 74)
                     : color(83, 100, 128);
     rectangle(renderer, 0, 0, QS_VIEW_W, QS_VIEW_H, sky);
-    for (i = 0; i < 16; ++i) {
-        int x = i * 36 - (cam / 3) % 36;
-        rectangle(renderer, x, 110 + i % 4 * 12, 24, 130,
-                  color(83, 126, 150));
+    if (qs_parallax_is_reference_city(game)) {
+        /* Original procedural geometry: NO Mega Drive pixels or art.
+         * Far plane B at half scroll; middle plane A at full scroll. */
+        for (i = 0; i < QS_VIEW_W / 64 + 2; ++i) {
+            int x = i * 64 - (parallax.distant_px % 64);
+            rectangle(renderer, x, 58, 25, 20, color(83, 126, 150));
+            rectangle(renderer, x + 8, 48, 10, 10, color(83, 126, 150));
+        }
+        for (i = 0; i < QS_VIEW_W / 48 + 2; ++i) {
+            int x = i * 48 - (parallax.front_px % 48);
+            rectangle(renderer, x, 94, 18, 21, color(103, 98, 150));
+            rectangle(renderer, x + 5, 85, 8, 9, color(103, 98, 150));
+        }
+    } else {
+        /* Preserve the legacy 1/3-speed placeholder skyline. */
+        for (i = 0; i < 16; ++i) {
+            int x = i * 36 - (cam / 3) % 36;
+            rectangle(renderer, x, 110 + i % 4 * 12, 24, 130,
+                      color(83, 126, 150));
+        }
     }
     for (row = 0; row < QS_ROWS; ++row) {
         int first = cam / QS_TILE;
@@ -311,6 +329,57 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     return 0;
 }
 
+
+/* Verify the REAL SDL raster output of independent synthetic background
+ * strips: a +2 px camera shift must shift far B by 1 px and near A by 2.
+ * Nothing from the original game is used as reference imagery.
+ */
+static int parallax_smoke_capture(SDL_Renderer *renderer,
+                                  const QsGame *g, int y, uint32_t *row) {
+    SDL_Rect scan = {0, y, QS_VIEW_W, 1};
+    if (SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) != 0 ||
+        SDL_RenderClear(renderer) != 0) return 0;
+    render_stage(renderer, g);
+    return SDL_RenderReadPixels(renderer, &scan, SDL_PIXELFORMAT_ARGB8888,
+                                row, QS_VIEW_W * (int)sizeof(uint32_t)) == 0;
+}
+static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame game;
+    uint32_t far_a[QS_VIEW_W], far_b[QS_VIEW_W];
+    uint32_t mid_a[QS_VIEW_W], mid_b[QS_VIEW_W];
+    unsigned far_edges = 0, mid_edges = 0;
+    int x, row, col;
+    qs_init(&game);
+    game.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&game, 0);
+    for (row = 0; row < QS_ROWS; ++row)
+        for (col = 0; col < QS_COLUMNS; ++col)
+            game.terrain[row][col] = '.';
+    game.hero.y = 188;
+    game.camera_x = 40;
+    if (!parallax_smoke_capture(renderer, &game, 69, far_a) ||
+        !parallax_smoke_capture(renderer, &game, 103, mid_a))
+        return 1;
+    game.camera_x = 42;
+    if (!parallax_smoke_capture(renderer, &game, 69, far_b) ||
+        !parallax_smoke_capture(renderer, &game, 103, mid_b))
+        return 1;
+    for (x = 24; x < QS_VIEW_W - 26; ++x) {
+        if (far_b[x] != far_a[x + 1] || mid_b[x] != mid_a[x + 2]) {
+            fprintf(stderr, "PARALLAX_SDL_FAIL: wrong pixel offsets at x=%d\n", x);
+            return 1;
+        }
+        if (far_a[x] != far_a[x+1]) ++far_edges;
+        if (mid_a[x] != mid_a[x+1]) ++mid_edges;
+    }
+    if (far_edges < 5 || mid_edges < 5) {
+        fprintf(stderr, "PARALLAX_SDL_FAIL: layers not visually distinct\n");
+        return 1;
+    }
+    puts("PARALLAX_SDL_PASS: pixel B shift=1, pixel A shift=2, original-free geometry");
+    return 0;
+}
+
 /* Records only numeric state, never file paths, controllers' IDs or ROM data. */
 static void runtime_event(QsTrace *trace, const QsGame *g, QsTraceEvent event,
                           int controller_count, int detail) {
@@ -332,7 +401,7 @@ int main(int argc, char **argv) {
     unsigned next_heartbeat = 600;
     const char *trace_path = getenv("QS_TRACE_PATH");
     const char *motion_path = getenv("QS_MOTION_PATH");
-    int smoke = 0;
+    int smoke = 0, parallax_smoke = 0;
 #ifdef __SWITCH__
     /* Homebrew arguments may include the launch pathname: do not reject them. */
     (void)argc;
@@ -343,14 +412,15 @@ int main(int argc, char **argv) {
         motion_path = "sdmc:/switch/quackshot-motion.csv";
 #else
     smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
+    parallax_smoke = argc == 2 && strcmp(argv[1], "--parallax-smoke") == 0;
     if (argc == 3 && strcmp(argv[1], "--probe-frames") == 0) {
         char *end = NULL;
         long count = strtol(argv[2], &end, 10);
         if (argv[2][0] && end && *end == '\0' && count >= 1 && count <= 1200)
             probe_frames = (unsigned)count;
     }
-    if ((argc != 1 && !smoke && !probe_frames) || (argc == 3 && !probe_frames)) {
-        fprintf(stderr, "Usage: %s [--smoke | --probe-frames 1..1200]\n", argv[0]);
+    if ((argc != 1 && !smoke && !parallax_smoke && !probe_frames) || (argc == 3 && !probe_frames)) {
+        fprintf(stderr, "Usage: %s [--smoke | --parallax-smoke | --probe-frames 1..1200]\n", argv[0]);
         return 2;
     }
 #endif
@@ -416,6 +486,17 @@ int main(int argc, char **argv) {
         qs_trace_close(&trace);
         return 1;
     }
+    if (parallax_smoke) {
+        int result = run_parallax_sdl_smoke(renderer);
+        runtime_event(&trace, &game, QS_TRACE_SMOKE, 0, result);
+        runtime_event(&trace, &game, QS_TRACE_SHUTDOWN, 0, result);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        qs_motion_close(&motion);
+        qs_trace_close(&trace);
+        return result;
+    }
     if (smoke) {
         int result = run_sdl_smoke(renderer);
         runtime_event(&trace, &game, QS_TRACE_SMOKE, 0, result);
@@ -472,6 +553,13 @@ int main(int argc, char **argv) {
             if (old_mode != game.mode || old_stage != game.stage)
                 runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL,
                               (int)game.physics_profile);
+            if (qs_parallax_is_reference_city(&game) &&
+                ((game.frames % 15u) == 0)) {
+                QsParallax p = qs_parallax_offsets(&game);
+                /* Render offsets: high16 foreground, low16 distant. */
+                runtime_event(&trace, &game, QS_TRACE_PARALLAX, pad != NULL,
+                              (p.front_px << 16) | p.distant_px);
+            }
             if ((unsigned)game.frames >= next_heartbeat) {
                 runtime_event(&trace, &game, QS_TRACE_HEARTBEAT, pad != NULL, 0);
                 next_heartbeat += 600;
