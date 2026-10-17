@@ -395,14 +395,17 @@ static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
     if (!parallax_smoke_capture(renderer, &game, 69, far_return) ||
         !parallax_smoke_capture(renderer, &game, 103, near_return))
         return 1;
-    for (x = 24; x < QS_VIEW_W - 26; ++x) {
+    for (x = 0; x < QS_VIEW_W; ++x) {
         if (far_return[x] != far[0][x] ||
             near_return[x] != near[0][x]) {
             fprintf(stderr, "PARALLAX_SDL_FAIL: camera reversal drift at x=%d\n", x);
             return 1;
         }
-        if (far[0][x] != far[0][x+1]) ++far_edges;
-        if (near[0][x] != near[0][x+1]) ++near_edges;
+        /* Edge counts exclude clipped margins, unlike reverse equality. */
+        if (x >= 24 && x < QS_VIEW_W - 26) {
+            if (far[0][x] != far[0][x+1]) ++far_edges;
+            if (near[0][x] != near[0][x+1]) ++near_edges;
+        }
     }
     if (far_edges < 5 || near_edges < 5) {
         fprintf(stderr, "PARALLAX_SDL_FAIL: layers not visually distinct\n");
