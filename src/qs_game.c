@@ -318,16 +318,29 @@ void qs_step(QsGame *g, QsInput input) {
             update_enemies(g);
             update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
-            /*
-             * Screen glyph centre remained near x=134 in two private
-             * original-game frames despite +200 world px motion.
-             * This is an APPROXIMATE experimental tracking anchor,
-             * not the original Genesis HScroll register or camera code.
-             */
-            g->camera_x = clampf(
-                g->hero.x - (g->physics_profile == QS_PHYSICS_REFERENCE_CITY
-                                 ? 134.0f : 150.0f),
-                0, QS_COLUMNS * QS_TILE - QS_VIEW_W);
+            if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+                /*
+                 * Private first-city Genesis RAM: the 0x8524 scroll-state
+                 * candidate keeps worldX-scroll in [140,142] while tracking
+                 * rightward, but [122,124] while tracking leftward. Reversing
+                 * direction causes a real deadzone: world X retreats first.
+                 *
+                 * Use the two measured screen-space bands as an *approximate*
+                 * tracking envelope on our synthetic 400px viewport. This is
+                 * NOT original VDP HScroll code or the original camera logic.
+                 */
+                float screen_x = g->hero.x - g->camera_x;
+                if (screen_x > 141.0f)
+                    g->camera_x = g->hero.x - 141.0f;
+                else if (screen_x < 123.0f)
+                    g->camera_x = g->hero.x - 123.0f;
+                g->camera_x = clampf(g->camera_x, 0,
+                                     QS_COLUMNS * QS_TILE - QS_VIEW_W);
+            } else {
+                /* Bit-preserve prototype v0.1 camera behavior. */
+                g->camera_x = clampf(g->hero.x - 150, 0,
+                                     QS_COLUMNS * QS_TILE - QS_VIEW_W);
+            }
             if (g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
                 g->cleared[g->stage] = 1;
                 g->mode = QS_MAP;
