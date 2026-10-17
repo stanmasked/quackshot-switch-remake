@@ -48,7 +48,17 @@ ldd "$emulator" > "$out/emulator-libraries.txt" 2>&1 || true
 
 # CPU Vulkan rendering using Mesa Lavapipe, no GPU or display hardware.
 export LIBGL_ALWAYS_SOFTWARE=1
-export VK_ICD_FILENAMES="/usr/share/vulkan/icd.d/lvp_icd.x86_64.json"
+# Mesa 26.04 uses a different ICD file name than some older runners.
+# Discover the Lavapipe ICD rather than assuming its exact filename.
+driver="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name '*lvp*json' -print -quit 2>/dev/null || true)"
+if [ -n "$driver" ]; then
+    export VK_ICD_FILENAMES="$driver"
+    echo "vulkan_icd=$driver" >> "$out/metadata.txt"
+else
+    unset VK_ICD_FILENAMES
+    echo "vulkan_icd=auto (Lavapipe ICD not detected)" >> "$out/metadata.txt"
+fi
+echo "glibc_version=$(getconf GNU_LIBC_VERSION)" >> "$out/metadata.txt"
 export WGPU_BACKEND=vulkan
 export GDK_BACKEND=x11
 export NEXIUM_VIDEO_FFMPEG=0
