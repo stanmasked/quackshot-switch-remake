@@ -142,7 +142,8 @@ class GenesisCityObstacleTests(unittest.TestCase):
         data = json.loads(witness.read_text())
         self.assertEqual(data["reference_sha256"],
                          "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34")
-        self.assertEqual(data["metrics"]["wall"]["stopped_world_xy"]["x"],498)
+        self.assertEqual(data["wall"]["world_xy"][0],498)
+        self.assertEqual(data["wall"]["horizontal_velocity_zero_first_frame"],2344)
         self.assertNotIn("video_frames",data)
         self.assertNotIn("raw_ram",data)
 
