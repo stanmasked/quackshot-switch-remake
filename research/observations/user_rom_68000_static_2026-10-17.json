@@ -79,6 +79,114 @@
       "opcode_family": "TST.W",
       "absolute_address": "0xC00004",
       "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x000306",
+      "opcode_family": "MOVE.B_abs_to_Dn",
+      "absolute_address": "0xA10001",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x000316",
+      "opcode_family": "MOVE.L_imm_to_abs",
+      "absolute_address": "0xA14000",
+      "region": "tmss_security_register_window"
+    },
+    {
+      "rom_offset": "0x0003A6",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xC00011",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x0003B4",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xC00011",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x0003C2",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xC00011",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x0003D0",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xC00011",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x000516",
+      "opcode_family": "MOVE.W_Dn_to_abs",
+      "absolute_address": "0xC00000",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x001FC6",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xA10009",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x001FCC",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xA1000B",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x001FD2",
+      "opcode_family": "MOVE.B_Dn_to_abs",
+      "absolute_address": "0xA1000D",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x001FD8",
+      "opcode_family": "MOVE.B_imm_to_abs",
+      "absolute_address": "0xA10003",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x002114",
+      "opcode_family": "MOVE.B_imm_to_abs",
+      "absolute_address": "0xA10003",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x002120",
+      "opcode_family": "MOVE.B_abs_to_Dn",
+      "absolute_address": "0xA10003",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x00212C",
+      "opcode_family": "MOVE.B_imm_to_abs",
+      "absolute_address": "0xA10003",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x002138",
+      "opcode_family": "MOVE.B_abs_to_Dn",
+      "absolute_address": "0xA10003",
+      "region": "genesis_io_register_window"
+    },
+    {
+      "rom_offset": "0x00A876",
+      "opcode_family": "MOVE.W_imm_to_abs",
+      "absolute_address": "0xC00004",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x00AB24",
+      "opcode_family": "MOVE.L_Dn_to_abs",
+      "absolute_address": "0xC00004",
+      "region": "genesis_vdp_register_window"
+    },
+    {
+      "rom_offset": "0x06A986",
+      "opcode_family": "MOVE.W_imm_to_abs",
+      "absolute_address": "0xC00004",
+      "region": "genesis_vdp_register_window"
     }
   ],
   "caveat": "Word-aligned opcode matches may be embedded data. IRQ level 6 is commonly used for VBlank but vector content does not prove that an interrupt fired. No gameplay sampled."
