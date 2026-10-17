@@ -1,0 +1,15 @@
+name: Reference ROM metadata tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  metadata-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run synthetic ROM tests (no copyrighted assets)
+        run: python -m unittest discover -s tests -p 'test_rom_report.py' -v
