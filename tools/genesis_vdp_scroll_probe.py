@@ -52,6 +52,47 @@ def vdp_number_snapshot(hook, line):
     }
 
 
+
+def validate_actual_vdp_parallax(scenarios):
+    """Check every sampled *actual VRAM word* against RAM's render-buffer field."""
+    sampled = 0
+    for name, frames in scenarios.items():
+        for frame, observation in frames.items():
+            scroll = observation["render_buffer_RAM_0x852c"]
+            if not 0 <= scroll < 1024:
+                raise ValueError(f"Unsupported HScroll range in {name}, frame {frame}")
+            lines = observation["vdp_scanlines"]
+            if len(lines) != len(SCANLINES):
+                raise ValueError("Incomplete VDP scanline set")
+            for expected_line, row in zip(SCANLINES, lines):
+                if (
+                    row["line"] != expected_line or
+                    row["vdp_reg11"] != 0 or
+                    row["vdp_reg13"] != 52 or
+                    row["hscroll_vram_base_address"] != 0xD000 or
+                    row["hscroll_scanline_mask"] != 0 or
+                    row["plane_A_HScroll_11bit_signed"] != -scroll or
+                    row["plane_B_HScroll_11bit_signed"] != -(scroll//2)
+                ):
+                    raise ValueError(
+                        f"VDP hardware HScroll or parallax mismatch in {name} "
+                        f"frame {frame}, scanline {expected_line}"
+                    )
+            sampled += 1
+    return {
+        "verified_numeric_RAM_render_buffer": "0x852C",
+        "hscroll_vram_base": "0xD000",
+        "vdp_reg11": 0, "vdp_reg13": 52,
+        "hscroll_mode": "full-screen (same HScroll on each of four sampled lines)",
+        "plane_A_formula": "-RAM[0x852C] (signed 11-bit)",
+        "plane_B_formula": "-floor(RAM[0x852C] / 2) (signed 11-bit)",
+        "frames_verified": sampled,
+        "scanlines_verified_per_frame": len(SCANLINES),
+        "individual_vdp_plane_word_comparisons": sampled * len(SCANLINES) * 2,
+        "all_numeric_comparisons_exact": True,
+    }
+
+
 def run_study(core, metadata, rompath, rawrom, sha):
     hook = bind_vdp_probe(core)
     intro = parse_script(DEFAULT_ENTRY)
@@ -66,6 +107,7 @@ def run_study(core, metadata, rompath, rawrom, sha):
             numeric[frame] = {
                 "world_x": world_x,
                 "software_camera_RAM_candidate": cam,
+                "render_buffer_RAM_0x852c": int.from_bytes(private_ram[0x852C:0x852E], "little"),
                 "vdp_scanlines": [vdp_number_snapshot(hook, line)
                                   for line in SCANLINES],
             }
@@ -86,6 +128,7 @@ def run_study(core, metadata, rompath, rawrom, sha):
     }
     if callback_counts != checks:
         raise RuntimeError("Invalid controller injection counts for VDP comparison")
+    parallax_proof = validate_actual_vdp_parallax(results)
     keyframes = {
         label: [{"frame":f, **states[f]} for f in KEYFRAMES]
         for label,states in results.items() if label != "right_repeat"
@@ -104,6 +147,7 @@ def run_study(core, metadata, rompath, rawrom, sha):
         "vdp_table_words_are_read_directly_from_emulator_internal_VRAM":True,
         "controller_delta_reads":callback_counts,
         "identical_right_replays":True,
+        "verified_hardware_parallax":parallax_proof,
         "keyframes":keyframes,
         "limitations":[
             "Decoded HScroll registers/VRAM table words, not an original CPU instruction trace of when writes occurred",
