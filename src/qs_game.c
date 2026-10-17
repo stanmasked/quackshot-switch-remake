@@ -260,11 +260,11 @@ void qs_step(QsGame *g, QsInput input) {
             g->selected_stage = (g->selected_stage + 1) % QS_STAGE_COUNT;
         if (edge(input.select, g->previous.select) || edge(input.jump, g->previous.jump)) {
             /*
-             * A+B together on the city-map selector opts in to the research
+             * R+A together on the city-map selector opts in to the research
              * envelope. Normal A or B leaves the v0.1 prototype unchanged.
              */
             g->physics_profile =
-                g->selected_stage == 0 && input.select && input.jump
+                g->selected_stage == 0 && input.select && input.dash
                     ? QS_PHYSICS_REFERENCE_CITY : QS_PHYSICS_PROTOTYPE;
             qs_begin_stage(g, g->selected_stage);
         }
