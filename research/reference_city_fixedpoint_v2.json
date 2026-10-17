@@ -1,0 +1,51 @@
+{
+  "schema": "quackshot_city_fixedpoint_calibration_v2",
+  "status": "opt_in_synthetic_city_stage_only",
+  "source": {
+    "rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+    "source_witness": "research/observations/user_rom_fixedpoint_motion_2026-10-18.json",
+    "original_reference_pr": "https://github.com/stanmasked/quackshot-switch-remake/pull/1",
+    "orig_rom_embedded": false,
+    "orig_media_embedded": false
+  },
+  "activation": "On map, select CITY TEST, hold Nintendo R and press A; default movement unchanged",
+  "horizontal": {
+    "velocity_encoding": "measured signed integer plus unsigned fractional half word, 16.16",
+    "measured_acceleration_step": 0.15625,
+    "measured_max_walk_speed": 1.625,
+    "measured_braking_step": 0.15625,
+    "measured_original_x_after_21_ticks_integer": 87,
+    "measured_original_x_after_91_ticks_integer": 201,
+    "measured_original_x_after_8tick_tap_plus_8tick_coast_integer": 71,
+    "implementation": "float vx clamped using measured discrete step; existing synthetic tiles"
+  },
+  "jump": {
+    "measured_original_takeoff_velocity": -2.9296875,
+    "measured_original_gravity_step": 0.1953125,
+    "measured_max_constant_velocity_held_frames": 15,
+    "short_hold_one_frame": {
+      "measured_rise_pixels": 24,
+      "landing_elapsed_frame": 30
+    },
+    "long_hold_fifty_frames": {
+      "measured_rise_pixels": 65,
+      "landing_elapsed_frame": 56
+    },
+    "implementation": "float vertical velocity, held plateau then measured gravity; opt-in tile-top snap for synthetic collision"
+  },
+  "shot": {
+    "one_frame_activation_delay": true,
+    "original_geometry_still_not_verified": true
+  },
+  "unmeasured": [
+    "R dash (left as experimental, without extending unsupported original reference)",
+    "non-city stages",
+    "hitboxes and stage terrain",
+    "world and camera origin",
+    "enemy collision",
+    "red anchors",
+    "damage and respawn",
+    "physical Nintendo Switch hardware"
+  ],
+  "regression_status": "Separate CTest validates walking anchors, ramp, brake, long/short jump, plunger, default behavior, and determinism"
+}
