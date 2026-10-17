@@ -1,5 +1,6 @@
 #include "qs_game.h"
 #include "qs_trace.h"
+#include "qs_motion.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -309,12 +310,14 @@ int main(int argc, char **argv) {
     SDL_GameController *pad = NULL;
     QsGame game;
     QsTrace trace = {0};
+    QsMotion motion = {0};
     Uint64 previous, frequency;
     double accumulator = 0.0;
     int running = 1, i, shown_first_frame = 0;
     unsigned probe_frames = 0;
     unsigned next_heartbeat = 600;
     const char *trace_path = getenv("QS_TRACE_PATH");
+    const char *motion_path = getenv("QS_MOTION_PATH");
     int smoke = 0;
 #ifdef __SWITCH__
     /* Homebrew arguments may include the launch pathname: do not reject them. */
@@ -322,6 +325,8 @@ int main(int argc, char **argv) {
     (void)argv;
     if (!trace_path || !*trace_path)
         trace_path = "sdmc:/switch/quackshot-runtime.csv";
+    if (!motion_path || !*motion_path)
+        motion_path = "sdmc:/switch/quackshot-motion.csv";
 #else
     smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
     if (argc == 3 && strcmp(argv[1], "--probe-frames") == 0) {
@@ -342,11 +347,14 @@ int main(int argc, char **argv) {
         else
             runtime_event(&trace, &game, QS_TRACE_BOOT, 0, 0);
     }
+    if (motion_path && *motion_path && !qs_motion_open(&motion, motion_path))
+        fprintf(stderr, "QuackShot: numeric motion CSV unavailable (non-fatal)\n");
     /* Hidden CI windows cannot receive controller events unless enabled. */
     if (smoke) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 1);
+        qs_motion_close(&motion);
         qs_trace_close(&trace);
         return 1;
     }
@@ -359,6 +367,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 2);
         SDL_Quit();
+        qs_motion_close(&motion);
         qs_trace_close(&trace);
         return 1;
     }
@@ -372,6 +381,7 @@ int main(int argc, char **argv) {
         runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 3);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_motion_close(&motion);
         qs_trace_close(&trace);
         return 1;
     }
@@ -388,6 +398,7 @@ int main(int argc, char **argv) {
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_motion_close(&motion);
         qs_trace_close(&trace);
         return 1;
     }
@@ -398,6 +409,7 @@ int main(int argc, char **argv) {
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_motion_close(&motion);
         qs_trace_close(&trace);
         return result;
     }
@@ -432,10 +444,17 @@ int main(int argc, char **argv) {
             }
         }
         while (accumulator >= 1.0 / 60.0) {
+            QsInput in = read_input(pad);
             QsMode old_mode = game.mode;
             int old_stage = game.stage;
-            qs_step(&game, read_input(pad));
+            unsigned input_before = qs_motion_input_bits(game.previous);
+            unsigned input_after = qs_motion_input_bits(in);
+            qs_step(&game, in);
             accumulator -= 1.0 / 60.0;
+            if (game.mode == QS_STAGE &&
+                ((game.frames % 5) == 0 || old_mode != game.mode ||
+                 input_before != input_after))
+                (void)qs_motion_emit(&motion, &game, (unsigned)SDL_GetTicks(), in);
             if (old_mode != game.mode || old_stage != game.stage)
                 runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL, 0);
             if ((unsigned)game.frames >= next_heartbeat) {
@@ -459,6 +478,7 @@ int main(int argc, char **argv) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    qs_motion_close(&motion);
     qs_trace_close(&trace);
     return 0;
 }
