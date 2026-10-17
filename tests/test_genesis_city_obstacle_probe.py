@@ -31,6 +31,8 @@ def synthetic_trials():
                 x = min(498, 347 + int((f-2250)*1.625))
                 y = 176 if f < 2281 else (177 if f < 2297 else 208)
                 vx = int(x < 498)
+                if f == 2343:
+                    x, vx = 497, 1  # contact resolved at frame 2344
                 if name == "near_wall_jump":
                     if f >= 2310:
                         x = 445+int((f-2310)*1.62)
