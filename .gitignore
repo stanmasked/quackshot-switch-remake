@@ -4,7 +4,6 @@
 /private/
 /assets/original/
 *.gen
-*.md
 *.smd
 *.32x
 *.cue
