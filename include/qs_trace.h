@@ -17,7 +17,8 @@ typedef enum {
     QS_TRACE_HEARTBEAT = 8,
     QS_TRACE_SHUTDOWN = 9,
     QS_TRACE_FAILURE = 10,
-    QS_TRACE_SMOKE = 11
+    QS_TRACE_SMOKE = 11,
+    QS_TRACE_PARALLAX = 12 /* foreground and distant px packed in detail */
 } QsTraceEvent;
 
 typedef struct {
