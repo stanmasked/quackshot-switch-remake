@@ -25,13 +25,234 @@ jobs:
           git clone --depth 30 https://github.com/libretro/Genesis-Plus-GX.git emulator-core
           git -C emulator-core checkout --detach "$UPSTREAM_SHA"
           test "$(git -C emulator-core rev-parse HEAD)" = "$UPSTREAM_SHA"
+      - name: Enable numeric-only VDP HScroll inspection in ROM-free research core
+        run: |
+          cat tools/genesis_vdp_hscroll_export.c >> emulator-core/libretro/libretro.c
+          grep -q 'quackshot_research_vdp_hscroll' emulator-core/libretro/libretro.c
       - name: Compile Linux x86-64 libretro core
         run: |
           make -C emulator-core -f Makefile.libretro -j2 platform=unix HAVE_CHD=0 HAVE_CDROM=0
           test -s emulator-core/genesis_plus_gx_libretro.so
           file emulator-core/genesis_plus_gx_libretro.so
           ldd emulator-core/genesis_plus_gx_libretro.so
-          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' retro_run$'
+          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' retro_run
+          sha256sum emulator-core/genesis_plus_gx_libretro.so > emulator-sha256.txt
+      - name: Check Python libretro frontend without proprietary game
+        run: |
+          python3 -m unittest discover -s tests -p 'test_genesis*.py' -v
+          python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so --core-info
+      - name: Emulate a synthetic noncommercial-content-free 68000 loop
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI TEST ONLY NO GAME ASSETS'.ljust(48, b' ')
+          data[0x150:0x180] = b'INDEPENDENT SYNTHETIC CPU LOOP'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x202] = bytes.fromhex('60fe')
+          data[0x18e:0x190] = (0x60fe).to_bytes(2, 'big')
+          Path('ci-only-synthetic.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --frames 90 --video-stride 1 --input 10:20:START --compare-to-idle \
+            --output ci-only-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('ci-only-observation.json').read_text())
+          assert r['frames_requested'] == 90, r
+          assert r['frames_video_callbacks'] == 90, r
+          assert r['input_polls'] == 90, r
+          assert r['input_nonzero_reads'] >= 10, r
+          assert r['system_ram_size'] == 65536, r
+          assert r['video_stride'] == 1 and len(r['video_checkpoints']) == 90, r
+          assert r['comparison_to_idle']['checkpoints_compared'] == 90, r
+          assert r['comparison_to_idle']['core_input_nonzero_reads_idle'] == 0, r
+          PY
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_input_causality import compare_checkpoints
+          sample = {0: "AAAA", 1: "BBBB", 2: "CCCC"}
+          difference = compare_checkpoints(sample, {0: "AAAA", 1: "EEEE", 2: "CCCC"})
+          assert difference["first_changed_frame"] == 1
+          assert difference["changed_count"] == 1
+          print("GENESIS_CAUSALITY_SYNTHETIC_PASS")
+
+          print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
+          PY
+          python3 tools/genesis_input_causality.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --expected-sha256 "$(sha256sum ci-only-synthetic.gen | cut -d' ' -f1)" \
+            --frames 90 --base "" --variants "start_10@10:20:START" --stride 1 \
+            --output ci-only-causal.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          witness = json.loads(Path('ci-only-causal.json').read_text())
+          assert witness["baseline"]["repeat_identical"], witness
+          assert witness["baseline"]["video_checkpoints"] == 90, witness
+          actual = witness["variants"][0]
+          assert actual["additional_nonzero_reads"] == 10, actual
+          assert actual["video_crc_differences"]["changed_count"] == 0, actual
+          assert actual["work_ram_crc_differences"]["changed_count"] == 0, actual
+          print("GENESIS_REAL_CI_CAUSALITY_PASS: real core, synthetic ROM, repeatable frames & RAM")
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_libretro_probe import safe_rom, setup_core, run_core
+          from genesis_playable_physics import decode_player_state
+          core, meta = setup_core(Path('emulator-core/genesis_plus_gx_libretro.so'))
+          path = Path('ci-only-synthetic.gen')
+          data, sha = safe_rom(path, None)
+          observed = []
+          def numeric_window(frame, private_ram):
+              state = decode_player_state(private_ram)
+              observed.append((frame, state["x"], state["y"]))
+          result = run_core(core, meta, data, sha, 90, [], private_rom_path=path,
+                            checkpoint_sink=numeric_window, ram_window=(10, 80))
+          assert result['frames_video_callbacks'] == 90, result
+          assert len([f for f,x,y in observed if 10 <= f < 80]) == 70, observed
+          assert all(0 <= x <= 65535 and 0 <= y <= 65535 for _,x,y in observed)
+          print('GENESIS_DENSE_RAM_PROBE_SYNTHETIC_PASS: per-frame window through real core')
+          PY
+          rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
+      - name: Package licensed emulator only
+        run: |
+          mkdir -p rom-free-emulator
+          cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py rom-free-emulator/
+          cp emulator-sha256.txt rom-free-emulator/
+          printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
+            'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
+            'Binary compiled on Ubuntu 24.04, x86-64.' \
+            'For private local inspection only. No game ROM or assets included.' \
+            'Genesis Plus GX license: non-commercial redistribution; consult LICENSE.txt.' \
+            > rom-free-emulator/BUILD_PROVENANCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-plus-gx-rom-free-linux-x64
+          path: rom-free-emulator/
+          retention-days: 7
+          if-no-files-found: error
+
+          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' quackshot_research_vdp_hscroll
+          sha256sum emulator-core/genesis_plus_gx_libretro.so > emulator-sha256.txt
+      - name: Check Python libretro frontend without proprietary game
+        run: |
+          python3 -m unittest discover -s tests -p 'test_genesis*.py' -v
+          python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so --core-info
+      - name: Emulate a synthetic noncommercial-content-free 68000 loop
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI TEST ONLY NO GAME ASSETS'.ljust(48, b' ')
+          data[0x150:0x180] = b'INDEPENDENT SYNTHETIC CPU LOOP'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x202] = bytes.fromhex('60fe')
+          data[0x18e:0x190] = (0x60fe).to_bytes(2, 'big')
+          Path('ci-only-synthetic.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --frames 90 --video-stride 1 --input 10:20:START --compare-to-idle \
+            --output ci-only-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('ci-only-observation.json').read_text())
+          assert r['frames_requested'] == 90, r
+          assert r['frames_video_callbacks'] == 90, r
+          assert r['input_polls'] == 90, r
+          assert r['input_nonzero_reads'] >= 10, r
+          assert r['system_ram_size'] == 65536, r
+          assert r['video_stride'] == 1 and len(r['video_checkpoints']) == 90, r
+          assert r['comparison_to_idle']['checkpoints_compared'] == 90, r
+          assert r['comparison_to_idle']['core_input_nonzero_reads_idle'] == 0, r
+          PY
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_input_causality import compare_checkpoints
+          sample = {0: "AAAA", 1: "BBBB", 2: "CCCC"}
+          difference = compare_checkpoints(sample, {0: "AAAA", 1: "EEEE", 2: "CCCC"})
+          assert difference["first_changed_frame"] == 1
+          assert difference["changed_count"] == 1
+          print("GENESIS_CAUSALITY_SYNTHETIC_PASS")
+
+          print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
+          PY
+          python3 tools/genesis_input_causality.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --expected-sha256 "$(sha256sum ci-only-synthetic.gen | cut -d' ' -f1)" \
+            --frames 90 --base "" --variants "start_10@10:20:START" --stride 1 \
+            --output ci-only-causal.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          witness = json.loads(Path('ci-only-causal.json').read_text())
+          assert witness["baseline"]["repeat_identical"], witness
+          assert witness["baseline"]["video_checkpoints"] == 90, witness
+          actual = witness["variants"][0]
+          assert actual["additional_nonzero_reads"] == 10, actual
+          assert actual["video_crc_differences"]["changed_count"] == 0, actual
+          assert actual["work_ram_crc_differences"]["changed_count"] == 0, actual
+          print("GENESIS_REAL_CI_CAUSALITY_PASS: real core, synthetic ROM, repeatable frames & RAM")
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_libretro_probe import safe_rom, setup_core, run_core
+          from genesis_playable_physics import decode_player_state
+          core, meta = setup_core(Path('emulator-core/genesis_plus_gx_libretro.so'))
+          path = Path('ci-only-synthetic.gen')
+          data, sha = safe_rom(path, None)
+          observed = []
+          def numeric_window(frame, private_ram):
+              state = decode_player_state(private_ram)
+              observed.append((frame, state["x"], state["y"]))
+          result = run_core(core, meta, data, sha, 90, [], private_rom_path=path,
+                            checkpoint_sink=numeric_window, ram_window=(10, 80))
+          assert result['frames_video_callbacks'] == 90, result
+          assert len([f for f,x,y in observed if 10 <= f < 80]) == 70, observed
+          assert all(0 <= x <= 65535 and 0 <= y <= 65535 for _,x,y in observed)
+          print('GENESIS_DENSE_RAM_PROBE_SYNTHETIC_PASS: per-frame window through real core')
+          PY
+          rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
+      - name: Package licensed emulator only
+        run: |
+          mkdir -p rom-free-emulator
+          cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py rom-free-emulator/
+          cp emulator-sha256.txt rom-free-emulator/
+          printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
+            'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
+            'Binary compiled on Ubuntu 24.04, x86-64.' \
+            'For private local inspection only. No game ROM or assets included.' \
+            'Genesis Plus GX license: non-commercial redistribution; consult LICENSE.txt.' \
+            > rom-free-emulator/BUILD_PROVENANCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-plus-gx-rom-free-linux-x64
+          path: rom-free-emulator/
+          retention-days: 7
+          if-no-files-found: error
+
           sha256sum emulator-core/genesis_plus_gx_libretro.so > emulator-sha256.txt
       - name: Check Python libretro frontend without proprietary game
         run: |
