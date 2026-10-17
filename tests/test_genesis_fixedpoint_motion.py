@@ -15,6 +15,7 @@ def independently_derived_synthetic_physics():
         x, y = 61 * 65536, 176 * 65536
         vx = vy = 0
         jump_age = 0
+        pending_ground_contact = False
         result = {}
         for f in range(m.WINDOW_START, m.WINDOW_END):
             step = f - m.FRAME_START
@@ -31,13 +32,22 @@ def independently_derived_synthetic_physics():
                 if step == 0 and (jumping or holding):
                     vy = -192000
                     jump_age = 0
-                if vy != 0 or y < 176*65536:
+                if pending_ground_contact:
+                    # A penetrated collision is resolved on the next frame,
+                    # unlike an exact-height contact. This reproduces the
+                    # independent original game's long-vs-tap landing frame.
+                    y, vy = 176*65536, 0
+                    pending_ground_contact = False
+                elif vy != 0 or y < 176*65536:
                     if not ((jumping or holding) and jump_age < 15):
                         vy += 12800
                     jump_age += 1
                     y += vy
                     if y >= 176*65536:
-                        y, vy = 176*65536, 0
+                        if y == 176*65536:
+                            vy = 0
+                        else:
+                            pending_ground_contact = True
             result[f] = {
                 "x": x // 65536,
                 "x_sub": x % 65536,
