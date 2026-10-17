@@ -312,6 +312,7 @@ int main(int argc, char **argv) {
     Uint64 previous, frequency;
     double accumulator = 0.0;
     int running = 1, i, shown_first_frame = 0;
+    unsigned probe_frames = 0;
     unsigned next_heartbeat = 600;
     const char *trace_path = getenv("QS_TRACE_PATH");
     int smoke = 0;
@@ -323,8 +324,14 @@ int main(int argc, char **argv) {
         trace_path = "sdmc:/switch/quackshot-runtime.csv";
 #else
     smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
-    if (argc != 1 && !smoke) {
-        fprintf(stderr, "Usage: %s [--smoke]\n", argv[0]);
+    if (argc == 3 && strcmp(argv[1], "--probe-frames") == 0) {
+        char *end = NULL;
+        long count = strtol(argv[2], &end, 10);
+        if (argv[2][0] && end && *end == '\0' && count >= 1 && count <= 1200)
+            probe_frames = (unsigned)count;
+    }
+    if ((argc != 1 && !smoke && !probe_frames) || (argc == 3 && !probe_frames)) {
+        fprintf(stderr, "Usage: %s [--smoke | --probe-frames 1..1200]\n", argv[0]);
         return 2;
     }
 #endif
@@ -443,6 +450,8 @@ int main(int argc, char **argv) {
             shown_first_frame = 1;
             runtime_event(&trace, &game, QS_TRACE_FIRST_FRAME, pad != NULL, 0);
         }
+        if (probe_frames && (unsigned)game.frames >= probe_frames)
+            running = 0;
         SDL_Delay(1);
     }
     runtime_event(&trace, &game, QS_TRACE_SHUTDOWN, pad != NULL, 0);
