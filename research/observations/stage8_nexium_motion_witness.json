@@ -1,0 +1,38 @@
+{
+  "schema": "quackshot_stage8_emulator_motion_witness_v1",
+  "type": "guest-produced numeric motion evidence, synthetic test stage",
+  "date": "2026-10-17",
+  "source_commit": "70539d49d440fb2eda40ec22572d99e4a8d173bb",
+  "workflow_run": "https://github.com/stanmasked/quackshot-switch-remake/actions/runs/39056856676",
+  "evidence_artifact": "https://github.com/stanmasked/quackshot-switch-remake/actions/runs/39056856676/artifacts/12110215497",
+  "emulated_guest": "Nintendo Switch AArch64 homebrew NRO",
+  "emulator": "NeXium Linux nightly on Ubuntu 26.04 (software Vulkan)",
+  "emulator_sha256": "29250067b941f84b85a4fc2ec1357eeba33b31334b715c3b33545c38146eed76",
+  "guest_nro_sha256": "fd53aeee29d8573910c79bc3e8ed73958499bdbc0b5e2b03fe9f7faa6b0e8331",
+  "guest_nro_bytes": 6742072,
+  "guest_events": {
+    "first_frame": true,
+    "enter_stage_frame": 234,
+    "return_to_map_frame": 605,
+    "heartbeat_last_frame": 2400,
+    "controller_connected": true
+  },
+  "guest_motion": {
+    "samples": 80,
+    "first_sample_frame": 234,
+    "last_sample_frame": 600,
+    "input_right_observed": true,
+    "input_jump_observed": true,
+    "input_fire_observed": true,
+    "horizontal_distance_px": 117.799,
+    "jump_rise_px": 76.801,
+    "max_active_shots": 1
+  },
+  "boundaries": {
+    "original_game_physics_measured": false,
+    "real_switch_hardware_tested": false,
+    "media_assets_embedded": false,
+    "rom_embedded": false
+  },
+  "original_rom_sha256_reference_only": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34"
+}
