@@ -1,0 +1,32 @@
+name: Portable gameplay core
+on:
+  push:
+  pull_request:
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-desktop -DQS_BUILD_DESKTOP=OFF -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      - name: Build
+        run: cmake --build build-desktop --parallel
+      - name: Test
+        run: ctest --test-dir build-desktop --output-on-failure
+  sdl-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
+      - name: Configure
+        run: cmake -S . -B build-desktop -DQS_BUILD_DESKTOP=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-desktop --parallel
+      - name: Verify desktop executable
+        run: test -x build-desktop/quackshot-prototype
+      - name: Test
+        run: ctest --test-dir build-desktop --output-on-failure
