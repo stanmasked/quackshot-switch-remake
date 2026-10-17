@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from genesis_camera_state_probe import SCENARIOS, START, END_EXCLUSIVE
+from genesis_camera_phase_model import evaluate_camera_phase
 from genesis_libretro_probe import parse_script, run_core, safe_rom, setup_core
 from genesis_playable_physics import DEFAULT_ENTRY
 
@@ -129,6 +130,8 @@ def run_study(core, metadata, rompath, rawrom, sha):
     if callback_counts != checks:
         raise RuntimeError("Invalid controller injection counts for VDP comparison")
     parallax_proof = validate_actual_vdp_parallax(results)
+    # Compare private consecutive RAM/VDP camera samples; export aggregates only.
+    phase_scores = evaluate_camera_phase(results)
     keyframes = {
         label: [{"frame":f, **states[f]} for f in KEYFRAMES]
         for label,states in results.items() if label != "right_repeat"
@@ -148,6 +151,7 @@ def run_study(core, metadata, rompath, rawrom, sha):
         "controller_delta_reads":callback_counts,
         "identical_right_replays":True,
         "verified_hardware_parallax":parallax_proof,
+        "camera_vdp_phase_hypothesis_scores":phase_scores,
         "keyframes":keyframes,
         "limitations":[
             "Decoded HScroll registers/VRAM table words, not an original CPU instruction trace of when writes occurred",
