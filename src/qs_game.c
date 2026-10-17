@@ -5,18 +5,19 @@
 static float clampf(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
 
 /*
- * Experimental first-city physics ENVELOPE fitted to private, numeric-only
- * Genesis Plus GX observations: X +26 after 21 input steps, +140 after 91,
- * world-space jump rise 65 with nominal 56-step flight.
- *
- * Exponential lateral easing and parabolic gravity are MODEL CHOICES;
- * they are not recovered Motorola 68000 code or proven game coefficients.
- * Never use these constants for the normal prototype profile.
+ * Original first-city controlled ROM run (private Genesis Plus GX):
+ * 16.16 stored RAM velocity changes by exactly 0x2800/65536 per step
+ * to +/-0x1A000/65536, and jump velocity starts at -0x2EE00/65536.
+ * For max 15 jump-held frames, vertical velocity stays constant;
+ * after release or 15 steps, it increments 0x3200/65536 each frame.
+ * These parameters are measured at ONE original city spawn, not
+ * copied original instructions or proven universal terrain physics.
  */
-#define QS_CITY_TARGET_WALK 1.6315692f
-#define QS_CITY_WALK_RESPONSE 0.161471675f
-#define QS_CITY_GRAVITY (65.0f / 392.0f)
-#define QS_CITY_JUMP_IMPULSE (-28.5f * QS_CITY_GRAVITY)
+#define QS_CITY_ACCEL (10240.0f / 65536.0f)
+#define QS_CITY_MAX_WALK (106496.0f / 65536.0f)
+#define QS_CITY_GRAVITY (12800.0f / 65536.0f)
+#define QS_CITY_JUMP_IMPULSE (-192000.0f / 65536.0f)
+#define QS_CITY_MAX_JUMP_HOLD 15
 
 static int edge(int now, int previous) { return now && !previous; }
 static float absolute(float n) { return n < 0 ? -n : n; }
@@ -73,6 +74,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     memset(g->enemies, 0, sizeof(g->enemies));
     memset(g->shots, 0, sizeof(g->shots));
     g->pending_reference_shot = 0;
+    g->reference_jump_steps = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -199,13 +201,15 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     float dx = 0, dy, segment, trial;
     int i, slices;
     if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
-        float requested = 0;
-        if (in.left != in.right) {
-            h->facing = in.left ? -1 : 1;
-            requested = h->facing * (in.dash ? 3.1f : QS_CITY_TARGET_WALK);
-        }
-        h->vx += (requested - h->vx) * QS_CITY_WALK_RESPONSE;
-        if (requested == 0 && absolute(h->vx) < 0.0001f) h->vx = 0;
+        int dir = (in.right && !in.left) ? 1 : ((in.left && !in.right) ? -1 : 0);
+        float requested = dir * QS_CITY_MAX_WALK;
+        if (dir) h->facing = dir;
+        /* Measured symmetric fixed-point ramp and release braking.
+         * Dash is not calibrated and must NOT silently change this profile. */
+        if (h->vx < requested)
+            h->vx = fminf(h->vx + QS_CITY_ACCEL, requested);
+        else if (h->vx > requested)
+            h->vx = fmaxf(h->vx - QS_CITY_ACCEL, requested);
         dx = h->vx;
     } else if (in.left != in.right) {
         h->facing = in.left ? -1 : 1;
@@ -214,6 +218,8 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     if (jump_pressed && h->grounded) {
         h->vy = g->physics_profile == QS_PHYSICS_REFERENCE_CITY
                     ? QS_CITY_JUMP_IMPULSE : -7.2f;
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+            g->reference_jump_steps = 0;
         h->grounded = 0;
     }
     slices = (int)ceilf(absolute(dx));
@@ -223,8 +229,15 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
         if (hits_tiles(g, trial, h->y, 12, 20)) break;
         h->x = trial;
     }
-    h->vy = clampf(h->vy + (g->physics_profile == QS_PHYSICS_REFERENCE_CITY
-                                ? QS_CITY_GRAVITY : 0.32f), -8.0f, 7.5f);
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+        if (!(in.jump && h->vy < 0 &&
+              g->reference_jump_steps < QS_CITY_MAX_JUMP_HOLD))
+            h->vy = clampf(h->vy + QS_CITY_GRAVITY, -8.0f, 7.5f);
+        if (g->reference_jump_steps < QS_CITY_MAX_JUMP_HOLD + 1)
+            ++g->reference_jump_steps;
+    } else {
+        h->vy = clampf(h->vy + 0.32f, -8.0f, 7.5f);
+    }
     dy = h->vy;
     slices = (int)ceilf(absolute(dy));
     segment = slices ? dy / slices : 0;
@@ -249,6 +262,8 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
         }
         h->y = trial;
     }
+    if (h->grounded && g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+        g->reference_jump_steps = 0;
     if (h->y > QS_VIEW_H + 22) respawn(g);
 }
 
