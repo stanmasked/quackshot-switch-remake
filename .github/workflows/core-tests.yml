@@ -48,6 +48,23 @@ jobs:
           assert int(records[3]["detail"]) in (0, 1), records
           print("TRACE_SMOKE_PASS: ordered asset-free boot/render/shutdown events")
           PY
+      - name: Verify actual two-plane SDL rendered pixel offsets (2:1)
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+          QS_TRACE_PATH: parallax-runtime.csv
+        run: |
+          ./build-desktop/quackshot-prototype --parallax-smoke | tee parallax-pixels.log
+          grep -q '^PARALLAX_SDL_PASS:' parallax-pixels.log
+          python3 - <<'PY'
+          import csv
+          with open("parallax-runtime.csv", newline="") as fh:
+              rows=list(csv.DictReader(fh))
+          assert [int(r["event"]) for r in rows] == [1,2,3,4,11,9], rows
+          assert int(rows[4]["detail"]) == 0, rows
+          print("PARALLAX_TRACE_PASS: ordered guest-compatible SDL render proof")
+          PY
       - name: Verify actual first frame and 600-frame heartbeat
         env:
           SDL_VIDEODRIVER: dummy
