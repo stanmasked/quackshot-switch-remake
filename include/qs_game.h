@@ -36,6 +36,7 @@ typedef struct {
     QsPhysicsProfile physics_profile;
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
+    int pending_reference_shot; /* delayed one step only in opt-in city profile */
     QsWeapon weapon;
     char terrain[QS_ROWS][QS_COLUMNS];
     QsPlayer hero;
