@@ -140,10 +140,20 @@ try:
     if not sequential or events[:4] != [1, 2, 3, 4] or 5 not in events:
         result.write_text(f"INCONCLUSIVE: guest trace lacks verified boot/first frame; events={events}\n")
         sys.exit(1)
-    if 7 in events:
-        result.write_text(f"PASS: guest NRO executed, first frame and real stage transition observed; events={events}\n")
-    else:
-        result.write_text(f"PASS: guest NRO executed through FIRST_FRAME; INPUT TRANSITION NOT CONFIRMED; events={events}\n")
+    transitions = [r for r in records if int(r["event"]) == 7]
+    if (len(transitions) < 2 or
+            (int(transitions[0]["mode"]), int(transitions[1]["mode"])) != (1, 0) or
+            not all(int(r["controllers"]) == 1 for r in transitions[:2])):
+        result.write_text(f"INCONCLUSIVE: controller stage-enter/return not proven; events={events}\n")
+        sys.exit(1)
+    if 8 not in events or max(int(r["frames"]) for r in records) < 600:
+        result.write_text(f"INCONCLUSIVE: guest did not complete 600 simulation steps; events={events}\n")
+        sys.exit(1)
+    result.write_text(
+        f"PASS: NRO first-frame, controller scene enter/return and >=600 frames verified; "
+        f"enter_frame={transitions[0]['frames']} return_frame={transitions[1]['frames']} "
+        f"events={events}\n"
+    )
 except (ValueError, KeyError, OSError) as exc:
     result.write_text(f"INCONCLUSIVE: invalid guest trace: {exc}\n")
     sys.exit(1)
