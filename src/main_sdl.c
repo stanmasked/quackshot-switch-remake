@@ -470,7 +470,8 @@ int main(int argc, char **argv) {
                  input_before != input_after))
                 (void)qs_motion_emit(&motion, &game, (unsigned)SDL_GetTicks(), in);
             if (old_mode != game.mode || old_stage != game.stage)
-                runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL, 0);
+                runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL,
+                              (int)game.physics_profile);
             if ((unsigned)game.frames >= next_heartbeat) {
                 runtime_event(&trace, &game, QS_TRACE_HEARTBEAT, pad != NULL, 0);
                 next_heartbeat += 600;
