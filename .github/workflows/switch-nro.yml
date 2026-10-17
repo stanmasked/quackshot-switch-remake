@@ -22,12 +22,14 @@ jobs:
           command -v sdl2-config
           sdl2-config --cflags
           sdl2-config --libs
+      - name: Test NRO verifier using synthetic images
+        run: python3 -m unittest discover -s tests -p 'test_nro.py' -v
       - name: Build homebrew NRO
         run: make -j2
       - name: Verify NRO artifact
         run: |
           test -s quackshot-prototype.nro
-          file quackshot-prototype.nro || true
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
           sha256sum quackshot-prototype.nro
       - uses: actions/upload-artifact@v4
         with:
