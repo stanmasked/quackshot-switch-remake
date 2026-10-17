@@ -89,5 +89,46 @@
     "Frames showing Donald in a stage may be an attract sequence; they are not yet validated as player-controlled.",
     "Strong START effect cannot be interpreted as jump or walk physics.",
     "Original graphics, ROM bytes, screenshot pixels and RAM bytes remain local; only numeric metadata is public."
-  ]
+  ],
+  "additional_right_window_scan": {
+    "method": "Independent Start450 baseline versus one 60-frame RIGHT hold per run; CRC32 sampled every 10 emulator frames",
+    "tested_first_frames": [
+      300,
+      550,
+      700,
+      850,
+      1000,
+      1150,
+      1450,
+      1750,
+      2050,
+      2350,
+      2650,
+      2950,
+      3450,
+      3900,
+      4350
+    ],
+    "hold_frames_per_run": 60,
+    "extra_pressed_input_reads_per_run": 60,
+    "changed_video_checkpoints_per_run": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "ran_with_private_rom_only": true,
+    "coverage_limit": "Only 15 completed windows. The wider candidate sweep was interrupted after the fifteenth; it is NOT evidence of all gameplay states or every possible time."
+  }
 }
