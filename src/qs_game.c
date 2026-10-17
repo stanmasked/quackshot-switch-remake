@@ -72,6 +72,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     tiles(g, stage);
     memset(g->enemies, 0, sizeof(g->enemies));
     memset(g->shots, 0, sizeof(g->shots));
+    g->pending_reference_shot = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -273,7 +274,17 @@ void qs_step(QsGame *g, QsInput input) {
         } else {
             if (edge(input.change, g->previous.change) && g->red_unlocked)
                 g->weapon = g->weapon == QS_YELLOW ? QS_RED : QS_YELLOW;
-            if (edge(input.fire, g->previous.fire)) shoot(g);
+            {
+                int fire_due = g->pending_reference_shot;
+                g->pending_reference_shot = 0;
+                if (edge(input.fire, g->previous.fire)) {
+                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+                        g->pending_reference_shot = 1;
+                    else
+                        shoot(g);
+                }
+                if (fire_due) shoot(g);
+            }
             move_hero(g, input, edge(input.jump, g->previous.jump));
             update_shots(g);
             update_enemies(g);
