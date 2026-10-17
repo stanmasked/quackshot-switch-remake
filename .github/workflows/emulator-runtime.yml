@@ -66,5 +66,7 @@ jobs:
             emulator-evidence/*.log
             emulator-evidence/xdg-config/NeXium/logs/*.log
             emulator-evidence/guest-runtime.csv
+            emulator-evidence/guest-motion.csv
+            emulator-evidence/motion-summary.txt
           retention-days: 7
           if-no-files-found: warn
