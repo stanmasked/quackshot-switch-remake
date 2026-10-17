@@ -35,7 +35,7 @@ jobs:
           sha256sum emulator-core/genesis_plus_gx_libretro.so > emulator-sha256.txt
       - name: Check Python libretro frontend without proprietary game
         run: |
-          python3 -m unittest discover -s tests -p test_genesis_libretro_probe.py -v
+          python3 -m unittest discover -s tests -p 'test_genesis*.py' -v
           python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so --core-info
       - name: Emulate a synthetic noncommercial-content-free 68000 loop
         run: |
@@ -69,8 +69,20 @@ jobs:
           assert r['video_stride'] == 1 and len(r['video_checkpoints']) == 90, r
           assert r['comparison_to_idle']['checkpoints_compared'] == 90, r
           assert r['comparison_to_idle']['core_input_nonzero_reads_idle'] == 0, r
-          print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
           PY
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_input_causality import compare_checkpoints
+          sample = {0: "AAAA", 1: "BBBB", 2: "CCCC"}
+          difference = compare_checkpoints(sample, {0: "AAAA", 1: "EEEE", 2: "CCCC"})
+          assert difference["first_changed_frame"] == 1
+          assert difference["changed_count"] == 1
+          print("GENESIS_CAUSALITY_SYNTHETIC_PASS")
+
+          print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
           rm -f ci-only-synthetic.gen ci-only-observation.json
       - name: Package licensed emulator only
         run: |
