@@ -51,7 +51,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y \
             xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools \
-            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
             libfontconfig1 libx11-xcb1 libegl1 libgles2 \
             libgl1 libpulse0
       - name: Start verified NeXium and examine real guest trace
@@ -61,6 +61,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nexium-emulation-evidence
-          path: emulator-evidence/
+          path: |
+            emulator-evidence/*.txt
+            emulator-evidence/*.log
+            emulator-evidence/xdg-config/NeXium/logs/*.log
+            emulator-evidence/guest-runtime.csv
           retention-days: 7
           if-no-files-found: warn
