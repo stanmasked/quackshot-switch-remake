@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from rom_report import _read_rom, inspect_data
+from rom_report import _read_rom, inspect_data, compare_profile
 
 
 def fixture():
@@ -53,6 +53,15 @@ class RomTests(unittest.TestCase):
     def test_bad_header_rejected(self):
         with self.assertRaises(ValueError):
             inspect_data(b'not a Mega Drive ROM')
+
+    def test_profile_match_and_mismatch(self):
+        result = inspect_data(fixture())
+        expected = {'linear_sha256': result['linear_sha256'], 'rom_size_bytes': 65536}
+        self.assertEqual(compare_profile(result, expected), {})
+        expected['rom_size_bytes'] = 123
+        self.assertIn('rom_size_bytes', compare_profile(result, expected))
+        with self.assertRaises(ValueError):
+            compare_profile(result, {})
 
     def test_zip_single_file(self):
         import tempfile
