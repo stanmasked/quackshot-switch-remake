@@ -94,6 +94,25 @@ class BootProbeTests(unittest.TestCase):
         self.assertEqual(r["executed_instruction_count"], 1)
         self.assertEqual(r["stop_reason"], "branch_target_out_of_range")
 
+    def test_reference_boot_witness_is_sha_bound(self):
+        root = Path(__file__).resolve().parents[1]
+        profile = json.loads((root / "research/reference_profiles/user_rom_2026-10-17.json").read_text())
+        witness = json.loads((root / "research/observations/user_rom_bounded_boot_2026-10-17.json").read_text())
+        self.assertEqual(witness["reference_rom_sha256"], profile["raw_sha256"])
+        self.assertEqual(witness["reference_rom_size_bytes"], profile["rom_size_bytes"])
+        self.assertEqual(witness["emulation_status"], "not_a_full_emulator")
+        self.assertEqual([s["executed_instruction_count"] for s in witness["scenarios"]], [4, 5])
+        self.assertEqual([s["stop_pc"] for s in witness["scenarios"]], ["0x000216", "0x000306"])
+        self.assertTrue(all(s["stop_reason"] == "unsupported_opcode"
+                            for s in witness["scenarios"]))
+
+    def test_ff_is_signed_short_branch_not_68020_long(self):
+        b = bytearray(self.rom)
+        b[0x246:0x248] = bytes.fromhex("67ff")
+        r = trace_prefix(bytes(b), self.mock)
+        self.assertEqual(r["executed_instruction_count"], 1)
+        self.assertEqual(r["stop_reason"], "branch_target_out_of_range")
+
     def test_no_rom_bytes_are_in_report(self):
         r = trace_prefix(self.rom, self.mock)
         report = json.dumps(r)
