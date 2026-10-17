@@ -1,0 +1,31 @@
+name: Nintendo Switch NRO (prototype)
+on:
+  push:
+  pull_request:
+
+jobs:
+  switch-nro:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SDL2 target libraries
+        run: |
+          test -d "$DEVKITPRO/libnx"
+          command -v aarch64-none-elf-gcc
+          sdl2-config --cflags
+          sdl2-config --libs
+      - name: Build homebrew NRO
+        run: make -j2
+      - name: Verify NRO artifact
+        run: |
+          test -s quackshot-prototype.nro
+          file quackshot-prototype.nro || true
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quackshot-switch-prototype-nro
+          path: quackshot-prototype.nro
+          if-no-files-found: error
+          retention-days: 14
