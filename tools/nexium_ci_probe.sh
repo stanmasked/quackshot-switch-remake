@@ -111,13 +111,19 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       # guest renderer must update BOTH procedural scroll planes.
       sleep 1.65
       xdotool keyup d
+      sleep 0.2
+      # NeXium default A = left-stick left, per controller_config.rs.
+      # Demand falling A/B offsets in the guest-generated trace.
+      xdotool keydown --clearmodifiers a
+      sleep 1.15
+      xdotool keyup a
       sleep 0.3
       xdotool keydown --clearmodifiers z
       sleep 0.25
       xdotool keyup z
       sleep 2
       xdotool key --clearmodifiers --delay 120 m
-      echo "INPUT_PROBE_SENT: R+A reference-city, B, stick right, Y, Plus"
+      echo "INPUT_PROBE_SENT: R+A reference-city, B, stick right then left, Y, Plus"
     ) > "$4" 2>&1 &
     input_pid=$!
     wait "$emu_pid"
@@ -186,9 +192,20 @@ try:
     if max(front_scroll) < 10 or max(distant_scroll) < 5:
         result.write_text("INCONCLUSIVE: actual camera did not scroll enough for independent two-plane proof\n")
         sys.exit(1)
+    rises = sum(b > a for a, b in zip(front_scroll, front_scroll[1:]))
+    falls = sum(b < a for a, b in zip(front_scroll, front_scroll[1:]))
+    drop = max(front_scroll) - front_scroll[-1]
+    if rises < 2 or falls < 2 or drop < 8:
+        result.write_text(
+            f"INCONCLUSIVE: guest parallax did not reverse convincingly; "
+            f"rises={rises} falls={falls} drop={drop} front={front_scroll}\n"
+        )
+        sys.exit(1)
     (out / "parallax-summary.txt").write_text(
-        "PARALLAX_GUEST_PASS: samples={} max_foreground={} max_background={} ratio=2:1\n".format(
-            len(front_scroll), max(front_scroll), max(distant_scroll)
+        "PARALLAX_GUEST_PASS: samples={} max_foreground={} max_background={} "
+        "ratio=2:1 rises={} falls={} reverse_drop_px={}\n".format(
+            len(front_scroll), max(front_scroll), max(distant_scroll),
+            rises, falls, drop
         )
     )
     if 8 not in events or max(int(r["frames"]) for r in records) < 600:
@@ -218,6 +235,8 @@ try:
     shots = [int(r["active_shots"]) for r in samples]
     checks = {
         "right_input_seen": any(mask & 2 for mask in inputs),
+        "left_input_seen": any(mask & 1 for mask in inputs),
+        "reverse_motion_px": (max(xs) - xs[-1]) / 1000.0,
         "jump_input_seen": any(mask & 4 for mask in inputs),
         "fire_input_seen": any(mask & 8 for mask in inputs),
         "horizontal_motion_px": (max(xs) - min(xs)) / 1000.0,
@@ -227,12 +246,17 @@ try:
         "first_motion_frame": int(samples[0]["frame"]),
         "last_motion_frame": int(samples[-1]["frame"]),
         "parallax_samples": len(parallax_rows),
+        "parallax_rising_steps": rises,
+        "parallax_falling_steps": falls,
+        "parallax_reverse_drop_px": drop,
         "max_foreground_scroll_px": max(front_scroll),
         "max_distant_scroll_px": max(distant_scroll),
     }
     import json
     (out / "motion-summary.txt").write_text(json.dumps(checks, indent=2) + "\n")
-    if not (checks["right_input_seen"] and checks["jump_input_seen"] and
+    if not (checks["right_input_seen"] and checks["left_input_seen"] and
+            checks["reverse_motion_px"] > 8 and
+            checks["jump_input_seen"] and
             checks["fire_input_seen"] and checks["horizontal_motion_px"] > 15 and
             55 < checks["jump_rise_px"] < 70 and checks["maximum_active_shots"] >= 1):
         result.write_text("INCONCLUSIVE: a measured control-to-motion/shot effect is absent; "
