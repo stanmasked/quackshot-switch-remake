@@ -17,6 +17,8 @@ extern "C" {
 #endif
 
 typedef enum { QS_MAP, QS_STAGE } QsMode;
+/* Reference-city envelope is an opt-in measured approximation, not original code. */
+typedef enum { QS_PHYSICS_PROTOTYPE = 0, QS_PHYSICS_REFERENCE_CITY = 1 } QsPhysicsProfile;
 typedef enum { QS_YELLOW, QS_RED } QsWeapon;
 typedef enum { QS_PICKUP_RED, QS_PICKUP_HEART } QsPickupType;
 
@@ -31,6 +33,7 @@ typedef struct { float x, y; int kind, active; } QsPickup;
 
 typedef struct {
     QsMode mode;
+    QsPhysicsProfile physics_profile;
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
     QsWeapon weapon;
