@@ -1,6 +1,7 @@
 name: Reference ROM metadata tests
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
