@@ -1,0 +1,18 @@
+# Keep original game dumps and extracted proprietary assets out of version control.
+/roms/
+/original/
+/assets/original/
+/private/
+*.smd
+*.gen
+*.32x
+*.cue
+*.iso
+*.chd
+*.sav
+*.srm
+__pycache__/
+*.pyc
+.venv/
+build/
+build-*/
