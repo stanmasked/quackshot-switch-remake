@@ -161,7 +161,72 @@ static int capture_frame(SDL_Renderer *renderer, const QsGame *game, uint64_t *d
     return 1;
 }
 
+
+#if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
+/* Desktop-only integration of our controller bindings with SDL virtual pads. */
+static int virtual_controller_smoke(void) {
+    int joystick_index, ok = 0;
+    SDL_GameController *controller = NULL;
+    SDL_Joystick *joystick;
+    char guid[64], mapping[512];
+    QsInput in;
+    joystick_index = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, 2, 16, 0);
+    if (joystick_index < 0) {
+        fprintf(stderr, "SDL virtual controller attach: %s\n", SDL_GetError());
+        return 0;
+    }
+    SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(joystick_index), guid, sizeof(guid));
+    snprintf(mapping, sizeof(mapping),
+             "%s,QuackShot CI Virtual,"
+             "a:b0,b:b1,x:b2,y:b3,back:b4,start:b5,leftshoulder:b6,"
+             "rightshoulder:b7,dpup:b8,dpdown:b9,dpleft:b10,dpright:b11,"
+             "leftx:a0,lefty:a1,", guid);
+    if (SDL_GameControllerAddMapping(mapping) < 0 ||
+        !SDL_IsGameController(joystick_index) ||
+        !(controller = SDL_GameControllerOpen(joystick_index))) {
+        fprintf(stderr, "SDL virtual controller open/mapping: %s\n", SDL_GetError());
+        goto cleanup;
+    }
+    joystick = SDL_GameControllerGetJoystick(controller);
+    if (SDL_JoystickSetVirtualButton(joystick, 1, SDL_PRESSED) ||
+        SDL_JoystickSetVirtualButton(joystick, 3, SDL_PRESSED) ||
+        SDL_JoystickSetVirtualButton(joystick, 7, SDL_PRESSED) ||
+        SDL_JoystickSetVirtualButton(joystick, 11, SDL_PRESSED)) {
+        fprintf(stderr, "SDL virtual controller button injection failed\n");
+        goto cleanup;
+    }
+    SDL_GameControllerUpdate();
+    in = read_input(controller);
+    if (!in.jump || !in.fire || !in.dash || !in.right || in.left) {
+        fprintf(stderr, "SDL controller buttons mapped unexpectedly\n");
+        goto cleanup;
+    }
+    SDL_JoystickSetVirtualButton(joystick, 1, SDL_RELEASED);
+    SDL_JoystickSetVirtualButton(joystick, 3, SDL_RELEASED);
+    SDL_JoystickSetVirtualButton(joystick, 7, SDL_RELEASED);
+    SDL_JoystickSetVirtualButton(joystick, 11, SDL_RELEASED);
+    SDL_JoystickSetVirtualAxis(joystick, 0, -25000);
+    SDL_GameControllerUpdate();
+    in = read_input(controller);
+    if (in.jump || in.fire || in.right || in.dash || !in.left) {
+        fprintf(stderr, "SDL controller axis mapped unexpectedly\n");
+        goto cleanup;
+    }
+    ok = 1;
+cleanup:
+    if (controller) SDL_GameControllerClose(controller);
+    if (SDL_JoystickDetachVirtual(joystick_index) != 0) {
+        fprintf(stderr, "SDL virtual controller detach: %s\n", SDL_GetError());
+        ok = 0;
+    }
+    return ok;
+}
+#endif
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
+#if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
+    if (!virtual_controller_smoke()) return 1;
+#endif
     uint64_t reference[QS_STAGE_COUNT + 1] = {0};
     int replay, stage, frame;
     for (replay = 0; replay < 2; ++replay) {
