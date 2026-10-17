@@ -126,11 +126,16 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
         raise ValueError("video_stride must be 1..600")
+    if ram_window is not None:
+        if (not isinstance(ram_window, tuple) or len(ram_window) != 2 or
+                not all(isinstance(v, int) for v in ram_window) or
+                not 0 <= ram_window[0] < ram_window[1] <= frames):
+            raise ValueError("ram_window requires (start, end_exclusive) within frame count")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0}
@@ -224,7 +229,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             active = buttons_at(frame, schedule)
             state["pressed"] = {BUTTONS[name] for name in active}
             core.retro_run()
-            if frame % 60 == 0:
+            if frame % 60 == 0 or (ram_window is not None and ram_window[0] <= frame < ram_window[1]):
                 ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
                 ram = C.string_at(ptr, ram_len) if ptr and ram_len else b""
                 changed = []
