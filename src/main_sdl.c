@@ -308,6 +308,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s [--smoke]\n", argv[0]);
         return 2;
     }
+    /* Hidden CI windows cannot receive controller events unless enabled. */
+    if (smoke) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
