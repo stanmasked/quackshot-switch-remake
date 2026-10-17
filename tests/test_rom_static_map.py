@@ -83,6 +83,23 @@ class StaticMapTests(unittest.TestCase):
         self.assertNotIn("4ab900a10008", report.lower())
         self.assertIn("static_byte_patterns_not_execution", report)
 
+    def test_public_witness_bound_to_reference_profile(self):
+        import json
+        root = Path(__file__).resolve().parents[1]
+        witness = json.loads((root / "research/observations/user_rom_68000_static_2026-10-17.json").read_text())
+        profile = json.loads((root / "research/reference_profiles/user_rom_2026-10-17.json").read_text())
+        self.assertEqual(witness["rom_sha256"], profile["linear_sha256"])
+        self.assertEqual(witness["rom_size_bytes"], profile["rom_size_bytes"])
+        self.assertEqual(witness["reset_program_counter"], "0x000206")
+        self.assertEqual(witness["exception_vectors"]["irq_level_6"], "0x00052A")
+        self.assertEqual([x["number"] for x in
+                          witness["exception_vectors"]["nondefault_handlers"]],
+                         [6, 30, 32, 33, 34, 35, 36, 37])
+        self.assertEqual([x["absolute_address"] for x in
+                          witness["static_io_instruction_candidates"]],
+                         ["0xA10008", "0xA1000C", "0xC00004"])
+        self.assertEqual(witness["evidence_type"], "static_byte_patterns_not_execution")
+
     def test_smd_conversion_produces_same_map(self):
         raw = fixture() + bytes(16384 - len(fixture()))
         smd_block = bytearray(16384)
