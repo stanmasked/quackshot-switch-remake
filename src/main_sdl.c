@@ -1,4 +1,5 @@
 #include "qs_game.h"
+#include "qs_trace.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -295,56 +296,102 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     return 0;
 }
 
+/* Records only numeric state, never file paths, controllers' IDs or ROM data. */
+static void runtime_event(QsTrace *trace, const QsGame *g, QsTraceEvent event,
+                          int controller_count, int detail) {
+    (void)qs_trace_emit(trace, (unsigned)SDL_GetTicks(), (unsigned)g->frames,
+                        event, (int)g->mode, g->stage, controller_count, detail);
+}
+
 int main(int argc, char **argv) {
-    SDL_Window *window;
-    SDL_Renderer *renderer;
+    SDL_Window *window = NULL;
+    SDL_Renderer *renderer = NULL;
     SDL_GameController *pad = NULL;
     QsGame game;
+    QsTrace trace = {0};
     Uint64 previous, frequency;
     double accumulator = 0.0;
-    int running = 1, i;
-    int smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
+    int running = 1, i, shown_first_frame = 0;
+    unsigned next_heartbeat = 600;
+    const char *trace_path = getenv("QS_TRACE_PATH");
+    int smoke = 0;
+#ifdef __SWITCH__
+    /* Homebrew arguments may include the launch pathname: do not reject them. */
+    (void)argc;
+    (void)argv;
+    if (!trace_path || !*trace_path)
+        trace_path = "sdmc:/switch/quackshot-runtime.csv";
+#else
+    smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
     if (argc != 1 && !smoke) {
         fprintf(stderr, "Usage: %s [--smoke]\n", argv[0]);
         return 2;
+    }
+#endif
+    qs_init(&game);
+    if (trace_path && *trace_path) {
+        if (!qs_trace_open(&trace, trace_path))
+            fprintf(stderr, "QuackShot: runtime CSV unavailable (continuing without it)\n");
+        else
+            runtime_event(&trace, &game, QS_TRACE_BOOT, 0, 0);
     }
     /* Hidden CI windows cannot receive controller events unless enabled. */
     if (smoke) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 1);
+        qs_trace_close(&trace);
         return 1;
     }
+    runtime_event(&trace, &game, QS_TRACE_SDL_READY, 0, 0);
     window = SDL_CreateWindow("QuackShot: experimental engine (no original assets)",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               smoke ? QS_VIEW_W : 1200, smoke ? QS_VIEW_H : 720,
                               smoke ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
+        runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 2);
         SDL_Quit();
+        qs_trace_close(&trace);
         return 1;
     }
+    runtime_event(&trace, &game, QS_TRACE_WINDOW_READY, 0, 0);
     renderer = smoke ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
                      : SDL_CreateRenderer(window, -1,
                            SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (!renderer) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
+        runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 3);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_trace_close(&trace);
         return 1;
+    }
+    /* Detail records SDL_RENDERER_SOFTWARE, not a model of the graphics API. */
+    {
+        SDL_RendererInfo info;
+        int software = SDL_GetRendererInfo(renderer, &info) == 0 &&
+                       (info.flags & SDL_RENDERER_SOFTWARE) != 0;
+        runtime_event(&trace, &game, QS_TRACE_RENDERER_READY, 0, software);
     }
     if (SDL_RenderSetLogicalSize(renderer, QS_VIEW_W, QS_VIEW_H) != 0) {
         fprintf(stderr, "SDL_RenderSetLogicalSize: %s\n", SDL_GetError());
+        runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 4);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_trace_close(&trace);
         return 1;
     }
     if (smoke) {
         int result = run_sdl_smoke(renderer);
+        runtime_event(&trace, &game, QS_TRACE_SMOKE, 0, result);
+        runtime_event(&trace, &game, QS_TRACE_SHUTDOWN, 0, result);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
+        qs_trace_close(&trace);
         return result;
     }
     for (i = 0; i < SDL_NumJoysticks(); i++) {
@@ -353,7 +400,7 @@ int main(int argc, char **argv) {
             if (pad) break;
         }
     }
-    qs_init(&game);
+    if (pad) runtime_event(&trace, &game, QS_TRACE_CONTROLLER, 1, 1);
     previous = SDL_GetPerformanceCounter();
     frequency = SDL_GetPerformanceFrequency();
     while (running) {
@@ -366,26 +413,43 @@ int main(int argc, char **argv) {
             if (event.type == SDL_QUIT ||
                 (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_q))
                 running = 0;
-            if (event.type == SDL_CONTROLLERDEVICEADDED && !pad)
+            if (event.type == SDL_CONTROLLERDEVICEADDED && !pad) {
                 pad = SDL_GameControllerOpen(event.cdevice.which);
+                if (pad) runtime_event(&trace, &game, QS_TRACE_CONTROLLER, 1, 1);
+            }
             if (event.type == SDL_CONTROLLERDEVICEREMOVED && pad &&
                 SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pad)) == event.cdevice.which) {
                 SDL_GameControllerClose(pad);
                 pad = NULL;
+                runtime_event(&trace, &game, QS_TRACE_CONTROLLER, 0, 0);
             }
         }
         while (accumulator >= 1.0 / 60.0) {
+            QsMode old_mode = game.mode;
+            int old_stage = game.stage;
             qs_step(&game, read_input(pad));
             accumulator -= 1.0 / 60.0;
+            if (old_mode != game.mode || old_stage != game.stage)
+                runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL, 0);
+            if ((unsigned)game.frames >= next_heartbeat) {
+                runtime_event(&trace, &game, QS_TRACE_HEARTBEAT, pad != NULL, 0);
+                next_heartbeat += 600;
+            }
         }
         if (game.mode == QS_MAP) render_map(renderer, &game);
         else render_stage(renderer, &game);
         SDL_RenderPresent(renderer);
+        if (!shown_first_frame) {
+            shown_first_frame = 1;
+            runtime_event(&trace, &game, QS_TRACE_FIRST_FRAME, pad != NULL, 0);
+        }
         SDL_Delay(1);
     }
+    runtime_event(&trace, &game, QS_TRACE_SHUTDOWN, pad != NULL, 0);
     if (pad) SDL_GameControllerClose(pad);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    qs_trace_close(&trace);
     return 0;
 }
