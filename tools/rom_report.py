@@ -76,15 +76,33 @@ def inspect_data(raw):
     }
 
 
+def compare_profile(result, expected):
+    """Return mismatched fields (without copying or exporting ROM bytes)."""
+    if not isinstance(expected, dict) or not expected:
+        raise ValueError('Expected profile must be a nonempty JSON object')
+    return {key: {'expected': value, 'observed': result.get(key)}
+            for key, value in expected.items() if key not in result or result[key] != value}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('rom', type=Path, help='Local ROM or ZIP file; never uploaded by this script')
+    parser.add_argument('--profile', type=Path, help='Optional JSON profile with expected metadata/hash')
     args = parser.parse_args()
     try:
         result = inspect_data(_read_rom(args.rom))
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as e:
         parser.exit(1, f'ROM inspection failed: {e}\n')
     print(json.dumps(result, indent=2, ensure_ascii=False))
+    if args.profile:
+        try:
+            expected = json.loads(args.profile.read_text(encoding='utf-8'))
+            mismatches = compare_profile(result, expected)
+        except (OSError, ValueError) as e:
+            parser.exit(1, f'Profile read failed: {e}\\n')
+        if mismatches:
+            parser.exit(2, f'Profile mismatch: {json.dumps(mismatches, ensure_ascii=False)}\\n')
+        print('PROFILE MATCH: all recorded fields agree')
 
 
 if __name__ == '__main__':
