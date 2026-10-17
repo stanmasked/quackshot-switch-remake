@@ -445,8 +445,9 @@ int main(int argc, char **argv) {
     runtime_event(&trace, &game, QS_TRACE_SDL_READY, 0, 0);
     window = SDL_CreateWindow("QuackShot: experimental engine (no original assets)",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                              smoke ? QS_VIEW_W : 1200, smoke ? QS_VIEW_H : 720,
-                              smoke ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+                              (smoke || parallax_smoke) ? QS_VIEW_W : 1200,
+                              (smoke || parallax_smoke) ? QS_VIEW_H : 720,
+                              (smoke || parallax_smoke) ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 2);
@@ -456,7 +457,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     runtime_event(&trace, &game, QS_TRACE_WINDOW_READY, 0, 0);
-    renderer = smoke ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
+    renderer = (smoke || parallax_smoke) ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
                      : SDL_CreateRenderer(window, -1,
                            SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
