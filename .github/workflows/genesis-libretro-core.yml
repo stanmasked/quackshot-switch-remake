@@ -35,7 +35,8 @@ jobs:
           test -s emulator-core/genesis_plus_gx_libretro.so
           file emulator-core/genesis_plus_gx_libretro.so
           ldd emulator-core/genesis_plus_gx_libretro.so
-          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' retro_run
+          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' retro_run$'
+          nm -D emulator-core/genesis_plus_gx_libretro.so | grep ' quackshot_research_vdp_hscroll$'
           sha256sum emulator-core/genesis_plus_gx_libretro.so > emulator-sha256.txt
       - name: Check Python libretro frontend without proprietary game
         run: |
