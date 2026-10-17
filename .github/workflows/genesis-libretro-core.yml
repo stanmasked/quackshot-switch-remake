@@ -125,7 +125,7 @@ jobs:
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py rom-free-emulator/
           cp emulator-sha256.txt rom-free-emulator/
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
