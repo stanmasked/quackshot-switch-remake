@@ -19,11 +19,14 @@ def inspect(data: bytes, require_nacp: bool = False) -> dict:
     if image_size < 0x80 or image_size > len(data):
         raise ValueError('Declared NRO image size is out of bounds')
     segments = {}
+    previous_end = 0
     for name, offset in [('text', 0x20), ('rodata', 0x28), ('data', 0x30)]:
         start, size = struct.unpack_from('<II', data, offset)
-        if start < 0x80 or size == 0 or start > image_size or size > image_size - start:
-            raise ValueError(f'{name} segment outside declared image')
+        if (size == 0 or start < previous_end or start > image_size or
+                size > image_size - start or (name == 'text' and start != 0)):
+            raise ValueError(f'{name} segment outside declared image or overlapping')
         segments[name] = {'offset': start, 'size': size}
+        previous_end = start + size
     if len(data) == image_size:
         if require_nacp:
             raise ValueError('NACP metadata missing (no ASET section)')
