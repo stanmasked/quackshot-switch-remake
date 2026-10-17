@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define ENSURE(x) do { if (!(x)) { \
-    fprintf(stderr,"parallax FAIL line %d: %s\\n", __LINE__, #x); \
+    fprintf(stderr,"parallax FAIL line %d: %s\n", __LINE__, #x); \
     exit(1); } } while (0)
 
 static QsGame test_game(QsPhysicsProfile profile) {
@@ -49,6 +49,9 @@ static void never_leak_to_unmeasured_stages_or_map(void) {
     QsGame g = test_game(QS_PHYSICS_REFERENCE_CITY);
     g.camera_x = 90.0f;
     qs_begin_stage(&g, 1);
+    /* Stage entry intentionally resets camera; set synthetic test offset
+     * AFTER entering the unmeasured stage. */
+    g.camera_x = 90.0f;
     ENSURE(!qs_parallax_is_reference_city(&g));
     ENSURE(qs_parallax_offsets(&g).distant_px == 30);
     qs_init(&g);
