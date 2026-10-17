@@ -92,13 +92,15 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool windowfocus "$window" || true
       sleep 1
       xdotool key --clearmodifiers --delay 120 c
-      sleep 2
-      xdotool keydown --clearmodifiers d
       sleep 1
-      xdotool keyup d
+      # Jump in a clear section before walking beneath test scaffolding.
       xdotool keydown --clearmodifiers x
       sleep 0.25
       xdotool keyup x
+      sleep 1
+      xdotool keydown --clearmodifiers d
+      sleep 1
+      xdotool keyup d
       sleep 0.3
       xdotool keydown --clearmodifiers z
       sleep 0.25
