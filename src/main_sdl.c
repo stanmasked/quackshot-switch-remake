@@ -345,10 +345,15 @@ static int parallax_smoke_capture(SDL_Renderer *renderer,
 }
 static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
     QsGame game;
-    uint32_t far_a[QS_VIEW_W], far_b[QS_VIEW_W];
-    uint32_t mid_a[QS_VIEW_W], mid_b[QS_VIEW_W];
-    unsigned far_edges = 0, mid_edges = 0;
-    int x, row, col;
+    /* Four consecutive camera pixels exercise both rounding parities.
+     * Camera:    40  41  42  43
+     * Plane A:   40  41  42  43
+     * Plane B:   20  20  21  21
+     */
+    uint32_t far[4][QS_VIEW_W], near[4][QS_VIEW_W];
+    uint32_t far_return[QS_VIEW_W], near_return[QS_VIEW_W];
+    unsigned far_edges = 0, near_edges = 0;
+    int x, row, col, sample;
     qs_init(&game);
     game.physics_profile = QS_PHYSICS_REFERENCE_CITY;
     qs_begin_stage(&game, 0);
@@ -356,27 +361,54 @@ static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
         for (col = 0; col < QS_COLUMNS; ++col)
             game.terrain[row][col] = '.';
     game.hero.y = 188;
-    game.camera_x = 40;
-    if (!parallax_smoke_capture(renderer, &game, 69, far_a) ||
-        !parallax_smoke_capture(renderer, &game, 103, mid_a))
-        return 1;
-    game.camera_x = 42;
-    if (!parallax_smoke_capture(renderer, &game, 69, far_b) ||
-        !parallax_smoke_capture(renderer, &game, 103, mid_b))
-        return 1;
-    for (x = 24; x < QS_VIEW_W - 26; ++x) {
-        if (far_b[x] != far_a[x + 1] || mid_b[x] != mid_a[x + 2]) {
-            fprintf(stderr, "PARALLAX_SDL_FAIL: wrong pixel offsets at x=%d\n", x);
+    for (sample = 0; sample < 4; ++sample) {
+        QsParallax offset;
+        game.camera_x = (float)(40 + sample);
+        offset = qs_parallax_offsets(&game);
+        if (offset.front_px != 40 + sample ||
+            offset.distant_px != (40 + sample) / 2 ||
+            !parallax_smoke_capture(renderer, &game, 69, far[sample]) ||
+            !parallax_smoke_capture(renderer, &game, 103, near[sample])) {
+            fprintf(stderr, "PARALLAX_SDL_FAIL: sample %d missing or incorrect\n", sample);
             return 1;
         }
-        if (far_a[x] != far_a[x+1]) ++far_edges;
-        if (mid_a[x] != mid_a[x+1]) ++mid_edges;
     }
-    if (far_edges < 5 || mid_edges < 5) {
+    /* Scan away from border pixels so clipping never masks a real error.
+     * For each +1 camera step the near layer moves 1; the far layer
+     * moves either 0 or 1 depending on odd/even floor rounding.
+     */
+    for (sample = 1; sample < 4; ++sample) {
+        int far_delta = ((40 + sample) / 2) - ((39 + sample) / 2);
+        for (x = 24; x < QS_VIEW_W - 26; ++x) {
+            if (far[sample][x] != far[sample-1][x + far_delta] ||
+                near[sample][x] != near[sample-1][x + 1]) {
+                fprintf(stderr, "PARALLAX_SDL_FAIL: parity sample=%d pixel=%d\n",
+                        sample, x);
+                return 1;
+            }
+        }
+    }
+    /* Revisit the original offset after moving backwards: no history-
+     * dependent drift is permitted in the procedural plane positions.
+     */
+    game.camera_x = 40;
+    if (!parallax_smoke_capture(renderer, &game, 69, far_return) ||
+        !parallax_smoke_capture(renderer, &game, 103, near_return))
+        return 1;
+    for (x = 24; x < QS_VIEW_W - 26; ++x) {
+        if (far_return[x] != far[0][x] ||
+            near_return[x] != near[0][x]) {
+            fprintf(stderr, "PARALLAX_SDL_FAIL: camera reversal drift at x=%d\n", x);
+            return 1;
+        }
+        if (far[0][x] != far[0][x+1]) ++far_edges;
+        if (near[0][x] != near[0][x+1]) ++near_edges;
+    }
+    if (far_edges < 5 || near_edges < 5) {
         fprintf(stderr, "PARALLAX_SDL_FAIL: layers not visually distinct\n");
         return 1;
     }
-    puts("PARALLAX_SDL_PASS: pixel B shift=1, pixel A shift=2, original-free geometry");
+    puts("PARALLAX_SDL_PASS: four-pixel parity 0/1/0 shift, no reverse drift, original-free geometry");
     return 0;
 }
 
