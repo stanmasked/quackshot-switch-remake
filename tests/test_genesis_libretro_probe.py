@@ -103,6 +103,27 @@ class GenesisFrontendTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing checkpoint"):
             probe.compare_idle_to_input(template, other)
 
+    def test_video_stride_validation_is_strict(self):
+        for stride in (0, 601, -1):
+            with self.subTest(stride=stride):
+                with self.assertRaisesRegex(ValueError, "video_stride"):
+                    probe.run_core(None, {"need_fullpath": False},
+                                   b"", "mock", 2, [], video_stride=stride)
+
+    def test_published_genesis_witness_matches_pinned_rom(self):
+        import json
+        root = Path(__file__).resolve().parents[1]
+        witness = json.loads((root / "research/observations/user_rom_libretro_start_witness_2026-10-17.json").read_text())
+        profile = json.loads((root / "research/reference_profiles/user_rom_2026-10-17.json").read_text())
+        self.assertEqual(witness["reference_rom_sha256"], profile["raw_sha256"])
+        self.assertEqual(witness["reference_rom_bytes"], profile["rom_size_bytes"])
+        exact = witness["frame_exact_comparison"]
+        self.assertEqual(exact["frames_compared"], 600)
+        self.assertEqual(exact["first_differing_frame"], 450)
+        self.assertEqual(exact["frame_before_action_matching"], 449)
+        self.assertEqual(exact["observed_libretro_nonzero_start_reads"], 15)
+        self.assertEqual(exact["video_stride"], 1)
+
     def test_callback_signature_declared(self):
         self.assertTrue(callable(probe.VideoCb))
         self.assertTrue(callable(probe.InputStateCb))
