@@ -3,6 +3,21 @@
 #include <string.h>
 
 static float clampf(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
+
+/*
+ * Experimental first-city physics ENVELOPE fitted to private, numeric-only
+ * Genesis Plus GX observations: X +26 after 21 input steps, +140 after 91,
+ * world-space jump rise 65 with nominal 56-step flight.
+ *
+ * Exponential lateral easing and parabolic gravity are MODEL CHOICES;
+ * they are not recovered Motorola 68000 code or proven game coefficients.
+ * Never use these constants for the normal prototype profile.
+ */
+#define QS_CITY_TARGET_WALK 1.6315692f
+#define QS_CITY_WALK_RESPONSE 0.161471675f
+#define QS_CITY_GRAVITY (65.0f / 392.0f)
+#define QS_CITY_JUMP_IMPULSE (-28.5f * QS_CITY_GRAVITY)
+
 static int edge(int now, int previous) { return now && !previous; }
 static float absolute(float n) { return n < 0 ? -n : n; }
 
@@ -52,6 +67,8 @@ static void add_enemy(QsGame *g, int slot, float x) {
 void qs_begin_stage(QsGame *g, int stage) {
     if (stage < 0 || stage >= QS_STAGE_COUNT) return;
     g->mode = QS_STAGE; g->stage = stage;
+    /* A city-only model: no extrapolation to unmeasured original levels. */
+    if (stage != 0) g->physics_profile = QS_PHYSICS_PROTOTYPE;
     tiles(g, stage);
     memset(g->enemies, 0, sizeof(g->enemies));
     memset(g->shots, 0, sizeof(g->shots));
@@ -76,6 +93,7 @@ void qs_begin_stage(QsGame *g, int stage) {
 void qs_init(QsGame *g) {
     memset(g, 0, sizeof(*g));
     g->mode = QS_MAP;
+    g->physics_profile = QS_PHYSICS_PROTOTYPE;
     g->stage = 0;
     g->selected_stage = 0;
     g->weapon = QS_YELLOW;
@@ -179,11 +197,24 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     QsPlayer *h = &g->hero;
     float dx = 0, dy, segment, trial;
     int i, slices;
-    if (in.left != in.right) {
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+        float requested = 0;
+        if (in.left != in.right) {
+            h->facing = in.left ? -1 : 1;
+            requested = h->facing * (in.dash ? 3.1f : QS_CITY_TARGET_WALK);
+        }
+        h->vx += (requested - h->vx) * QS_CITY_WALK_RESPONSE;
+        if (requested == 0 && absolute(h->vx) < 0.0001f) h->vx = 0;
+        dx = h->vx;
+    } else if (in.left != in.right) {
         h->facing = in.left ? -1 : 1;
         dx = h->facing * (in.dash ? 3.1f : 1.9f);
     }
-    if (jump_pressed && h->grounded) { h->vy = -7.2f; h->grounded = 0; }
+    if (jump_pressed && h->grounded) {
+        h->vy = g->physics_profile == QS_PHYSICS_REFERENCE_CITY
+                    ? QS_CITY_JUMP_IMPULSE : -7.2f;
+        h->grounded = 0;
+    }
     slices = (int)ceilf(absolute(dx));
     segment = slices ? dx / slices : 0;
     for (i = 0; i < slices; i++) {
@@ -191,7 +222,8 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
         if (hits_tiles(g, trial, h->y, 12, 20)) break;
         h->x = trial;
     }
-    h->vy = clampf(h->vy + 0.32f, -8.0f, 7.5f);
+    h->vy = clampf(h->vy + (g->physics_profile == QS_PHYSICS_REFERENCE_CITY
+                                ? QS_CITY_GRAVITY : 0.32f), -8.0f, 7.5f);
     dy = h->vy;
     slices = (int)ceilf(absolute(dy));
     segment = slices ? dy / slices : 0;
@@ -225,8 +257,16 @@ void qs_step(QsGame *g, QsInput input) {
             g->selected_stage = (g->selected_stage + QS_STAGE_COUNT - 1) % QS_STAGE_COUNT;
         if (edge(input.right, g->previous.right) || edge(input.down, g->previous.down))
             g->selected_stage = (g->selected_stage + 1) % QS_STAGE_COUNT;
-        if (edge(input.select, g->previous.select) || edge(input.jump, g->previous.jump))
+        if (edge(input.select, g->previous.select) || edge(input.jump, g->previous.jump)) {
+            /*
+             * A+B together on the city-map selector opts in to the research
+             * envelope. Normal A or B leaves the v0.1 prototype unchanged.
+             */
+            g->physics_profile =
+                g->selected_stage == 0 && input.select && input.jump
+                    ? QS_PHYSICS_REFERENCE_CITY : QS_PHYSICS_PROTOTYPE;
             qs_begin_stage(g, g->selected_stage);
+        }
     } else {
         if (edge(input.back, g->previous.back)) {
             g->mode = QS_MAP;
