@@ -1,6 +1,7 @@
 name: Portable gameplay core
 on:
   push:
+    branches: [main]
   pull_request:
 jobs:
   core:
