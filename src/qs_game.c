@@ -226,7 +226,13 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     segment = slices ? dx / slices : 0;
     for (i = 0; i < slices; i++) {
         trial = h->x + segment;
-        if (hits_tiles(g, trial, h->y, 12, 20)) break;
+        if (hits_tiles(g, trial, h->y, 12, 20)) {
+            /* Observed original city wall: held direction stops X velocity.
+             * Retain legacy prototype collision behavior verbatim. */
+            if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+                h->vx = 0;
+            break;
+        }
         h->x = trial;
     }
     if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
@@ -312,7 +318,16 @@ void qs_step(QsGame *g, QsInput input) {
             update_enemies(g);
             update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
-            g->camera_x = clampf(g->hero.x - 150, 0, QS_COLUMNS * QS_TILE - QS_VIEW_W);
+            /*
+             * Screen glyph centre remained near x=134 in two private
+             * original-game frames despite +200 world px motion.
+             * This is an APPROXIMATE experimental tracking anchor,
+             * not the original Genesis HScroll register or camera code.
+             */
+            g->camera_x = clampf(
+                g->hero.x - (g->physics_profile == QS_PHYSICS_REFERENCE_CITY
+                                 ? 134.0f : 150.0f),
+                0, QS_COLUMNS * QS_TILE - QS_VIEW_W);
             if (g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
                 g->cleared[g->stage] = 1;
                 g->mode = QS_MAP;
