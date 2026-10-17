@@ -53,6 +53,48 @@ class GenesisVDPHScrollTests(unittest.TestCase):
         self.assertIn(2124, vdp.KEYFRAMES)
         self.assertIn(2375, vdp.KEYFRAMES)
 
+    def test_exact_plane_a_b_numeric_relation(self):
+        camera_value = 155
+        rows = [{
+            "line": line,
+            "vdp_reg11": 0,
+            "vdp_reg13": 52,
+            "hscroll_vram_base_address": 0xD000,
+            "hscroll_scanline_mask": 0,
+            "plane_A_HScroll_11bit_signed": -camera_value,
+            "plane_B_HScroll_11bit_signed": -(camera_value // 2),
+        } for line in vdp.SCANLINES]
+        sample = {"right": {2220: {
+            "render_buffer_RAM_0x852c": camera_value,
+            "vdp_scanlines": rows,
+        }}}
+        summary = vdp.validate_actual_vdp_parallax(sample)
+        self.assertEqual(summary["frames_verified"], 1)
+        self.assertEqual(summary["individual_vdp_plane_word_comparisons"], 8)
+        self.assertTrue(summary["all_numeric_comparisons_exact"])
+
+        rows[0]["plane_B_HScroll_11bit_signed"] = -78
+        with self.assertRaisesRegex(ValueError, "parallax mismatch"):
+            vdp.validate_actual_vdp_parallax(sample)
+
+    def test_hscroll_mode_and_vram_base_are_checked(self):
+        rows = [{
+            "line": line,
+            "vdp_reg11": 2,
+            "vdp_reg13": 52,
+            "hscroll_vram_base_address": 0xD000,
+            "hscroll_scanline_mask": 0,
+            "plane_A_HScroll_11bit_signed": -90,
+            "plane_B_HScroll_11bit_signed": -45,
+        } for line in vdp.SCANLINES]
+        with self.assertRaisesRegex(ValueError, "parallax mismatch"):
+            vdp.validate_actual_vdp_parallax(
+                {"right": {2180: {
+                    "render_buffer_RAM_0x852c":90,
+                    "vdp_scanlines":rows
+                }}}
+            )
+
     def test_core_provenance_research_only(self):
         hook = Path(__file__).resolve().parents[1] / "tools/genesis_vdp_hscroll_export.c"
         content = hook.read_text()
