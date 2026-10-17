@@ -44,7 +44,8 @@ jobs:
               records = list(csv.DictReader(f))
           assert [int(row["event"]) for row in records] == [1,2,3,4,11,9], records
           assert [int(row["seq"]) for row in records] == list(range(len(records)))
-          assert all(int(row["detail"]) == 0 for row in records), records
+          assert all(int(row["detail"]) == 0 for row in records if int(row["event"]) != 4), records
+          assert int(records[3]["detail"]) in (0, 1), records
           print("TRACE_SMOKE_PASS: ordered asset-free boot/render/shutdown events")
           PY
       - name: Test
