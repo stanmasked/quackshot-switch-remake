@@ -13,6 +13,7 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
 - Twelve executable regression checks in Release and Debug builds.
+- **Optional city-reference physics envelope**, fitted to numeric observations from privately emulated original Mega Drive gameplay. Default prototype movement is unchanged.
 - Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
 - Independent original-ROM metadata inspector lives in PR #1.
@@ -32,6 +33,14 @@ For the SDL2 viewer, install SDL2 development headers and run:
 Keyboard: arrows or A/D, Space (jump), J (fire), Shift (run),
 K (plunger), Enter (select), Esc (back), Q (quit).
 Gamepad: directional stick/D-pad, B, Y, R, X, A, Plus.
+
+**Experimental reference-city mode (stage 0 only):** on the map hold
+**R + A** simultaneously (desktop: Shift + Enter) to enter CITY TEST with
+a fitted walk acceleration, ~65-pixel jump and one-step delayed yellow
+plunger. Ordinary A entry uses the original prototype profile. Other
+test stages do not use the fitted values. The model is *not* verified
+original QuackShot CPU code or precise original collision geometry.
+See [calibration methodology](docs/REFERENCE_CITY_PHYSICS_RU.md).
 
 ## Switch homebrew
 
