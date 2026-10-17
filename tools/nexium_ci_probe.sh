@@ -96,8 +96,13 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool keydown --clearmodifiers d
       sleep 1
       xdotool keyup d
-      xdotool key --clearmodifiers --delay 120 x
-      xdotool key --clearmodifiers --delay 120 z
+      xdotool keydown --clearmodifiers x
+      sleep 0.25
+      xdotool keyup x
+      sleep 0.3
+      xdotool keydown --clearmodifiers z
+      sleep 0.25
+      xdotool keyup z
       sleep 2
       xdotool key --clearmodifiers --delay 120 m
       echo "INPUT_PROBE_SENT: A, stick right, B, Y, Plus"
@@ -119,6 +124,12 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
 if [ -s "$out/guest-trace-paths.txt" ]; then
     IFS= read -r first < "$out/guest-trace-paths.txt"
     cp "$first" "$out/guest-runtime.csv"
+fi
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-motion.csv' -print > "$out/motion-trace-paths.txt"
+if [ -s "$out/motion-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/motion-trace-paths.txt"
+    cp "$first" "$out/guest-motion.csv"
 fi
 
 python3 - "$out" <<'PY'
@@ -149,10 +160,51 @@ try:
     if 8 not in events or max(int(r["frames"]) for r in records) < 600:
         result.write_text(f"INCONCLUSIVE: guest did not complete 600 simulation steps; events={events}\n")
         sys.exit(1)
+    motion_path = out / "guest-motion.csv"
+    if not motion_path.is_file():
+        result.write_text("INCONCLUSIVE: guest motion CSV absent; no motion/weapon proof\n")
+        sys.exit(1)
+    with motion_path.open(newline="") as stream:
+        samples = list(csv.DictReader(stream))
+    expected_columns = ["seq", "frame", "ticks_ms", "stage", "input_bits",
+                        "x_milli", "y_milli", "vy_milli", "grounded",
+                        "active_shots", "attached_shots", "stunned_enemies"]
+    if not samples or list(samples[0].keys()) != expected_columns or len(samples) > 256:
+        result.write_text("INCONCLUSIVE: guest motion sample shape or bounds invalid\n")
+        sys.exit(1)
+    if [int(r["seq"]) for r in samples] != list(range(len(samples))):
+        result.write_text("INCONCLUSIVE: guest motion sequence not continuous\n")
+        sys.exit(1)
+    if any(int(r["stage"]) != 0 for r in samples):
+        result.write_text("INCONCLUSIVE: input probe unexpectedly changed stage\n")
+        sys.exit(1)
+    inputs = [int(r["input_bits"]) for r in samples]
+    xs = [int(r["x_milli"]) for r in samples]
+    ys = [int(r["y_milli"]) for r in samples]
+    shots = [int(r["active_shots"]) for r in samples]
+    checks = {
+        "right_input_seen": any(mask & 2 for mask in inputs),
+        "jump_input_seen": any(mask & 4 for mask in inputs),
+        "fire_input_seen": any(mask & 8 for mask in inputs),
+        "horizontal_motion_px": (max(xs) - min(xs)) / 1000.0,
+        "jump_rise_px": (ys[0] - min(ys)) / 1000.0,
+        "maximum_active_shots": max(shots),
+        "sample_count": len(samples),
+        "first_motion_frame": int(samples[0]["frame"]),
+        "last_motion_frame": int(samples[-1]["frame"]),
+    }
+    import json
+    (out / "motion-summary.txt").write_text(json.dumps(checks, indent=2) + "\n")
+    if not (checks["right_input_seen"] and checks["jump_input_seen"] and
+            checks["fire_input_seen"] and checks["horizontal_motion_px"] > 15 and
+            checks["jump_rise_px"] > 12 and checks["maximum_active_shots"] >= 1):
+        result.write_text("INCONCLUSIVE: a measured control-to-motion/shot effect is absent; "
+                          + json.dumps(checks) + "\n")
+        sys.exit(1)
     result.write_text(
-        f"PASS: NRO first-frame, controller scene enter/return and >=600 frames verified; "
-        f"enter_frame={transitions[0]['frames']} return_frame={transitions[1]['frames']} "
-        f"events={events}\n"
+        f"PASS: guest NRO stage-enter/return, input/motion/jump/fire validated; "
+        f"enter_frame={transitions[0]['frames']} return_frame={transitions[1]['frames']}; "
+        + json.dumps(checks) + "\n"
     )
 except (ValueError, KeyError, OSError) as exc:
     result.write_text(f"INCONCLUSIVE: invalid guest trace: {exc}\n")
