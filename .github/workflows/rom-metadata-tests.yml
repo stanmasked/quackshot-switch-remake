@@ -11,5 +11,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run synthetic ROM tests (no copyrighted assets)
-        run: python -m unittest discover -s tests -p 'test_rom_report.py' -v
+      - name: Test synthetic ROM metadata, exception vectors and I/O patterns
+        run: python -m unittest discover -s tests -p 'test_rom*.py' -v
