@@ -10,10 +10,16 @@ jobs:
       image: devkitpro/devkita64:latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure devkitA64 tool paths
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
       - name: Check SDL2 target libraries
         run: |
           test -d "$DEVKITPRO/libnx"
+          test -x "$DEVKITPRO/devkitA64/bin/aarch64-none-elf-gcc"
           command -v aarch64-none-elf-gcc
+          command -v sdl2-config
           sdl2-config --cflags
           sdl2-config --libs
       - name: Build homebrew NRO
