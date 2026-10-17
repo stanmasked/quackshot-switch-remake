@@ -71,10 +71,43 @@ vulkaninfo --summary > "$out/vulkan.txt" 2>&1 || true
 
 # No false positive: timeout, an emulator window, or just loading an NRO
 # are not proof that SDL rendered the first guest frame.
+# Default NeXium keyboard configuration (verified against its public source):
+# C -> Switch A, D -> left-stick right, X -> B, Z -> Y, M -> Plus.
+# Input injection is best effort and recorded; only guest events prove success.
 set +e
 xvfb-run -a -s "-screen 0 1280x720x24" \
-    timeout --signal=TERM --kill-after=5s 75s "$emulator" "$nro" \
-    > "$out/emulator-stdout.txt" 2>&1
+  bash -c '
+    timeout --signal=TERM --kill-after=5s 40s "$1" "$2" > "$3" 2>&1 &
+    emu_pid=$!
+    (
+      sleep 5
+      echo "Visible windows:"
+      xdotool search --onlyvisible --name "NeXium" || true
+      window="$(xdotool search --onlyvisible --name "NeXium" | tail -n1)"
+      if [ -z "$window" ]; then
+        echo "INPUT_PROBE_UNAVAILABLE: NeXium window not located"
+        exit 0
+      fi
+      echo "Target window: $window"
+      xdotool windowfocus "$window" || true
+      sleep 1
+      xdotool key --clearmodifiers --delay 120 c
+      sleep 2
+      xdotool keydown --clearmodifiers d
+      sleep 1
+      xdotool keyup d
+      xdotool key --clearmodifiers --delay 120 x
+      xdotool key --clearmodifiers --delay 120 z
+      sleep 2
+      xdotool key --clearmodifiers --delay 120 m
+      echo "INPUT_PROBE_SENT: A, stick right, B, Y, Plus"
+    ) > "$4" 2>&1 &
+    input_pid=$!
+    wait "$emu_pid"
+    rc=$?
+    wait "$input_pid" 2>/dev/null || true
+    exit "$rc"
+  ' bash "$emulator" "$nro" "$out/emulator-stdout.txt" "$out/input-injection.txt"
 rc=$?
 set -e
 echo "emulator_exit_code=$rc" >> "$out/metadata.txt"
@@ -107,7 +140,10 @@ try:
     if not sequential or events[:4] != [1, 2, 3, 4] or 5 not in events:
         result.write_text(f"INCONCLUSIVE: guest trace lacks verified boot/first frame; events={events}\n")
         sys.exit(1)
-    result.write_text(f"PASS: guest NRO executed through FIRST_FRAME; events={events}\n")
+    if 7 in events:
+        result.write_text(f"PASS: guest NRO executed, first frame and real stage transition observed; events={events}\n")
+    else:
+        result.write_text(f"PASS: guest NRO executed through FIRST_FRAME; INPUT TRANSITION NOT CONFIRMED; events={events}\n")
 except (ValueError, KeyError, OSError) as exc:
     result.write_text(f"INCONCLUSIVE: invalid guest trace: {exc}\n")
     sys.exit(1)
