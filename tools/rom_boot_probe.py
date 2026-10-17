@@ -76,10 +76,9 @@ def trace_prefix(image, mmio, max_steps=MAX_STEPS):
             if displacement == 0:
                 displacement = signed16(word(image, pc + 2))
                 next_pc = pc + 4
-            elif displacement == 0xFF:
-                stop = "unsupported_long_branch"
-                break
             else:
+                # On the original 68000, 0xFF is signed -1 (short);
+                # 32-bit branch offsets were introduced with 68020.
                 displacement = signed8(displacement)
             taken = (cond == 0x6000 or
                      (cond == 0x6600 and not z) or
