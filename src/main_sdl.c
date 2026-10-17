@@ -1,6 +1,9 @@
 #include "qs_game.h"
 #include <SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 
 /*
  * Intentionally original placeholder geometry. This viewer neither reads nor
@@ -120,6 +123,94 @@ static QsInput read_input(SDL_GameController *pad) {
     return result;
 }
 
+
+/*
+ * Host-only SDL smoke mode: exercise real software rasterization and pixel
+ * readback without a display, GPU, controller, copyrighted assets, or ROM.
+ * Repeat identical input traces to detect nondeterministic visual outcomes.
+ */
+static int capture_frame(SDL_Renderer *renderer, const QsGame *game, uint64_t *digest) {
+    size_t bytes = (size_t)QS_VIEW_W * QS_VIEW_H * sizeof(uint32_t);
+    uint32_t *pixels = (uint32_t *)malloc(bytes);
+    uint64_t hash = UINT64_C(14695981039346656037);
+    size_t i;
+    if (!pixels) {
+        fprintf(stderr, "SDL smoke: allocation failed\n");
+        return 0;
+    }
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    if (SDL_RenderClear(renderer) != 0) {
+        fprintf(stderr, "SDL smoke: render clear failed: %s\n", SDL_GetError());
+        free(pixels);
+        return 0;
+    }
+    if (game->mode == QS_MAP) render_map(renderer, game);
+    else render_stage(renderer, game);
+    if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ARGB8888,
+                             pixels, QS_VIEW_W * (int)sizeof(uint32_t)) != 0) {
+        fprintf(stderr, "SDL smoke: render readback failed: %s\n", SDL_GetError());
+        free(pixels);
+        return 0;
+    }
+    for (i = 0; i < bytes / sizeof(uint32_t); ++i) {
+        hash ^= pixels[i];
+        hash *= UINT64_C(1099511628211);
+    }
+    free(pixels);
+    *digest = hash;
+    return 1;
+}
+
+static int run_sdl_smoke(SDL_Renderer *renderer) {
+    uint64_t reference[QS_STAGE_COUNT + 1] = {0};
+    int replay, stage, frame;
+    for (replay = 0; replay < 2; ++replay) {
+        QsGame game;
+        uint64_t digest;
+        qs_init(&game);
+        if (!capture_frame(renderer, &game, &digest)) return 1;
+        if (replay && digest != reference[0]) {
+            fprintf(stderr, "SDL smoke: map image changed between replays\n");
+            return 1;
+        }
+        if (!replay) reference[0] = digest;
+        for (stage = 0; stage < QS_STAGE_COUNT; ++stage) {
+            qs_begin_stage(&game, stage);
+            for (frame = 0; frame < 65; ++frame) {
+                QsInput in = {0};
+                in.right = frame < 36;
+                in.jump = frame == 8 || frame == 42;
+                in.fire = frame == 15;
+                qs_step(&game, in);
+            }
+            if (game.mode != QS_STAGE || !capture_frame(renderer, &game, &digest)) {
+                fprintf(stderr, "SDL smoke: stage %d unavailable\n", stage);
+                return 1;
+            }
+            if (digest == reference[0] ||
+                (replay && digest != reference[stage + 1])) {
+                fprintf(stderr, "SDL smoke: stage %d frame mismatch\n", stage);
+                return 1;
+            }
+            if (!replay) reference[stage + 1] = digest;
+        }
+    }
+    for (stage = 1; stage <= QS_STAGE_COUNT; ++stage) {
+        for (frame = 1; frame < stage; ++frame) {
+            if (reference[stage] == reference[frame]) {
+                fprintf(stderr, "SDL smoke: duplicate stage frames\n");
+                return 1;
+            }
+        }
+    }
+    printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
+           (unsigned long long)reference[0],
+           (unsigned long long)reference[1],
+           (unsigned long long)reference[2],
+           (unsigned long long)reference[3]);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     SDL_Window *window;
     SDL_Renderer *renderer;
@@ -128,22 +219,27 @@ int main(int argc, char **argv) {
     Uint64 previous, frequency;
     double accumulator = 0.0;
     int running = 1, i;
-    (void)argc;
-    (void)argv;
+    int smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
+    if (argc != 1 && !smoke) {
+        fprintf(stderr, "Usage: %s [--smoke]\n", argv[0]);
+        return 2;
+    }
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
     window = SDL_CreateWindow("QuackShot: experimental engine (no original assets)",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                              1200, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+                              smoke ? QS_VIEW_W : 1200, smoke ? QS_VIEW_H : 720,
+                              smoke ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
-    renderer = SDL_CreateRenderer(window, -1,
-                                   SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    renderer = smoke ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
+                     : SDL_CreateRenderer(window, -1,
+                           SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (!renderer) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
@@ -151,7 +247,20 @@ int main(int argc, char **argv) {
         SDL_Quit();
         return 1;
     }
-    SDL_RenderSetLogicalSize(renderer, QS_VIEW_W, QS_VIEW_H);
+    if (SDL_RenderSetLogicalSize(renderer, QS_VIEW_W, QS_VIEW_H) != 0) {
+        fprintf(stderr, "SDL_RenderSetLogicalSize: %s\n", SDL_GetError());
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+    if (smoke) {
+        int result = run_sdl_smoke(renderer);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return result;
+    }
     for (i = 0; i < SDL_NumJoysticks(); i++) {
         if (SDL_IsGameController(i)) {
             pad = SDL_GameControllerOpen(i);
