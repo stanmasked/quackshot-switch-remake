@@ -108,6 +108,7 @@ def setup_core(core_path):
         "retro_load_game": ([C.POINTER(GameInfo)], C.c_bool),
         "retro_unload_game": ([], None),
         "retro_run": ([], None),
+        "retro_set_controller_port_device": ([C.c_uint, C.c_uint], None),
         "retro_get_memory_data": ([C.c_uint], C.c_void_p),
         "retro_get_memory_size": ([C.c_uint], C.c_size_t),
     }
@@ -129,7 +130,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
-             "frame_checksums": [], "pressed": set()}
+             "frame_checksums": [], "pressed": set(),
+             "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
     # This path is never printed, exported, or included in numerical evidence.
@@ -182,12 +184,15 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
 
     @InputPollCb
     def input_poll():
-        pass
+        state["input_polls"] += 1
 
     @InputStateCb
     def input_state(port, device, index, button):
-        return int(port == 0 and device == RETRO_DEVICE_JOYPAD and
-                   index == 0 and button in state["pressed"])
+        state["input_reads"] += 1
+        active = int(port == 0 and device == RETRO_DEVICE_JOYPAD and
+                     index == 0 and button in state["pressed"])
+        state["input_nonzero_reads"] += active
+        return active
 
     keepalive.extend((environment, video, audio, audio_batch, input_poll, input_state))
     core.retro_set_environment(environment)
@@ -205,6 +210,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         if not core.retro_load_game(C.byref(game)):
             raise RuntimeError("libretro core rejected the private Mega Drive ROM")
         loaded = True
+        core.retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD)
         av = AvInfo()
         core.retro_get_system_av_info(C.byref(av))
         ram_len = int(core.retro_get_memory_size(RETRO_MEMORY_SYSTEM_RAM))
@@ -237,6 +243,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "reference_rom_sha256": rom_hash,
             "frames_requested": frames,
             "frames_video_callbacks": state["video_frames"],
+            "input_polls": state["input_polls"],
+            "input_reads": state["input_reads"],
+            "input_nonzero_reads": state["input_nonzero_reads"],
             "system_fps_reported": round(float(av.timing.fps), 6),
             "system_ram_size": ram_len,
             "input_ranges": [{"first_frame": a, "end_exclusive": b, "button": n}
@@ -258,9 +267,35 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             core.retro_deinit()
 
 
+
+def compare_idle_to_input(idle, active):
+    """Compare numeric metadata only, not copyrighted framebuffer/RAM bytes."""
+    if (idle["reference_rom_sha256"] != active["reference_rom_sha256"] or
+            idle["frames_requested"] != active["frames_requested"]):
+        raise ValueError("Comparison requires same ROM and same frame count")
+    a = {x["frame"]: x["crc32"] for x in idle["video_checkpoints"]}
+    b = {x["frame"]: x["crc32"] for x in active["video_checkpoints"]}
+    if a.keys() != b.keys():
+        raise ValueError("Missing checkpoint in compared runs")
+    difference = [frame for frame in sorted(a) if a[frame] != b[frame]]
+    return {
+        "type": "idle_vs_scripted_inputs",
+        "checkpoints_compared": len(a),
+        "first_different_video_checkpoint": difference[0] if difference else None,
+        "different_video_checkpoint_count": len(difference),
+        "core_input_nonzero_reads_idle": idle["input_nonzero_reads"],
+        "core_input_nonzero_reads_scripted": active["input_nonzero_reads"],
+        "observation_limit": (
+            "CRC divergence proves output differs, not that gameplay input or "
+            "Donald coordinates changed. Checkpoints occur every 60 frames."),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", type=Path, required=True, help="Locally compiled libretro .so")
+    parser.add_argument("--compare-to-idle", action="store_true",
+                        help="Run an independent no-input baseline to test causal output changes")
     parser.add_argument("--core-info", action="store_true",
                         help="Inspect binary metadata without any game ROM")
     parser.add_argument("--rom", type=Path, help="Local original ROM (never uploaded)")
@@ -284,6 +319,10 @@ def main():
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom)
+            if args.compare_to_idle:
+                idle = run_core(core, metadata, data, checksum, args.frames, [],
+                                private_rom_path=args.rom)
+                result["comparison_to_idle"] = compare_idle_to_input(idle, result)
         output = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.output:
             args.output.write_text(output, encoding="utf-8")
