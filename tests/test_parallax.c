@@ -72,7 +72,7 @@ static void reject_corrupted_camera_inputs(void) {
 static void camera_reverse_keeps_hardware_ratio(void) {
     QsGame g = test_game(QS_PHYSICS_REFERENCE_CITY);
     QsInput right = {0}, left = {0};
-    int i, shifted = 0;
+    int i, maximum = 0, decreased = 0, odd_seen = 0, even_seen = 0;
     right.right = 1;
     left.left = 1;
     for (i = 0; i < 145; ++i) {
@@ -80,15 +80,20 @@ static void camera_reverse_keeps_hardware_ratio(void) {
         qs_step(&g, right);
         p = qs_parallax_offsets(&g);
         ENSURE(p.front_px / 2 == p.distant_px);
-        if (p.front_px > 0) shifted = 1;
+        if (p.front_px > maximum) maximum = p.front_px;
+        if (p.front_px > 0 && (p.front_px & 1)) odd_seen = 1;
+        if (p.front_px > 0 && !(p.front_px & 1)) even_seen = 1;
     }
-    ENSURE(shifted);
-    for (i = 0; i < 35; ++i) {
+    ENSURE(maximum > 20 && odd_seen && even_seen);
+    for (i = 0; i < 65; ++i) {
         QsParallax p;
         qs_step(&g, left);
         p = qs_parallax_offsets(&g);
         ENSURE(p.distant_px == p.front_px / 2);
+        if (p.front_px < maximum - 8) decreased = 1;
     }
+    ENSURE(decreased);
+    ENSURE(qs_parallax_offsets(&g).front_px < maximum - 8);
 }
 
 int main(void) {
