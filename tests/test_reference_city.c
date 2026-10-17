@@ -49,15 +49,17 @@ static void measured_jump_envelope(void) {
     float apex;
     unsigned ticks;
     jump.jump = 1;
-    qs_step(&g, jump);
+    /* Genesis: initial upward velocity is CONSTANT for 15 held frames.
+     * Subsequent held input cannot prolong it beyond that bound. */
+    steps(&g, 15, jump);
+    CHECK(fabsf(g.hero.vy - (-2.9296875f)) < 0.0001f);
+    CHECK(g.reference_jump_steps == 15);
     jump.jump = 0;
-    steps(&g, 27, jump);
+    steps(&g, 15, jump);
+    ticks = 30;
     apex = g.hero.y;
     CHECK(fabsf((bottom - apex) - 65.0f) < 1.0f);
     CHECK(!g.hero.grounded);
-    /* The original state landed at +56. A one-frame tolerance allows
-     * 32-bit float floor collision in this DIFFERENT synthetic terrain. */
-    ticks = 28;
     while (!g.hero.grounded && ticks < 60) {
         qs_step(&g, jump);
         ++ticks;
@@ -65,6 +67,50 @@ static void measured_jump_envelope(void) {
     CHECK(g.hero.grounded);
     CHECK(ticks >= 55 && ticks <= 58);
     CHECK(fabsf(g.hero.y - bottom) < 0.02f);
+}
+ 
+static void measured_short_jump(void) {
+    QsGame g = enter_city(1);
+    QsInput jump = none();
+    float bottom = g.hero.y, apex = bottom;
+    unsigned tick;
+    jump.jump = 1;
+    qs_step(&g, jump);
+    jump.jump = 0;
+    CHECK(fabsf(g.hero.vy - (-2.9296875f)) < 0.0001f);
+    for (tick = 2; tick <= 35 && !g.hero.grounded; ++tick) {
+        qs_step(&g, jump);
+        if (g.hero.y < apex) apex = g.hero.y;
+    }
+    CHECK(g.hero.grounded);
+    CHECK(bottom - apex > 23 && bottom - apex < 25);
+    CHECK(tick-1 >= 30 && tick-1 <= 32);
+}
+ 
+static void measured_fixed_point_acceleration_and_braking(void) {
+    QsGame g = enter_city(1);
+    QsInput right = none();
+    unsigned i;
+    right.right = 1;
+    for (i = 1; i <= 11; ++i) {
+        qs_step(&g, right);
+        CHECK(fabsf(g.hero.vx - fminf(i * 0.15625f, 1.625f)) < 0.00001f);
+    }
+    CHECK(fabsf(g.hero.x - (61.0f + 10.21875f)) < 0.0001f);
+    right.right = 0;
+    for (i = 1; i <= 11; ++i) {
+        qs_step(&g, right);
+        CHECK(fabsf(g.hero.vx - fmaxf(1.625f - i*0.15625f, 0.0f)) < 0.00001f);
+    }
+    CHECK(fabsf(g.hero.vx) < 0.00001f);
+    /* A short eight-frame tap coasts a predictable 8 more frames. */
+    g = enter_city(1);
+    right.right = 1;
+    steps(&g, 8, right);
+    right.right = 0;
+    steps(&g, 8, right);
+    CHECK(fabsf(g.hero.x - 71.0f) < 0.0001f);
+    CHECK(g.hero.vx == 0.0f);
 }
 
 static void projectile_is_one_tick_deferred(void) {
@@ -137,10 +183,12 @@ static void reference_replay_is_deterministic(void) {
 int main(void) {
     measured_walking_envelope();
     measured_jump_envelope();
+    measured_short_jump();
+    measured_fixed_point_acceleration_and_braking();
     projectile_is_one_tick_deferred();
     original_prototype_is_unchanged();
     profile_never_leaks_to_unmeasured_levels();
     reference_replay_is_deterministic();
-    puts("PASS: 6 optional reference-city physics checks, prototype stays unchanged");
+    puts("PASS: 8 measured city physics checks, fixed ramp, variable-height jump, prototype unchanged");
     return 0;
 }
