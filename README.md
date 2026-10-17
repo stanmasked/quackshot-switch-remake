@@ -13,7 +13,8 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
 - Twelve executable regression checks in Release and Debug builds.
-- Experimental Nintendo Switch homebrew Makefile; NRO cross-build under CI validation.
+- Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
+- Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
 - Independent original-ROM metadata inspector lives in PR #1.
 
 ## Portable tests
@@ -38,10 +39,23 @@ With devkitPro/devkitA64, libnx and Switch SDL2 installed:
 
     make -j2
 
-Expected build artifact: quackshot-prototype.nro, **if** the cross-build succeeds.
+CI-confirmed build artifact: quackshot-prototype.nro.
 Actual Switch runtime behavior still needs hardware/emulator validation.
+For a runtime diagnostic log, the Switch build attempts to write
+sdmc:/switch/quackshot-runtime.csv (up to 256 records); failure to open it
+never prevents gameplay.
 
-See [documentation in Russian](docs/PROTOTYPE_RU.md).
+See [documentation in Russian](docs/PROTOTYPE_RU.md) and
+[Switch runtime protocol](docs/SWITCH_RUNTIME_TEST_RU.md).
+
+Host-only diagnostics for Linux CI:
+
+    QS_TRACE_PATH=probe-runtime.csv SDL_VIDEODRIVER=dummy \
+      SDL_RENDER_DRIVER=software ./build-desktop/quackshot-prototype --probe-frames 605
+
+The finite probe verifies SDL initialization, first rendered frame,
+600 simulation steps, a heartbeat and clean shutdown. It is **not**
+a Nintendo Switch emulator or console run.
 
 ## Rights and asset isolation
 
