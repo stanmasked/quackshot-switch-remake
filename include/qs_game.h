@@ -37,6 +37,7 @@ typedef struct {
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
+    int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
     QsWeapon weapon;
     char terrain[QS_ROWS][QS_COLUMNS];
     QsPlayer hero;
