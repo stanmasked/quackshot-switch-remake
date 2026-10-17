@@ -115,12 +115,26 @@ static QsInput read_input(SDL_GameController *pad) {
                    pad_button(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || axis > 10000;
     result.up = pressed(keys, SDL_SCANCODE_UP) || pad_button(pad, SDL_CONTROLLER_BUTTON_DPAD_UP);
     result.down = pressed(keys, SDL_SCANCODE_DOWN) || pad_button(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+    /*
+     * On Switch, SDL2 normalizes Nintendo's physical south/east/west/north
+     * face buttons to Xbox-style A/B/X/Y positions, not the printed labels:
+     * Nintendo B(south)=SDL A, A(east)=SDL B,
+     * Y(west)=SDL X, X(north)=SDL Y.
+     * Desktop regression pads retain their original Xbox-style bindings.
+     */
+#ifdef __SWITCH__
+    result.jump = pressed(keys, SDL_SCANCODE_SPACE) || pad_button(pad, SDL_CONTROLLER_BUTTON_A);
+    result.fire = pressed(keys, SDL_SCANCODE_J) || pad_button(pad, SDL_CONTROLLER_BUTTON_X);
+    result.change = pressed(keys, SDL_SCANCODE_K) || pad_button(pad, SDL_CONTROLLER_BUTTON_Y);
+    result.select = pressed(keys, SDL_SCANCODE_RETURN) || pad_button(pad, SDL_CONTROLLER_BUTTON_B);
+#else
     result.jump = pressed(keys, SDL_SCANCODE_SPACE) || pad_button(pad, SDL_CONTROLLER_BUTTON_B);
     result.fire = pressed(keys, SDL_SCANCODE_J) || pad_button(pad, SDL_CONTROLLER_BUTTON_Y);
     result.change = pressed(keys, SDL_SCANCODE_K) || pad_button(pad, SDL_CONTROLLER_BUTTON_X);
+    result.select = pressed(keys, SDL_SCANCODE_RETURN) || pad_button(pad, SDL_CONTROLLER_BUTTON_A);
+#endif
     result.dash = pressed(keys, SDL_SCANCODE_LSHIFT) ||
                   pad_button(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-    result.select = pressed(keys, SDL_SCANCODE_RETURN) || pad_button(pad, SDL_CONTROLLER_BUTTON_A);
     result.back = pressed(keys, SDL_SCANCODE_ESCAPE) || pad_button(pad, SDL_CONTROLLER_BUTTON_START);
     return result;
 }
