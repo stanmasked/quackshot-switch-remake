@@ -40,13 +40,14 @@ With devkitPro/devkitA64, libnx and Switch SDL2 installed:
     make -j2
 
 CI-confirmed build artifact: quackshot-prototype.nro.
-Actual Switch runtime behavior still needs hardware/emulator validation.
+Runtime in the **NeXium Nintendo Switch emulator has now been verified**: guest SDL2 first frame, 600+ simulation frames, and A/Plus scene enter/return. This does not validate physical Switch hardware or every emulator.
 For a runtime diagnostic log, the Switch build attempts to write
 sdmc:/switch/quackshot-runtime.csv (up to 256 records); failure to open it
 never prevents gameplay.
 
 See [documentation in Russian](docs/PROTOTYPE_RU.md) and
-[Switch runtime protocol](docs/SWITCH_RUNTIME_TEST_RU.md).
+[Switch runtime protocol](docs/SWITCH_RUNTIME_TEST_RU.md) and
+[NeXium emulator evidence (Russian)](docs/NEXIUM_EMULATOR_RU.md).
 
 Host-only diagnostics for Linux CI:
 
