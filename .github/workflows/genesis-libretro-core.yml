@@ -100,12 +100,32 @@ jobs:
           assert actual["work_ram_crc_differences"]["changed_count"] == 0, actual
           print("GENESIS_REAL_CI_CAUSALITY_PASS: real core, synthetic ROM, repeatable frames & RAM")
           PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'tools')
+          from genesis_libretro_probe import safe_rom, setup_core, run_core
+          from genesis_playable_physics import decode_player_state
+          core, meta = setup_core(Path('emulator-core/genesis_plus_gx_libretro.so'))
+          path = Path('ci-only-synthetic.gen')
+          data, sha = safe_rom(path, None)
+          observed = []
+          def numeric_window(frame, private_ram):
+              state = decode_player_state(private_ram)
+              observed.append((frame, state["x"], state["y"]))
+          result = run_core(core, meta, data, sha, 90, [], private_rom_path=path,
+                            checkpoint_sink=numeric_window, ram_window=(10, 80))
+          assert result['frames_video_callbacks'] == 90, result
+          assert len([f for f,x,y in observed if 10 <= f < 80]) == 70, observed
+          assert all(0 <= x <= 65535 and 0 <= y <= 65535 for _,x,y in observed)
+          print('GENESIS_DENSE_RAM_PROBE_SYNTHETIC_PASS: per-frame window through real core')
+          PY
           rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
       - name: Package licensed emulator only
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py rom-free-emulator/
           cp emulator-sha256.txt rom-free-emulator/
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
