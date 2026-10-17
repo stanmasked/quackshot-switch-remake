@@ -112,9 +112,15 @@ class StaticMapTests(unittest.TestCase):
         self.assertEqual([x["number"] for x in
                           witness["exception_vectors"]["nondefault_handlers"]],
                          [6, 30, 32, 33, 34, 35, 36, 37])
-        self.assertEqual([x["absolute_address"] for x in
-                          witness["static_io_instruction_candidates"]],
+        hardware = witness["static_io_instruction_candidates"]
+        self.assertEqual(len(hardware), 21)
+        self.assertEqual([x["absolute_address"] for x in hardware[:3]],
                          ["0xA10008", "0xA1000C", "0xC00004"])
+        self.assertEqual([x["rom_offset"] for x in hardware
+                          if x["opcode_family"] == "MOVE.B_abs_to_Dn" and
+                          x["absolute_address"] == "0xA10003"],
+                         ["0x002120", "0x002138"])
+        self.assertEqual(hardware[4]["region"], "tmss_security_register_window")
         self.assertEqual(witness["evidence_type"], "static_byte_patterns_not_execution")
 
     def test_smd_conversion_produces_same_map(self):
