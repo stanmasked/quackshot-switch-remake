@@ -23,6 +23,7 @@ static void actual_measured_2_to_1_samples(void) {
     for (i = 0; i < sizeof buffer / sizeof buffer[0]; ++i) {
         QsParallax p;
         g.camera_x = (float)buffer[i];
+        g.render_camera_x = g.camera_x;
         p = qs_parallax_offsets(&g);
         ENSURE(p.front_px == buffer[i]);
         ENSURE(p.distant_px == buffer[i] / 2);
@@ -30,8 +31,10 @@ static void actual_measured_2_to_1_samples(void) {
                p.front_px == 2 * p.distant_px + 1);
     }
     g.camera_x = 155.9f;
+    g.render_camera_x = g.camera_x;
     ENSURE(qs_parallax_offsets(&g).distant_px == 77);
     g.camera_x = 359.99f;
+    g.render_camera_x = g.camera_x;
     ENSURE(qs_parallax_offsets(&g).distant_px == 179);
 }
 
@@ -64,8 +67,10 @@ static void never_leak_to_unmeasured_stages_or_map(void) {
 static void reject_corrupted_camera_inputs(void) {
     QsGame g = test_game(QS_PHYSICS_REFERENCE_CITY);
     g.camera_x = -1.0f;
+    g.render_camera_x = g.camera_x;
     ENSURE(qs_parallax_offsets(&g).front_px == 0);
     g.camera_x = 90000.0f;
+    g.render_camera_x = g.camera_x;
     ENSURE(qs_parallax_offsets(&g).front_px == 0);
 }
 

@@ -31,7 +31,7 @@ int qs_trace_emit(QsTrace *trace, unsigned ticks_ms, unsigned frames,
                   int detail) {
     if (!trace || !trace->stream || trace->failed ||
         trace->records >= QS_TRACE_MAX_RECORDS ||
-        event < QS_TRACE_BOOT || event > QS_TRACE_PARALLAX) return 0;
+        event < QS_TRACE_BOOT || event > QS_TRACE_CAMERA_PHASE) return 0;
     if (fprintf(trace->stream, "%u,%u,%u,%d,%d,%d,%d,%d\n",
                 trace->records, ticks_ms, frames, (int)event,
                 mode, stage, controllers, detail) < 0 ||

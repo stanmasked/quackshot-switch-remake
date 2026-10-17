@@ -189,6 +189,31 @@ try:
     if not all(front // 2 == distant for front, distant in zip(front_scroll, distant_scroll)):
         result.write_text("INCONCLUSIVE: guest A/B parallax scroll ratio differs from 2:1\n")
         sys.exit(1)
+    phase_rows = [r for r in records if int(r["event"]) == 13]
+    if len(phase_rows) != len(parallax_rows):
+        result.write_text("INCONCLUSIVE: guest camera phase samples missing or incomplete\n")
+        sys.exit(1)
+    camera_current = [int(r["detail"]) >> 16 for r in phase_rows]
+    camera_presented = [int(r["detail"]) & 0xffff for r in phase_rows]
+    if any(
+        int(c["frames"]) != int(p["frames"]) or
+        int(c["seq"]) + 1 != int(p["seq"]) or
+        c["mode"] != p["mode"] or c["stage"] != p["stage"] or
+        presentation != foreground
+        for c, p, presentation, foreground in zip(
+            phase_rows, parallax_rows, camera_presented, front_scroll
+        )
+    ):
+        result.write_text("INCONCLUSIVE: camera phase not bound to the rendered parallax samples\n")
+        sys.exit(1)
+    phase_gaps = [current - presented for current, presented
+                  in zip(camera_current, camera_presented)]
+    if not any(gap > 0 for gap in phase_gaps) or not any(gap < 0 for gap in phase_gaps):
+        result.write_text(f"INCONCLUSIVE: guest camera has no forward/reverse frame-lag proof: {phase_gaps}\n")
+        sys.exit(1)
+    if max(map(abs, phase_gaps)) > 3:
+        result.write_text(f"INCONCLUSIVE: unexpected camera presentation lag: {phase_gaps}\n")
+        sys.exit(1)
     if max(front_scroll) < 10 or max(distant_scroll) < 5:
         result.write_text("INCONCLUSIVE: actual camera did not scroll enough for independent two-plane proof\n")
         sys.exit(1)
@@ -246,6 +271,10 @@ try:
         "first_motion_frame": int(samples[0]["frame"]),
         "last_motion_frame": int(samples[-1]["frame"]),
         "parallax_samples": len(parallax_rows),
+        "camera_phase_samples": len(phase_rows),
+        "camera_phase_positive_count": sum(g > 0 for g in phase_gaps),
+        "camera_phase_negative_count": sum(g < 0 for g in phase_gaps),
+        "camera_phase_max_gap_px": max(map(abs, phase_gaps)),
         "parallax_rising_steps": rises,
         "parallax_falling_steps": falls,
         "parallax_reverse_drop_px": drop,

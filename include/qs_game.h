@@ -44,7 +44,8 @@ typedef struct {
     QsEnemy enemies[QS_MAX_ENEMIES];
     QsShot shots[QS_MAX_SHOTS];
     QsPickup pickups[QS_MAX_PICKUPS];
-    float camera_x;
+    float camera_x;        /* current simulation camera (city RAM 0x8524 proxy) */
+    float render_camera_x; /* previous simulation-step camera, city VDP proxy */
     QsInput previous;
 } QsGame;
 

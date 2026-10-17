@@ -81,6 +81,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->hero.facing = 1; g->hero.grounded = 0;
     g->hero.hearts = 3; g->hero.hurt_frames = 0;
     g->camera_x = 0;
+    g->render_camera_x = 0;
     add_enemy(g, 0, 410); add_enemy(g, 1, 752); add_enemy(g, 2, 1100);
     if (stage == 0 && !g->red_unlocked) {
         g->pickups[0].x = 179; g->pickups[0].y = 140;
@@ -318,6 +319,10 @@ void qs_step(QsGame *g, QsInput input) {
             update_enemies(g);
             update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
+            /* Snapshot BEFORE simulation camera update. In the measured city
+             * the VDP HScroll buffer can trail the gameplay RAM position.
+             * One frame is an explicit working hypothesis, not recovered code. */
+            g->render_camera_x = g->camera_x;
             if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
                 /*
                  * Private first-city Genesis RAM: the 0x8524 scroll-state
@@ -340,6 +345,8 @@ void qs_step(QsGame *g, QsInput input) {
                 /* Bit-preserve prototype v0.1 camera behavior. */
                 g->camera_x = clampf(g->hero.x - 150, 0,
                                      QS_COLUMNS * QS_TILE - QS_VIEW_W);
+                /* Normal test profiles do NOT receive a presentation delay. */
+                g->render_camera_x = g->camera_x;
             }
             if (g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
                 g->cleared[g->stage] = 1;

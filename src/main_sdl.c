@@ -364,6 +364,7 @@ static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
     for (sample = 0; sample < 4; ++sample) {
         QsParallax offset;
         game.camera_x = (float)(40 + sample);
+        game.render_camera_x = game.camera_x;
         offset = qs_parallax_offsets(&game);
         if (offset.front_px != 40 + sample ||
             offset.distant_px != (40 + sample) / 2 ||
@@ -392,6 +393,7 @@ static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
      * dependent drift is permitted in the procedural plane positions.
      */
     game.camera_x = 40;
+    game.render_camera_x = game.camera_x;
     if (!parallax_smoke_capture(renderer, &game, 69, far_return) ||
         !parallax_smoke_capture(renderer, &game, 103, near_return))
         return 1;
@@ -592,6 +594,11 @@ int main(int argc, char **argv) {
             if (qs_parallax_is_reference_city(&game) &&
                 ((game.frames % 15u) == 0)) {
                 QsParallax p = qs_parallax_offsets(&game);
+                /* Guest evidence: simulation position before presentation.
+                 * Two 16-bit nonnegative scroll coordinates per record. */
+                runtime_event(&trace, &game, QS_TRACE_CAMERA_PHASE, pad != NULL,
+                              (((int)game.camera_x) << 16) |
+                              (int)game.render_camera_x);
                 /* Render offsets: high16 foreground, low16 distant. */
                 runtime_event(&trace, &game, QS_TRACE_PARALLAX, pad != NULL,
                               (p.front_px << 16) | p.distant_px);

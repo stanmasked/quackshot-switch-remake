@@ -8,10 +8,14 @@ int qs_parallax_is_reference_city(const QsGame *game) {
 
 QsParallax qs_parallax_offsets(const QsGame *game) {
     QsParallax p = {0, 0};
-    /* Camera is clamped by the simulation; guard malformed test data. */
-    if (!game || !(game->camera_x >= 0.0f) ||
-        game->camera_x > 65535.0f) return p;
-    p.front_px = (int)game->camera_x;
+    /* Only the opt-in city uses a one-tick-latched presentation position.
+     * Other scenes retain their original camera-to-pixel mapping. */
+    float camera;
+    if (!game) return p;
+    camera = qs_parallax_is_reference_city(game)
+                 ? game->render_camera_x : game->camera_x;
+    if (!(camera >= 0.0f) || camera > 65535.0f) return p;
+    p.front_px = (int)camera;
     if (qs_parallax_is_reference_city(game)) {
         /* Original VDP: HScroll A=-S, B=-floor(S/2) for this city.
          * S here is our own nonnegative synthetic camera offset. */
