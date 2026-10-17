@@ -91,7 +91,13 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       echo "Target window: $window"
       xdotool windowfocus "$window" || true
       sleep 1
+      # Hold Switch R (NeXium keyboard E) while pressing A (C)
+      # to enter the measured city envelope. R alone does not enter a stage.
+      xdotool keydown --clearmodifiers e
+      sleep 0.3
       xdotool key --clearmodifiers --delay 120 c
+      sleep 0.1
+      xdotool keyup e
       sleep 1
       # Jump in a clear section before walking beneath test scaffolding.
       xdotool keydown --clearmodifiers x
@@ -107,7 +113,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool keyup z
       sleep 2
       xdotool key --clearmodifiers --delay 120 m
-      echo "INPUT_PROBE_SENT: A, stick right, B, Y, Plus"
+      echo "INPUT_PROBE_SENT: R+A reference-city, B, stick right, Y, Plus"
     ) > "$4" 2>&1 &
     input_pid=$!
     wait "$emu_pid"
@@ -159,6 +165,9 @@ try:
             not all(int(r["controllers"]) == 1 for r in transitions[:2])):
         result.write_text(f"INCONCLUSIVE: controller stage-enter/return not proven; events={events}\n")
         sys.exit(1)
+    if int(transitions[0]["detail"]) != 1:
+        result.write_text("INCONCLUSIVE: R+A did not activate optional reference-city profile\n")
+        sys.exit(1)
     if 8 not in events or max(int(r["frames"]) for r in records) < 600:
         result.write_text(f"INCONCLUSIVE: guest did not complete 600 simulation steps; events={events}\n")
         sys.exit(1)
@@ -199,7 +208,7 @@ try:
     (out / "motion-summary.txt").write_text(json.dumps(checks, indent=2) + "\n")
     if not (checks["right_input_seen"] and checks["jump_input_seen"] and
             checks["fire_input_seen"] and checks["horizontal_motion_px"] > 15 and
-            checks["jump_rise_px"] > 12 and checks["maximum_active_shots"] >= 1):
+            55 < checks["jump_rise_px"] < 70 and checks["maximum_active_shots"] >= 1):
         result.write_text("INCONCLUSIVE: a measured control-to-motion/shot effect is absent; "
                           + json.dumps(checks) + "\n")
         sys.exit(1)
