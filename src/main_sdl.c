@@ -195,6 +195,8 @@ static int virtual_controller_smoke(void) {
         fprintf(stderr, "SDL virtual controller button injection failed\n");
         goto cleanup;
     }
+    /* SDL can throttle joystick polling within a single millisecond. */
+    SDL_Delay(30);
     SDL_PumpEvents();
     SDL_JoystickUpdate();
     SDL_GameControllerUpdate();
@@ -219,6 +221,8 @@ static int virtual_controller_smoke(void) {
     SDL_JoystickSetVirtualButton(joystick, 7, SDL_RELEASED);
     SDL_JoystickSetVirtualButton(joystick, 11, SDL_RELEASED);
     SDL_JoystickSetVirtualAxis(joystick, 0, -25000);
+    /* SDL can throttle joystick polling within a single millisecond. */
+    SDL_Delay(30);
     SDL_PumpEvents();
     SDL_JoystickUpdate();
     SDL_GameControllerUpdate();
