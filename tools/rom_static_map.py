@@ -28,6 +28,48 @@ DIRECT_ABS_LONG = {
     0x4EB9: "JSR", 0x4EF9: "JMP",
 }
 
+# Other precisely decoded M68000 6-, 8-, and 10-byte forms.
+# Matching offsets remain static *candidates*, not disassembled control flow.
+MOVE_ABS_TO_DN = {
+    0x1039: "MOVE.B_abs_to_Dn",
+    0x3039: "MOVE.W_abs_to_Dn",
+    0x2039: "MOVE.L_abs_to_Dn",
+}
+MOVE_DN_TO_ABS = {
+    0x13C0: "MOVE.B_Dn_to_abs",
+    0x33C0: "MOVE.W_Dn_to_abs",
+    0x23C0: "MOVE.L_Dn_to_abs",
+}
+MOVE_IMM_TO_ABS = {
+    0x13FC: ("MOVE.B_imm_to_abs", 4),
+    0x33FC: ("MOVE.W_imm_to_abs", 4),
+    0x23FC: ("MOVE.L_imm_to_abs", 6),
+}
+
+
+def absolute_long_operand(image, offset):
+    """Return exact M68000 operand address and mnemonic, or None."""
+    if offset + 6 > len(image):
+        return None
+    opcode = int.from_bytes(image[offset:offset+2], "big")
+    if opcode in DIRECT_ABS_LONG:
+        mnemonic, operand_offset = DIRECT_ABS_LONG[opcode], 2
+    elif (opcode & 0xF1FF) in MOVE_ABS_TO_DN:
+        mnemonic = MOVE_ABS_TO_DN[opcode & 0xF1FF]
+        operand_offset = 2
+    elif (opcode & 0xFFF8) in MOVE_DN_TO_ABS:
+        mnemonic = MOVE_DN_TO_ABS[opcode & 0xFFF8]
+        operand_offset = 2
+    elif opcode in MOVE_IMM_TO_ABS:
+        mnemonic, operand_offset = MOVE_IMM_TO_ABS[opcode]
+    else:
+        return None
+    if offset + operand_offset + 4 > len(image):
+        return None
+    absolute = int.from_bytes(
+        image[offset+operand_offset:offset+operand_offset+4], "big")
+    return mnemonic, absolute
+
 
 def normalize_image(raw):
     profile = inspect_data(raw)
@@ -82,11 +124,10 @@ def static_map(raw):
     ]
     access = []
     for off in range(0x200, len(image)-6+1, 2):
-        op = int.from_bytes(image[off:off+2], "big")
-        mnemonic = DIRECT_ABS_LONG.get(op)
-        if mnemonic is None:
+        operand = absolute_long_operand(image, off)
+        if operand is None:
             continue
-        address = int.from_bytes(image[off+2:off+6], "big")
+        mnemonic, address = operand
         region = io_region(address)
         if region:
             access.append({
