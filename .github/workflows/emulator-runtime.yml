@@ -1,0 +1,66 @@
+name: NeXium Switch Emulator Runtime
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "Makefile"
+      - "tools/nexium_ci_probe.sh"
+      - "tools/verify_nro.py"
+      - ".github/workflows/emulator-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure devkitPro tools
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build Switch homebrew from this commit
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-probe-homebrew-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+
+  emulate:
+    needs: cross-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-probe-homebrew-nro
+          path: emulator-input
+      - name: Install headless Vulkan and UI dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 \
+            libgl1 libpulse0
+      - name: Start verified NeXium and examine real guest trace
+        run: bash tools/nexium_ci_probe.sh emulator-input/quackshot-prototype.nro emulator-evidence
+      - name: Preserve full outcome and emulator logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexium-emulation-evidence
+          path: emulator-evidence/
+          retention-days: 7
+          if-no-files-found: warn
