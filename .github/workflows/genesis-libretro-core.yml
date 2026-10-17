@@ -29,6 +29,8 @@ jobs:
         run: |
           cat tools/genesis_vdp_hscroll_export.c >> emulator-core/libretro/libretro.c
           grep -q 'quackshot_research_vdp_hscroll' emulator-core/libretro/libretro.c
+          sed -i 's/global: retro_\*;/global: retro_*; quackshot_research_vdp_hscroll;/' emulator-core/libretro/link.T
+          grep -q 'quackshot_research_vdp_hscroll' emulator-core/libretro/link.T
       - name: Compile Linux x86-64 libretro core
         run: |
           make -C emulator-core -f Makefile.libretro -j2 platform=unix HAVE_CHD=0 HAVE_CDROM=0
