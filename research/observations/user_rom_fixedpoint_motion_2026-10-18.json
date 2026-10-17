@@ -1,0 +1,104 @@
+{
+  "schema": "quackshot_original_genesis_fixedpoint_motion_v1",
+  "evidence_type": "independent_original_rom_emulation_numeric_work_ram_observations",
+  "reference_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "reference_rom_size_bytes": 524288,
+  "emulator_core": "Genesis Plus GX libretro v1.7.4 aa74d79",
+  "emulator_sha256": "8c0dd22e79cf9db57ce8aa0d8751592ecb6f5ba88b61432bf45a0cbd0ef68c63",
+  "independent_runs": 6,
+  "frames_per_run": 2320,
+  "first_city_control_frame": 2070,
+  "identical_pre_input_world_coordinate": {
+    "x": 61,
+    "y": 176
+  },
+  "raw_rom_ram_audio_video_included": false,
+  "fixedpoint_format": "each state is signed 16-bit integer word followed by unsigned 16-bit fractional word; frac / 65536",
+  "numeric_address_binding": {
+    "world_x": "0xA2D0",
+    "world_x_fraction": "0xA2D2",
+    "world_y": "0xA2D4",
+    "world_y_fraction": "0xA2D6",
+    "vx_integer": "0xA2D8",
+    "vx_fraction": "0xA2DA",
+    "vy_integer": "0xA2DC",
+    "vy_fraction": "0xA2DE"
+  },
+  "scenarios": [
+    {
+      "name": "idle",
+      "controller_input": "none",
+      "observed_frames": 2320
+    },
+    {
+      "name": "right_hold_100",
+      "controller_input": "RIGHT [2070,2170)",
+      "active_input_reads": 100,
+      "first_vx": 0.15625,
+      "max_vx": 1.625,
+      "frame_reaches_max_vx": 2080,
+      "world_x_at_2090": 87,
+      "world_x_at_2160": 201,
+      "world_x_after_braking_at_2180": 223
+    },
+    {
+      "name": "right_tap_8",
+      "controller_input": "RIGHT [2070,2078)",
+      "active_input_reads": 8,
+      "vx_after_eight_frames": 1.25,
+      "stopped_by_frame": 2085,
+      "final_world_x": 71
+    },
+    {
+      "name": "left_hold_100",
+      "controller_input": "LEFT [2070,2170)",
+      "active_input_reads": 100,
+      "first_vx": -0.15625,
+      "min_vx": -1.625,
+      "world_x_left_boundary": 16
+    },
+    {
+      "name": "jump_A_1",
+      "controller_input": "A [2070,2071)",
+      "active_input_reads": 1,
+      "initial_vy": -2.9296875,
+      "vertical_gravity_step": 0.1953125,
+      "peak_rise_world_pixels": 24,
+      "first_apex_frame": 2083,
+      "landing_frame": 2100,
+      "elapsed_frames_until_landing": 30
+    },
+    {
+      "name": "jump_A_50",
+      "controller_input": "A [2070,2120)",
+      "active_input_reads": 50,
+      "initial_vy": -2.9296875,
+      "held_takeoff_velocity_steps": 15,
+      "first_gravity_advance_frame": 2085,
+      "gravity_step": 0.1953125,
+      "peak_rise_world_pixels": 65,
+      "first_apex_frame": 2097,
+      "landing_frame": 2126,
+      "elapsed_frames_until_landing": 56
+    }
+  ],
+  "conclusions": {
+    "horizontal_acceleration_16_16_units": 10240,
+    "horizontal_max_speed_16_16_units": 106496,
+    "horizontal_braking_16_16_units": 10240,
+    "horizontal_acceleration_px_per_frame_squared": 0.15625,
+    "horizontal_max_speed_px_per_frame": 1.625,
+    "braking_px_per_frame_squared": 0.15625,
+    "jump_takeoff_vy_px_per_frame": -2.9296875,
+    "vertical_gravity_px_per_frame_squared": 0.1953125,
+    "jump_upward_velocity_hold_limit_frames": 15,
+    "jump_is_variable_height": true
+  },
+  "boundaries": [
+    "Measured at first verified original playable city spawn only; not proof for every level",
+    "World-coordinate and velocity numerical fields observed by privately emulating original ROM",
+    "Camera, collision geometry, enemy interactions, damage, dash and other stages require independent measurements",
+    "Only numeric observations released: original ROM, code bytes, images, audio and RAM contents stay private",
+    "16.16 here describes game-state field representation decoded from RAM; Motorola 68000 CPU is big-endian"
+  ]
+}
