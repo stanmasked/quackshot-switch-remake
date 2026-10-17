@@ -84,7 +84,23 @@ jobs:
 
           print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
           PY
-          rm -f ci-only-synthetic.gen ci-only-observation.json
+          python3 tools/genesis_input_causality.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --expected-sha256 "$(sha256sum ci-only-synthetic.gen | cut -d' ' -f1)" \
+            --frames 90 --base "" --variants "start_10@10:20:START" --stride 1 \
+            --output ci-only-causal.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          witness = json.loads(Path('ci-only-causal.json').read_text())
+          assert witness["baseline"]["repeat_identical"], witness
+          assert witness["baseline"]["video_checkpoints"] == 90, witness
+          actual = witness["variants"][0]
+          assert actual["additional_nonzero_reads"] == 10, actual
+          assert actual["video_crc_differences"]["changed_count"] == 0, actual
+          assert actual["work_ram_crc_differences"]["changed_count"] == 0, actual
+          print("GENESIS_REAL_CI_CAUSALITY_PASS: real core, synthetic ROM, repeatable frames & RAM")
+          PY
+          rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
       - name: Package licensed emulator only
         run: |
           mkdir -p rom-free-emulator
