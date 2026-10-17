@@ -69,6 +69,40 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertNotIn("rom", probe.setup_core.__code__.co_consts)
         self.assertEqual(probe.RETRO_MEMORY_SYSTEM_RAM, 2)
 
+    def test_idle_vs_input_video_divergence_is_numeric_only(self):
+        idle = {"reference_rom_sha256": "test", "frames_requested": 120,
+                "input_nonzero_reads": 0,
+                "video_checkpoints": [
+                    {"frame": 0, "crc32": "AAAAAAAA"},
+                    {"frame": 60, "crc32": "BBBBBBBB"}]}
+        scripted = {"reference_rom_sha256": "test", "frames_requested": 120,
+                    "input_nonzero_reads": 10,
+                    "video_checkpoints": [
+                        {"frame": 0, "crc32": "AAAAAAAA"},
+                        {"frame": 60, "crc32": "CCCCCCCC"}]}
+        witness = probe.compare_idle_to_input(idle, scripted)
+        self.assertEqual(witness["first_different_video_checkpoint"], 60)
+        self.assertEqual(witness["different_video_checkpoint_count"], 1)
+        self.assertEqual(witness["core_input_nonzero_reads_scripted"], 10)
+        self.assertNotIn("image", witness)
+
+    def test_comparison_rejects_other_rom(self):
+        template = {"reference_rom_sha256": "test", "frames_requested": 120,
+                    "input_nonzero_reads": 0, "video_checkpoints": []}
+        other = dict(template)
+        other["reference_rom_sha256"] = "different"
+        with self.assertRaisesRegex(ValueError, "same ROM"):
+            probe.compare_idle_to_input(template, other)
+
+    def test_comparison_rejects_missing_frame(self):
+        template = {"reference_rom_sha256": "test", "frames_requested": 120,
+                    "input_nonzero_reads": 0,
+                    "video_checkpoints": [{"frame": 0, "crc32": "FFFFFFFF"}]}
+        other = dict(template)
+        other["video_checkpoints"] = []
+        with self.assertRaisesRegex(ValueError, "Missing checkpoint"):
+            probe.compare_idle_to_input(template, other)
+
     def test_callback_signature_declared(self):
         self.assertTrue(callable(probe.VideoCb))
         self.assertTrue(callable(probe.InputStateCb))
