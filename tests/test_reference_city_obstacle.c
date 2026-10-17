@@ -107,10 +107,34 @@ static void camera_uses_provisional_city_anchor(void) {
     }
     VERIFY(city.camera_x>0);
     VERIFY(normal.camera_x>0);
-    VERIFY(fabsf((city.hero.x-city.camera_x)-134.0f)<0.001f);
+    VERIFY(fabsf((city.hero.x-city.camera_x)-141.0f)<0.001f);
     VERIFY(fabsf((normal.hero.x-normal.camera_x)-150.0f)<0.001f);
     VERIFY(city.physics_profile==QS_PHYSICS_REFERENCE_CITY);
     VERIFY(normal.physics_profile==QS_PHYSICS_PROTOTYPE);
+}
+
+static void camera_reverse_has_measured_deadzone(void) {
+    QsGame g=course(QS_PHYSICS_REFERENCE_CITY);
+    QsInput right=no_input(),left=no_input();
+    float at_wall;
+    unsigned i;
+    right.right=1;
+    left.left=1;
+    for (i=0;i<305;i++) qs_step(&g,right);
+    VERIFY(g.hero.vx==0.0f);
+    at_wall=g.camera_x;
+    VERIFY(g.hero.x-g.camera_x>=140.0f &&
+           g.hero.x-g.camera_x<=142.0f);
+    for (i=0;i<12;i++) qs_step(&g,left);
+    /* Direction reversal must move the hero through the viewport
+     * deadzone before the background begins tracking in reverse. */
+    VERIFY(g.camera_x==at_wall);
+    VERIFY(g.hero.x<500.0f);
+    for (i=0;i<24;i++) qs_step(&g,left);
+    VERIFY(g.camera_x<at_wall);
+    VERIFY(g.hero.x-g.camera_x>=122.0f &&
+           g.hero.x-g.camera_x<=124.0f);
+    VERIFY(g.hero.vx<0);
 }
 
 static void camera_and_collision_replays_identical(void) {
@@ -135,7 +159,8 @@ int main(void) {
     jump_timing_matters();
     reverse_clears_collision();
     camera_uses_provisional_city_anchor();
+    camera_reverse_has_measured_deadzone();
     camera_and_collision_replays_identical();
-    puts("PASS: 5 synthetic ledge/wall/camera regression checks");
+    puts("PASS: 6 synthetic ledge/wall/camera hysteresis regression checks");
     return 0;
 }
