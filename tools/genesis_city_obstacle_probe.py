@@ -47,11 +47,11 @@ def first_frame(series, predicate, start, stop):
 def validate(traces, reads):
     if set(traces) != set(RUNS):
         raise ValueError("Missing one of six independent original game runs")
-    if traces["right"] != traces["right_repeat"]:
-        raise ValueError("Repeated rightward original-game trace diverged")
     for name, series in traces.items():
         if set(series) != set(range(FIRST, LAST_EXCLUSIVE)):
             raise ValueError(f"{name}: missing or extra frame checkpoints")
+    if traces["right"] != traces["right_repeat"]:
+        raise ValueError("Repeated rightward original-game trace diverged")
     for name, expected in {
         "idle": 0, "right": 450, "right_repeat": 450,
         "near_wall_jump": 480, "early_jump": 480, "wall_reverse": 360,
@@ -78,7 +78,10 @@ def validate(traces, reads):
         right, lambda r: r["x"] >= 498 and r["vx_int"] == 0, 2300, 2420
     )
     if (first_drop, first_lower_floor, first_wall_stop) != (2281, 2297, 2344):
-        raise ValueError("First city ledge/floor/wall timing differs from ROM witness")
+        raise ValueError(
+            f"First city ledge/floor/wall timing differs from ROM witness: "
+            f"{(first_drop,first_lower_floor,first_wall_stop)}"
+        )
     if (right[2344]["x"], right[2344]["y"]) != (498, 208):
         raise ValueError("Observed wall state no longer matches verified ROM")
     if any(right[f]["x"] != 498 or right[f]["y"] != 208
