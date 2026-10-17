@@ -257,7 +257,14 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
             }
         }
         if (on_anchor || hits_tiles(g, h->x, trial, 12, 20)) {
-            if (dy > 0) h->grounded = 1;
+            if (dy > 0) {
+                h->grounded = 1;
+                /* Snap to the actual tile top instead of stopping at the
+                 * previous fractional substep. Only the measured city model
+                 * opts into this; the legacy prototype remains bit-identical. */
+                if (!on_anchor && g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+                    h->y = floorf((trial + 20) / QS_TILE) * QS_TILE - 20;
+            }
             h->vy = 0; break;
         }
         h->y = trial;
