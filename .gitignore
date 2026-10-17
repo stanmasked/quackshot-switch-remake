@@ -1,0 +1,22 @@
+# Original copyrighted reference material must remain local only.
+/roms/
+/original/
+/private/
+/assets/original/
+*.gen
+*.md
+*.smd
+*.32x
+*.cue
+*.iso
+*.chd
+*.srm
+*.sav
+__pycache__/
+*.pyc
+.venv/
+build/
+build-*/
+*.elf
+*.nro
+*.nacp
