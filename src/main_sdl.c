@@ -195,10 +195,20 @@ static int virtual_controller_smoke(void) {
         fprintf(stderr, "SDL virtual controller button injection failed\n");
         goto cleanup;
     }
+    SDL_PumpEvents();
     SDL_GameControllerUpdate();
     in = read_input(controller);
     if (!in.jump || !in.fire || !in.dash || !in.right || in.left) {
-        fprintf(stderr, "SDL controller buttons mapped unexpectedly\n");
+        char *resolved = SDL_GameControllerMapping(controller);
+        fprintf(stderr, "SDL controller mismatch: jump=%d fire=%d dash=%d right=%d left=%d "
+                        "rawB=%d rawY=%d rawR=%d rawDpadRight=%d mapping=%s\n",
+                in.jump, in.fire, in.dash, in.right, in.left,
+                SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_B),
+                SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_Y),
+                SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER),
+                SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT),
+                resolved ? resolved : "none");
+        SDL_free(resolved);
         goto cleanup;
     }
     SDL_JoystickSetVirtualButton(joystick, 1, SDL_RELEASED);
@@ -206,6 +216,7 @@ static int virtual_controller_smoke(void) {
     SDL_JoystickSetVirtualButton(joystick, 7, SDL_RELEASED);
     SDL_JoystickSetVirtualButton(joystick, 11, SDL_RELEASED);
     SDL_JoystickSetVirtualAxis(joystick, 0, -25000);
+    SDL_PumpEvents();
     SDL_GameControllerUpdate();
     in = read_input(controller);
     if (in.jump || in.fire || in.right || in.dash || !in.left) {
