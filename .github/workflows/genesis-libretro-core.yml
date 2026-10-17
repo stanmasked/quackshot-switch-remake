@@ -55,7 +55,7 @@ jobs:
           Path('ci-only-synthetic.gen').write_bytes(data)
           PY
           python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so \
-            --rom ci-only-synthetic.gen --frames 90 --input 10:20:START \
+            --rom ci-only-synthetic.gen --frames 90 --video-stride 1 --input 10:20:START --compare-to-idle \
             --output ci-only-observation.json
           python3 - <<'PY'
           import json
@@ -66,6 +66,9 @@ jobs:
           assert r['input_polls'] == 90, r
           assert r['input_nonzero_reads'] >= 10, r
           assert r['system_ram_size'] == 65536, r
+          assert r['video_stride'] == 1 and len(r['video_checkpoints']) == 90, r
+          assert r['comparison_to_idle']['checkpoints_compared'] == 90, r
+          assert r['comparison_to_idle']['core_input_nonzero_reads_idle'] == 0, r
           print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
           PY
           rm -f ci-only-synthetic.gen ci-only-observation.json
