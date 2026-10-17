@@ -126,9 +126,11 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
+    if not 1 <= video_stride <= 600:
+        raise ValueError("video_stride must be 1..600")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0}
@@ -162,7 +164,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     @VideoCb
     def video(data, width, height, pitch):
         state["video_frames"] += 1
-        if not data or state["frame"] % 60 or not width or not height:
+        if not data or state["frame"] % video_stride or not width or not height:
             return
         bytes_per_pixel = 4 if state["pixel_format"] == 1 else 2
         count = int(pitch) * int(height)
@@ -243,6 +245,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "reference_rom_sha256": rom_hash,
             "frames_requested": frames,
             "frames_video_callbacks": state["video_frames"],
+            "video_stride": video_stride,
             "input_polls": state["input_polls"],
             "input_reads": state["input_reads"],
             "input_nonzero_reads": state["input_nonzero_reads"],
@@ -301,6 +304,8 @@ def main():
     parser.add_argument("--rom", type=Path, help="Local original ROM (never uploaded)")
     parser.add_argument("--expected-sha256", help="Pinned source SHA-256")
     parser.add_argument("--frames", type=int, default=1200)
+    parser.add_argument("--video-stride", type=int, default=60,
+                        help="Save frame checksums every N frames; use 1 for precise input-response timing")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -318,10 +323,10 @@ def main():
             schedule = parse_script(args.input)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
-                              private_rom_path=args.rom)
+                              private_rom_path=args.rom, video_stride=args.video_stride)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
-                                private_rom_path=args.rom)
+                                private_rom_path=args.rom, video_stride=args.video_stride)
                 result["comparison_to_idle"] = compare_idle_to_input(idle, result)
         output = json.dumps(result, indent=2, ensure_ascii=False) + "\n"
         if args.output:
