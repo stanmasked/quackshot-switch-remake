@@ -20,7 +20,7 @@ static QsGame enter_city(int reference) {
     QsInput entry = none();
     qs_init(&g);
     entry.select = 1;
-    entry.jump = reference;
+    entry.dash = reference;
     qs_step(&g, entry);
     CHECK(g.mode == QS_STAGE && g.stage == 0);
     CHECK(g.physics_profile == (reference ? QS_PHYSICS_REFERENCE_CITY :
@@ -111,7 +111,7 @@ static void profile_never_leaks_to_unmeasured_levels(void) {
     g.selected_stage = 2;
     {
         QsInput both = none();
-        both.select = 1; both.jump = 1;
+        both.select = 1; both.dash = 1;
         qs_step(&g, both);
     }
     CHECK(g.stage == 2 && g.physics_profile == QS_PHYSICS_PROTOTYPE);
