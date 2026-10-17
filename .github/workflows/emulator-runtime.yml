@@ -46,6 +46,8 @@ jobs:
         with:
           name: nexium-probe-homebrew-nro
           path: emulator-input
+      - name: Validate nested emulator shell script syntax
+        run: bash -n tools/nexium_ci_probe.sh
       - name: Install headless Vulkan and UI dependencies
         run: |
           sudo apt-get update -qq
