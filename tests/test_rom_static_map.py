@@ -71,6 +71,23 @@ class StaticMapTests(unittest.TestCase):
         self.assertIn({"number": 29, "target": "0xF1234567"},
                       result["exception_vectors"]["nonzero_invalid_vectors"])
 
+    def test_other_move_forms_target_io(self):
+        b = bytearray(fixture())
+        b[0x310:0x316] = bytes.fromhex("103900a10003")  # MOVE.B abs.l to D0
+        b[0x320:0x328] = bytes.fromhex("13fc00c000a10003")  # MOVE.B #imm to abs.l
+        b[0x330:0x33a] = bytes.fromhex("23fc0000000300c00004")  # MOVE.L #imm to abs.l
+        b[0x340:0x346] = bytes.fromhex("13c000c00011")  # MOVE.B D0 to abs.l
+        found = {(e["rom_offset"], e["opcode_family"], e["absolute_address"])
+                 for e in m.static_map(bytes(b))["static_io_instruction_candidates"]}
+        self.assertIn(("0x000310", "MOVE.B_abs_to_Dn", "0xA10003"), found)
+        self.assertIn(("0x000320", "MOVE.B_imm_to_abs", "0xA10003"), found)
+        self.assertIn(("0x000330", "MOVE.L_imm_to_abs", "0xC00004"), found)
+        self.assertIn(("0x000340", "MOVE.B_Dn_to_abs", "0xC00011"), found)
+
+    def test_truncated_immediate_op_not_decoded(self):
+        self.assertIsNone(m.absolute_long_operand(bytes.fromhex("23fc00000003"), 0))
+        self.assertIsNone(m.absolute_long_operand(b"\x00\x00", 0))
+
     def test_profile_hash_mismatch_detected(self):
         result = inspect_data(fixture())
         self.assertNotEqual(result["raw_sha256"],
