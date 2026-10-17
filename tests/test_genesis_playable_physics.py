@@ -115,9 +115,7 @@ class PlayablePhysicsTests(unittest.TestCase):
         self.assertEqual(obs["right"]["x_at_frame_2160"] - obs["right"]["x_at_frame_2090"], 114)
         self.assertAlmostEqual(obs["right"]["measured_steady_world_px_per_frame"], 114 / 70, places=5)
         self.assertEqual(obs["jump"]["rise_world_px"], 65)
-        self.assertEqual(obs["jump"]["landing_frame"] - obs["measurement_frame_start"]
-                         if "measurement_frame_start" in obs else
-                         obs["jump"]["landing_frame"] - obs["control_frame"], 56)
+        self.assertEqual(obs["jump"]["landing_frame"] - obs["control_frame"], 56)
         self.assertEqual(obs["plunger"]["first_active_slot_frame"], obs["control_frame"] + 1)
 
     def test_missing_variant_refused(self):
