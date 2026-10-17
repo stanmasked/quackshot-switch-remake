@@ -101,7 +101,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       sleep 1
       # Jump in a clear section before walking beneath test scaffolding.
       # Long-jump trial: >15 emulated frames held to exercise the measured
-      # original Genesis variable-height jump's full plateau window.
+      # original Genesis variable-height jump full plateau window.
       xdotool keydown --clearmodifiers x
       sleep 0.65
       xdotool keyup x
