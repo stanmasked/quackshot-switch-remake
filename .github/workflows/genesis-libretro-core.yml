@@ -83,12 +83,13 @@ jobs:
           print("GENESIS_CAUSALITY_SYNTHETIC_PASS")
 
           print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
+          PY
           rm -f ci-only-synthetic.gen ci-only-observation.json
       - name: Package licensed emulator only
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py rom-free-emulator/
           cp emulator-sha256.txt rom-free-emulator/
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
