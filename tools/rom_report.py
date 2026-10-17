@@ -99,9 +99,9 @@ def main():
             expected = json.loads(args.profile.read_text(encoding='utf-8'))
             mismatches = compare_profile(result, expected)
         except (OSError, ValueError) as e:
-            parser.exit(1, f'Profile read failed: {e}\\n')
+            parser.exit(1, f'Profile read failed: {e}\n')
         if mismatches:
-            parser.exit(2, f'Profile mismatch: {json.dumps(mismatches, ensure_ascii=False)}\\n')
+            parser.exit(2, f'Profile mismatch: {json.dumps(mismatches, ensure_ascii=False)}\n')
         print('PROFILE MATCH: all recorded fields agree')
 
 
