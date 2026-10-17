@@ -37,6 +37,38 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_genesis_libretro_probe.py -v
           python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so --core-info
+      - name: Emulate a synthetic noncommercial-content-free 68000 loop
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI TEST ONLY NO GAME ASSETS'.ljust(48, b' ')
+          data[0x150:0x180] = b'INDEPENDENT SYNTHETIC CPU LOOP'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x202] = bytes.fromhex('60fe')
+          data[0x18e:0x190] = (0x60fe).to_bytes(2, 'big')
+          Path('ci-only-synthetic.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen --frames 90 --input 10:20:START \
+            --output ci-only-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r = json.loads(Path('ci-only-observation.json').read_text())
+          assert r['frames_requested'] == 90, r
+          assert r['frames_video_callbacks'] == 90, r
+          assert r['input_polls'] == 90, r
+          assert r['input_nonzero_reads'] >= 10, r
+          assert r['system_ram_size'] == 65536, r
+          print('GENESIS_LIBRETRO_SYNTHETIC_PASS: 90 CPU/video frames, joypad polls, 64KiB RAM')
+          PY
+          rm -f ci-only-synthetic.gen ci-only-observation.json
       - name: Package licensed emulator only
         run: |
           mkdir -p rom-free-emulator
