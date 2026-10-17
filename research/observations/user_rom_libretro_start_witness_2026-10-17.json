@@ -37,7 +37,8 @@
     "first_differing_checkpoint_frame": 480,
     "pressed_button": "START",
     "inclusive_pressed_frame": 450,
-    "exclusive_end_frame": 465
+    "exclusive_end_frame": 465,
+    "frame_480_is_coarse_sampling_only": true
   },
   "local_visual_context": [
     "title screen observed around frame 600",
@@ -48,5 +49,18 @@
     "Separate right/jump/attack input variants at later frames did not yet show distinct video or RAM outcomes; the game may be in a scripted attract/demo phase.",
     "Observed RAM changes are not independently identified as Donald's coordinates or velocity.",
     "Source images, audio, raw ROM and original game RAM bytes were never transferred to GitHub."
-  ]
+  ],
+  "frame_exact_comparison": {
+    "evidence_type": "independent_idle_vs_START_per_frame_video_crc32",
+    "frames_compared": 600,
+    "video_stride": 1,
+    "scripted_start_inclusive_frame": 450,
+    "scripted_end_exclusive_frame": 465,
+    "frame_before_action_matching": 449,
+    "first_differing_frame": 450,
+    "differing_frame_count": 141,
+    "last_compared_frame": 599,
+    "observed_libretro_nonzero_start_reads": 15,
+    "qualification": "Same-frame output change establishes observable response but does not identify a player-controlled state or gameplay movement."
+  }
 }
