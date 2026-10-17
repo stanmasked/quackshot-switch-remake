@@ -21,3 +21,35 @@ Synthetic test fixtures are generated on the fly:
     python3 -m unittest discover -s tests -p test_rom_report.py -v
 
 A reference image is not needed to build or test the independent prototype.
+
+
+## Verified reference — 2026-10-17
+
+A user-provided `.gen` image was inspected locally. The corresponding
+**metadata-only** fingerprint is committed as
+[`research/reference_profiles/user_rom_2026-10-17.json`](../research/reference_profiles/user_rom_2026-10-17.json).
+The image itself is deliberately excluded from GitHub.
+
+The ROM's overseas title contains `RUSSIAN` and its country code is `C`.
+These are literal header values, **not** proof of a particular publisher,
+specific Russian-language patch, or a standard USA/Europe/Japan region.
+Its reported checksum matches the checksum calculated over the image.
+That still does not independently validate the game's authenticity.
+
+Re-check the exact private local file using:
+
+```sh
+python3 tools/rom_report.py "/private/path/QuackShot Starring Donald Duck.gen" \
+  --profile research/reference_profiles/user_rom_2026-10-17.json
+```
+
+Expected result: `PROFILE MATCH: all recorded fields agree`.
+The inspector will exit with status 2 if any recorded field differs.
+CI tests use exclusively synthetic ROMs, never the original file.
+
+## Future game-mechanics research
+
+Measurements of movement speed, jump height, map transitions, animation
+timing and enemy AI should come from **observed emulation/hardware traces**
+of the exact pinned reference image. ROM header metadata alone does not
+establish any of these behaviors.
