@@ -132,7 +132,9 @@ static void normal_profile_does_not_get_city_guard(void){
     g.physics_profile=QS_PHYSICS_PROTOTYPE;
     shot(&g,0,40,194,1281.0f,0,65);
     qs_step(&g,idle());
-    CHECK(g.shots[0].active);
+    /* The unmodified prototype moves by the full vx first, then
+     * retires a shot only when its x crosses the right map edge. */
+    CHECK(!g.shots[0].active);
     CHECK(g.shots[0].x==1321);
 }
 static void max_speed_replay_stays_deterministic(void){
