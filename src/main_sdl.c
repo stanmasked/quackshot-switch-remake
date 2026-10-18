@@ -320,6 +320,16 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                       (int)QS_CITY_SPRING_WIDTH-10,2,
                       color(112,202,221));
     }
+    /* Stage 81: reachable spring-route heart, independent from the
+     * two ground beacons and their 1000-point scoreboard. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0 && game->city_air_reward_collected == 0) {
+        int x=(int)QS_CITY_AIR_REWARD_X-cam;
+        int y=(int)QS_CITY_AIR_REWARD_Y;
+        rectangle(renderer,x,y,(int)QS_CITY_AIR_REWARD_SIZE,
+                  (int)QS_CITY_AIR_REWARD_SIZE,color(95,228,218));
+        rectangle(renderer,x+3,y+3,4,4,color(255,240,174));
+    }
     /* Stage 72: a small original-free barricade can be shot away,
      * or bypassed by jumping. It is only present in CITY TEST. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
@@ -3634,6 +3644,70 @@ static int run_city_sector_budget_sdl_smoke(SDL_Renderer *renderer) {
  * impulse, short bounce glow, paused/fading raster and stage retry.
  * Probe left-edge pixels outside the hero to avoid sprite occlusion.
  */
+/*
+ * Stage 81: real SDL pixels prove airborne pickup appears only in
+ * the opt-in city, disappears on collection and returns on retry.
+ * The render path consumes state but never changes health or pickups.
+ */
+static int run_city_air_reward_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    const int cam=880;
+    const int x=(int)QS_CITY_AIR_REWARD_X-cam;
+    const int y=(int)QS_CITY_AIR_REWARD_Y;
+    const uint32_t shine=UINT32_C(0xfffff0ae);
+    uint32_t before=0,after=0,restored=0,prototype=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.camera_x=g.render_camera_x=(float)cam;
+    g.hero.x=100;g.hero.y=188;
+    if(!read_multishot_pixel(renderer,&g,x+4,y+4,&before) ||
+       before!=shine) {
+        fprintf(stderr,"CITY_AIR_REWARD_SDL_FAIL: before=%08x\n",
+                (unsigned)before);
+        return 0;
+    }
+    g.hero.x=QS_CITY_AIR_REWARD_X;
+    g.hero.y=QS_CITY_AIR_REWARD_Y;
+    g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=0;
+    g.hero.hearts=2;
+    qs_step(&g,in);
+    if(g.city_air_reward_collected!=1 || g.hero.hearts!=3 ||
+       !read_multishot_pixel(renderer,&g,x+4,y+4,&after) ||
+       after==shine) {
+        fprintf(stderr,"CITY_AIR_REWARD_SDL_FAIL: after=%08x state=%d\n",
+                (unsigned)after,g.city_air_reward_collected);
+        return 0;
+    }
+    in.back=in.dash=1;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.mode!=QS_STAGE || g.city_air_reward_collected ||
+       !read_multishot_pixel(renderer,&g,x+4,y+4,&restored) ||
+       restored!=shine) {
+        fprintf(stderr,"CITY_AIR_REWARD_SDL_FAIL: retry=%08x\n",
+                (unsigned)restored);
+        return 0;
+    }
+    qs_init(&legacy);
+    qs_begin_stage(&legacy,0);
+    legacy.camera_x=legacy.render_camera_x=(float)cam;
+    legacy.hero.x=100;
+    if(!read_multishot_pixel(renderer,&legacy,x+4,y+4,&prototype) ||
+       prototype==shine) {
+        fprintf(stderr,"CITY_AIR_REWARD_SDL_FAIL: prototype=%08x\n",
+                (unsigned)prototype);
+        return 0;
+    }
+    printf("CITY_AIR_REWARD_SDL_PASS: before=%08x collected=%08x retry=%08x\n",
+           (unsigned)before,(unsigned)after,(unsigned)restored);
+    return 1;
+}
+
 static int run_city_spring_sdl_smoke(SDL_Renderer *renderer) {
     QsGame g,legacy;
     QsInput in={0};
@@ -3812,6 +3886,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_sector_time_sdl_smoke(renderer)) return 1;
     if (!run_city_sector_budget_sdl_smoke(renderer)) return 1;
     if (!run_city_spring_sdl_smoke(renderer)) return 1;
+    if (!run_city_air_reward_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],

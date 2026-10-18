@@ -167,6 +167,13 @@ flash. It integrates with jump-hold physics, time-trial pause and
 quick retry, while the ordinary prototype stays unaffected. See
 [spring pad gameplay and tests](docs/REFERENCE_CITY_SPRING_PAD_RU.md).
 
+Stage 81 adds a **single-use airborne heart** above the spring pad.
+The fixed spring launch reaches it without steering; the ordinary city
+jump from the floor does not. Collecting it heals at most one heart;
+collection persists through life respawns but resets on a fresh attempt.
+It does not change the two-beacon score or the legacy prototype. See
+[airborne heart gameplay and checks](docs/REFERENCE_CITY_AIR_REWARD_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and

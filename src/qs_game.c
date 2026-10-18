@@ -275,6 +275,7 @@ void qs_begin_stage(QsGame *g, int stage) {
         stage == 0 && g->physics_profile == QS_PHYSICS_REFERENCE_CITY;
     g->city_crate_fx_frames = 0; /* new attempt has no old debris */
     g->city_spring_flash_frames = 0;
+    g->city_air_reward_collected = 0;
     g->city_paused = 0;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
@@ -361,6 +362,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_crate_active = 0; /* next stage entry recreates the obstacle */
         g->city_crate_fx_frames = 0; /* no debris carried onto the map */
         g->city_spring_flash_frames = 0;
+        g->city_air_reward_collected = 0;
         g->city_paused = 0; /* no pause state carried onto the map */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
@@ -793,6 +795,26 @@ static void update_city_bonus(QsGame *g) {
         int earned = qs_city_bonus_score(g);
         if (earned > g->city_best_bonus_score)
             g->city_best_bonus_score = earned;
+    }
+}
+
+/*
+ * Stage 81: a synthetic airborne heart sits above the spring pad.
+ * A normal measured-city jump from the floor cannot reach its height;
+ * an unsteered spring launch can. It is only awarded on a survived tick
+ * after projectile/enemy and pit arbitration, never on a fatal respawn.
+ * The one-bit witness survives checkpoint respawns, but not a new
+ * attempt. Full health still consumes the pickup without over-healing.
+ */
+static void update_city_air_reward(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0 || g->city_air_reward_collected != 0)
+        return;
+    if (overlaps(g->hero.x, g->hero.y, 12, 20,
+                 QS_CITY_AIR_REWARD_X, QS_CITY_AIR_REWARD_Y,
+                 QS_CITY_AIR_REWARD_SIZE, QS_CITY_AIR_REWARD_SIZE)) {
+        g->city_air_reward_collected = 1;
+        if (g->hero.hearts < 3) ++g->hero.hearts;
     }
 }
 
@@ -1392,6 +1414,10 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_best_checkpoint_frames = 0;
             if (g->city_bonus_mask < 0 || g->city_bonus_mask > 3)
                 g->city_bonus_mask = 0;
+            /* Fail closed: corrupted values cannot mint a new heart. */
+            if (g->city_air_reward_collected != 0 &&
+                g->city_air_reward_collected != 1)
+                g->city_air_reward_collected = 1;
             if (g->city_crate_active != 0 && g->city_crate_active != 1)
                 g->city_crate_active = 1; /* fail-closed collision */
             if (g->city_crate_active == 1)
@@ -1496,6 +1522,7 @@ void qs_step(QsGame *g, QsInput input) {
                     update_pickups(g);
                     update_city_checkpoint(g);
                     update_city_bonus(g);
+                    update_city_air_reward(g);
                 }
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
