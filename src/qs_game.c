@@ -296,6 +296,23 @@ static int city_anchor_surface(const QsGame *g, float hero_x,
     return found;
 }
 
+/*
+ * In the legacy update order, movement precedes shot timer decrement.
+ * City-only expired attached supports must be retired BEFORE collision,
+ * so a platform with 1 remaining frame cannot hold the hero one extra
+ * simulation step. Preserve the ordinary prototype's update ordering.
+ */
+static void retire_city_expiring_anchors(QsGame *g) {
+    int i;
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    for (i = 0; i < QS_MAX_SHOTS; ++i) {
+        QsShot *s = &g->shots[i];
+        if (s->active && s->attached && s->frames <= 1)
+            s->active = 0;
+    }
+}
+
 static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     QsPlayer *h = &g->hero;
     float dx = 0, dy, segment, trial;
@@ -422,6 +439,7 @@ void qs_step(QsGame *g, QsInput input) {
                 }
                 if (fire_due) shoot(g);
             }
+            retire_city_expiring_anchors(g);
             move_hero(g, input, edge(input.jump, g->previous.jump));
             update_shots(g);
             update_enemies(g);
