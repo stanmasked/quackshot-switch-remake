@@ -2321,7 +2321,7 @@ static int run_map_best_score_sdl_smoke(SDL_Renderer *renderer) {
     g.city_best_bonus_score=1000;
     if (!capture_frame(renderer,&g,&ten)) return 0;
     {
-        SDL_Rect at={282,62,1,1};
+        SDL_Rect at={278,62,1,1};
         if (SDL_RenderReadPixels(renderer,&at,SDL_PIXELFORMAT_ARGB8888,
                                  &pixel,(int)sizeof(pixel))!=0)
             return 0;
