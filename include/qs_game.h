@@ -24,6 +24,12 @@
 #define QS_CITY_CRATE_Y 192.0f
 #define QS_CITY_CRATE_SIZE 16.0f
 #define QS_CITY_CRATE_FX_TICKS 18 /* transient procedural debris only */
+/* Stage 80: independently authored optional bounce pad on city floor. */
+#define QS_CITY_SPRING_X 1144.0f
+#define QS_CITY_SPRING_TOP 208.0f
+#define QS_CITY_SPRING_WIDTH 24.0f
+#define QS_CITY_SPRING_BOUNCE -8.0f
+#define QS_CITY_SPRING_FLASH_TICKS 12
 #define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
 
 #ifdef __cplusplus
@@ -54,6 +60,7 @@ typedef struct {
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int city_crate_active; /* city-only breakable box, reset on new attempt */
     int city_crate_fx_frames; /* remaining visible debris ticks, never collidable */
+    int city_spring_flash_frames; /* bounded flash after successful landing */
     int city_paused; /* opt-in X+Start training pause, not gameplay time */
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int city_attempt_frames; /* reset at every stage/map handoff */
