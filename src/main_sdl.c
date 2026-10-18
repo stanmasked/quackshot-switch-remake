@@ -71,6 +71,16 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
             time/=10;
         }
     }
+    /* Stage 69: session-best split is visible even without a clear.
+     * Place it in the separate bottom map strip (not over stage titles). */
+    if (qs_city_best_checkpoint_time(game)>0) {
+        int split=qs_city_best_checkpoint_time(game),place;
+        for(place=3;place>=0;--place) {
+            render_bonus_score_digit(renderer,238+8*place,203,split%10,
+                                     color(255,180,129));
+            split/=10;
+        }
+    }
     rectangle(renderer, 50, 215, 300, 4, color(130, 146, 167));
 }
 
@@ -127,6 +137,15 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
         int decimal=score%10;
         render_bonus_score_digit(renderer,166+8*place,4,decimal,
                                  color(94,221,138));
+        score/=10;
+    }
+    /* First checkpoint split in the current attempt (amber). An
+     * unearned flag leaves this part of the dark HUD blank. */
+    score=qs_city_checkpoint_split_time(game);
+    if(score>0) for(place=3;place>=0;--place) {
+        int decimal=score%10;
+        render_bonus_score_digit(renderer,126+8*place,4,decimal,
+                                 color(255,180,129));
         score/=10;
     }
 }
