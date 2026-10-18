@@ -76,6 +76,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_shot = 0;
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
+    g->city_checkpoint_active = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -145,12 +146,19 @@ static void city_leave_to_map(QsGame *g) {
         clear_city_transients(g);
         g->camera_x = 0;
         g->render_camera_x = 0;
+        g->city_checkpoint_active = 0; /* next attempt starts fresh */
     }
     g->mode = QS_MAP;
 }
 
 static void respawn(QsGame *g) {
-    g->hero.x = 40; g->hero.y = 188;
+    /* A deliberately authored mid-city landmark becomes the new restart
+     * only after a clean nonlethal contact in this attempt. The original
+     * prototype and an unactivated CITY TEST still start at x=40. */
+    int checkpoint = g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                     g->stage == 0 && g->city_checkpoint_active == 1;
+    g->hero.x = checkpoint ? QS_CITY_CHECKPOINT_X : 40;
+    g->hero.y = checkpoint ? QS_CITY_CHECKPOINT_Y : 188;
     g->hero.vx = 0; g->hero.vy = 0;
     g->hero.hearts = 3; g->hero.hurt_frames = 90;
     if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
@@ -158,8 +166,9 @@ static void respawn(QsGame *g) {
         g->hero.facing = 1;
         g->hero.grounded = 0;
         /* A new spawn must not present a viewport from the old pit. */
-        g->camera_x = 0;
-        g->render_camera_x = 0;
+        g->camera_x = checkpoint ?
+            clampf(g->hero.x - 141.0f, 0.0f, QS_COLUMNS * QS_TILE - QS_VIEW_W) : 0.0f;
+        g->render_camera_x = g->camera_x;
     }
 }
 
@@ -465,6 +474,21 @@ static void update_pickups(QsGame *g) {
             if (p->kind == QS_PICKUP_HEART && g->hero.hearts < 3) ++g->hero.hearts;
         }
     }
+}
+
+/*
+ * Stage 58: a geometric, hand-authored checkpoint for the optional city
+ * research scene. It is activated only after surviving the current tick,
+ * so fatal collisions and numeric/pit retries never grant old-life
+ * progress. No original QuackShot checkpoint data is used.
+ */
+static void update_city_checkpoint(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0 || g->city_checkpoint_active)
+        return;
+    if (overlaps(g->hero.x,g->hero.y,12,20,
+                 QS_CITY_CHECKPOINT_X,QS_CITY_CHECKPOINT_Y,12,20))
+        g->city_checkpoint_active = 1;
 }
 
 static void shoot_as(QsGame *g, int red) {
@@ -958,6 +982,9 @@ void qs_step(QsGame *g, QsInput input) {
         sanitize_city_pickups(g);
         sanitize_city_shots(g);
         sanitize_city_weapon_queue(g);
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0 &&
+            g->city_checkpoint_active != 1)
+            g->city_checkpoint_active = 0;
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the
@@ -1031,7 +1058,10 @@ void qs_step(QsGame *g, QsInput input) {
                  * before movement. Like lethal/pit retries, the spawn
                  * must not collect items during the OLD attempt's tick.
                  * Nonfatal contact still allows the usual same-tick item. */
-                if (!lethal_retry && !numeric_retry) update_pickups(g);
+                if (!lethal_retry && !numeric_retry) {
+                    update_pickups(g);
+                    update_city_checkpoint(g);
+                }
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
              * the VDP HScroll buffer can trail the gameplay RAM position.
