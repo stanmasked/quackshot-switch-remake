@@ -332,6 +332,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                     ? color(94, 221, 138) : color(90, 88, 107));
     }
     render_city_bonus_score(renderer,game);
+    /*
+     * Stage 76: asset-free paused-state emblem, rendered LAST so it
+     * stays visible even when the camera is moving through scenery.
+     * The game loop itself owns the freeze; this only draws two bars.
+     */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0 && game->city_paused == 1) {
+        rectangle(renderer,185,99,30,36,color(28,38,54));
+        rectangle(renderer,192,108,5,18,color(255,225,108));
+        rectangle(renderer,203,108,5,18,color(255,225,108));
+    }
 }
 
 static int pressed(const Uint8 *keys, SDL_Scancode key) { return keys[key] != 0; }
