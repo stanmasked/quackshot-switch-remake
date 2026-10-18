@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <stdio.h>
 #include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -1205,6 +1206,59 @@ static int run_frame_arbitration_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Stage 51: real SDL HUD confirms that clamping INT_MAX protection
+ * still preserves the last safe tick and exposes the hero on the NEXT
+ * one. The bounded enemy stun remains visible as a blue placeholder. */
+static int run_timer_boundary_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t safe=0, expired=0, stunned=0;
+    int i;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.hero.x=100;g.hero.y=188;g.hero.grounded=1;
+    g.hero.hurt_frames=INT_MAX;
+    g.enemies[0].active=1;
+    g.enemies[0].x=100;g.enemies[0].y=188;
+    g.enemies[0].min_x=g.enemies[0].max_x=100;
+    g.enemies[0].dir=1;
+    g.enemies[1].active=1;
+    g.enemies[1].x=180;g.enemies[1].y=184;
+    g.enemies[1].min_x=g.enemies[1].max_x=180;
+    g.enemies[1].dir=1;
+    g.enemies[1].stunned_frames=INT_MAX;
+    qs_step(&g,idle);
+    if (g.hero.hearts!=3 || g.hero.hurt_frames!=89 ||
+        g.enemies[1].stunned_frames!=179 ||
+        !read_immunity_heart_pixel(renderer,&g,&safe) ||
+        !read_multishot_pixel(renderer,&g,181,186,&stunned) ||
+        safe!=UINT32_C(0xffef606c) ||
+        stunned!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"TIMER_BOUNDARY_SDL_FAIL: safe=%08x stun=%08x frames=%d\n",
+                (unsigned)safe,(unsigned)stunned,g.hero.hurt_frames);
+        return 0;
+    }
+    for(i=0;i<89;i++) {
+        qs_step(&g,idle);
+        if(g.hero.hearts!=3) return 0;
+    }
+    if(g.hero.hurt_frames!=0) return 0;
+    qs_step(&g,idle);
+    if(g.hero.hearts!=2 || g.hero.hurt_frames!=69 ||
+       !read_immunity_heart_pixel(renderer,&g,&expired) ||
+       expired!=UINT32_C(0xff5a586b)) {
+        fprintf(stderr,"TIMER_BOUNDARY_SDL_FAIL: exposed=%08x hearts=%d\n",
+                (unsigned)expired,g.hero.hearts);
+        return 0;
+    }
+    printf("TIMER_BOUNDARY_SDL_PASS: protected=%08x exposed=%08x stunned=%08x\n",
+           (unsigned)safe,(unsigned)expired,(unsigned)stunned);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1267,6 +1321,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_numeric_transition_sdl_smoke(renderer)) return 1;
     if (!run_pickup_numeric_sdl_smoke(renderer)) return 1;
     if (!run_frame_arbitration_sdl_smoke(renderer)) return 1;
+    if (!run_timer_boundary_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
