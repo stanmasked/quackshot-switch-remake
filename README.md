@@ -48,6 +48,11 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 25 adds reference-city-only **swept projectile collision**: the first
+impacted wall face fixes red anchor placement, enemies before walls are
+hit first, and fast shots cannot tunnel across test tiles. The ordinary
+prototype preserves its earlier collision routine unchanged. See
+[projectile collision regression](docs/REFERENCE_CITY_SHOT_SWEEP_RU.md).
 Stage 24 adds a separate **real SDL pixel readback** which verifies that the
 hero, enemy, pickup, projectile, tile geometry and two planes all use the
 latched display camera, while the HUD remains stationary. The deliberate

@@ -132,7 +132,76 @@ static void hurt(QsGame *g) {
     else g->hero.hurt_frames = 70;
 }
 
-static void update_shots(QsGame *g) {
+/*
+ * An independent swept-AABB approximation for the optional CITY TEST.
+ * Prototype profile remains byte-for-byte on the earlier collision path.
+ *
+ * We advance by <=1 px and resolve the first solid tile or enemy hit
+ * along the shot's path. Red anchors are aligned with the *actual wall
+ * face*, not with the tile containing the shot's left edge; otherwise
+ * a width-7 projectile can embed the anchor 16 px too far from the wall.
+ *
+ * These are deliberate safety/gameplay rules for original-free geometry,
+ * NOT decoded QuackShot collision routines or measured anchor distances.
+ */
+static void update_shots_reference_city(QsGame *g) {
+    int i, j, k;
+    for (i = 0; i < QS_MAX_SHOTS; ++i) {
+        QsShot *s = &g->shots[i];
+        float step;
+        int slices, stopped = 0;
+        if (!s->active) continue;
+        if (--s->frames <= 0) { s->active = 0; continue; }
+        if (s->attached) continue;
+        slices = (int)ceilf(absolute(s->vx));
+        if (slices < 1) slices = 1;
+        step = s->vx / slices;
+        for (k = 0; k < slices; ++k) {
+            int face_col;
+            s->x += step;
+            if (s->x < 0 || s->x >= QS_COLUMNS * QS_TILE) {
+                s->active = 0;
+                stopped = 1;
+                break;
+            }
+            if (hits_tiles(g, s->x, s->y, 7, 4)) {
+                if (s->red) {
+                    /* Identify the tile crossed by the *leading* edge.
+                     * A red anchor straddles an impact face when fired
+                     * right, and begins at the right face when fired left. */
+                    face_col = (int)floorf((s->x + (step > 0 ? 6.99f : 0.0f))
+                                           / QS_TILE);
+                    s->x = step > 0 ? face_col * QS_TILE - 8.0f
+                                     : (face_col + 1) * QS_TILE;
+                    s->attached = 1;
+                    s->frames = 230;
+                } else {
+                    s->active = 0;
+                }
+                stopped = 1;
+                break;
+            }
+            for (j = 0; j < QS_MAX_ENEMIES; ++j) {
+                QsEnemy *e = &g->enemies[j];
+                if (e->active &&
+                    overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16)) {
+                    e->stunned_frames = 180;
+                    s->active = 0;
+                    stopped = 1;
+                    break;
+                }
+            }
+            if (stopped) break;
+        }
+    }
+}
+
+
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+        update_shots_reference_city(g);
+        return;
+    }
+    int i, j;static void update_shots(QsGame *g) {
     int i, j;
     for (i = 0; i < QS_MAX_SHOTS; i++) {
         QsShot *s = &g->shots[i];
