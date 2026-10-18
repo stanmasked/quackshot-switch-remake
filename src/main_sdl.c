@@ -3392,6 +3392,95 @@ static int run_city_training_pause_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 78: verify the live lavender second-sector digits, and
+ * the map's session best ONLY after a legitimate checkpoint+finish.
+ * A shorter second sector can become PB despite a slower full run.
+ */
+static int run_city_sector_time_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,blank,legacy;
+    QsInput in={0};
+    uint32_t dark=0,live=0,map_sector=0,empty=0;
+    uint64_t with_pb=0,without_pb=0,faster=0;
+    SDL_Rect probe={279,203,1,1};
+    const uint32_t violet=UINT32_C(0xffb7a0ff);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.hero.x=100;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    if(qs_city_sector_time(&g)!=0 || qs_city_best_sector_time(&g)!=0 ||
+       !verify_city_digits_pixels(renderer,&g,NULL,42,violet) ||
+       !read_multishot_pixel(renderer,&g,43,4,&dark) ||
+       dark!=UINT32_C(0xff1c2636))
+        return 0;
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_checkpoint_split_frames!=1 ||
+       qs_city_sector_time(&g)!=0 ||
+       !verify_city_digits_pixels(renderer,&g,"0000",42,violet))
+        return 0;
+    for(int t=0;t<5;t++)qs_step(&g,in);
+    if(qs_city_sector_time(&g)!=5 ||
+       !verify_city_digits_pixels(renderer,&g,"0005",42,violet) ||
+       !read_multishot_pixel(renderer,&g,43,4,&live) || live!=violet)
+        return 0;
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;g.hero.y=188;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_clear_time(&g)!=7 ||
+       qs_city_best_sector_time(&g)!=6 ||
+       qs_city_sector_time(&g)!=0 ||
+       !capture_frame(renderer,&g,&with_pb) ||
+       SDL_RenderReadPixels(renderer,&probe,SDL_PIXELFORMAT_ARGB8888,
+                            &map_sector,(int)sizeof(map_sector))!=0 ||
+       map_sector!=violet) {
+        fprintf(stderr,"CITY_SECTOR_SDL_FAIL: finish best=%d pixel=%08x\n",
+                qs_city_best_sector_time(&g),(unsigned)map_sector);
+        return 0;
+    }
+    blank=g;blank.city_best_sector_frames=0;
+    if(!capture_frame(renderer,&blank,&without_pb) ||
+       with_pb==without_pb ||
+       SDL_RenderReadPixels(renderer,&probe,SDL_PIXELFORMAT_ARGB8888,
+                            &empty,(int)sizeof(empty))!=0 ||
+       empty!=UINT32_C(0xff1f2a40))
+        return 0;
+    /* Faster completed sector from a slower total attempt: first
+     * 20 non-checkpoint frames followed by immediate checkpoint+exit. */
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    for(int t=0;t<20;t++)qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;g.hero.y=188;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_clear_time(&g)!=7 ||
+       qs_city_best_sector_time(&g)!=1 ||
+       !capture_frame(renderer,&g,&faster) ||
+       faster==with_pb)
+        return 0;
+    /* Legacy level renders no live sector, even if state is forged. */
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.city_checkpoint_active=1;
+    legacy.city_checkpoint_split_frames=1;
+    legacy.city_attempt_frames=6;
+    legacy.city_best_sector_frames=1;
+    if(qs_city_sector_time(&legacy)!=0 ||
+       qs_city_best_sector_time(&legacy)!=0 ||
+       !verify_city_digits_pixels(renderer,&legacy,NULL,42,violet))
+        return 0;
+    printf("CITY_SECTOR_SDL_PASS: first=%016llx no-record=%016llx improved=%016llx live=%08x\n",
+           (unsigned long long)with_pb,(unsigned long long)without_pb,
+           (unsigned long long)faster,(unsigned)live);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3476,6 +3565,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_crate_debris_sdl_smoke(renderer)) return 1;
     if (!run_city_crate_priority_sdl_smoke(renderer)) return 1;
     if (!run_city_training_pause_sdl_smoke(renderer)) return 1;
+    if (!run_city_sector_time_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
