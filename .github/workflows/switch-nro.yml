@@ -4,6 +4,15 @@ on:
     branches: [main]
   pull_request:
 
+
+# Keep the newest PR revision moving instead of queueing every obsolete
+# intermediate commit. Separate groups per workflow (not globally)
+# preserve parallel core, NRO, and NeXium checks for the same HEAD.
+# Default-branch pushes are not cancelled so the main build remains auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   switch-nro:
     runs-on: ubuntu-latest
