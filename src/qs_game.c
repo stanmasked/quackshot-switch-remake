@@ -47,6 +47,20 @@ int qs_city_bonus_score(const QsGame *g) {
            ((mask & 2) ? QS_CITY_BONUS_VALUE : 0);
 }
 
+/*
+ * Stage 63: retain the best earned city practice score across retries,
+ * exits and stage reentry, while the current attempt's score resets.
+ * Only canonical values count. The default prototype is unchanged.
+ */
+int qs_city_best_bonus_score(const QsGame *g) {
+    if (!g || g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0)
+        return 0;
+    return (g->city_best_bonus_score == 500 ||
+            g->city_best_bonus_score == 1000)
+         ? g->city_best_bonus_score : 0;
+}
+
 int qs_solid(const QsGame *g, int col, int row) {
     if (col < 0 || col >= QS_COLUMNS || row < 0) return 1;
     if (row >= QS_ROWS) return 0; /* Pits have no invisible floor. */
@@ -542,6 +556,11 @@ static void update_city_bonus(QsGame *g) {
      * exceeds the ordinary three-heart maximum. */
     if (before != 3 && g->city_bonus_mask == 3 && g->hero.hearts < 3)
         ++g->hero.hearts;
+    if (before != g->city_bonus_mask) {
+        int earned = qs_city_bonus_score(g);
+        if (earned > g->city_best_bonus_score)
+            g->city_best_bonus_score = earned;
+    }
 }
 
 static void shoot_as(QsGame *g, int red) {
@@ -1040,6 +1059,10 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_checkpoint_active = 0;
             if (g->city_bonus_mask < 0 || g->city_bonus_mask > 3)
                 g->city_bonus_mask = 0;
+            if (g->city_best_bonus_score != 0 &&
+                g->city_best_bonus_score != 500 &&
+                g->city_best_bonus_score != 1000)
+                g->city_best_bonus_score = 0;
         }
         /*
          * A CITY TEST exit already crossed at tick start is a completed
