@@ -90,7 +90,7 @@ static void finishing_before_damage_is_unchanged(void){
     in.right=1;qs_step(&g,in);
     CHECK(g.mode==QS_MAP && g.cleared[0] && g.hero.hearts==1);
 }
-static void 900_frame_replay(void){
+static void replay_900_frames(void){
     QsGame a=scene(QS_PHYSICS_REFERENCE_CITY),b;
     int t,k;
     enemy(&a,0,100);pickup(&a,0,36,QS_PICKUP_RED);
@@ -124,7 +124,7 @@ int main(void){
     second_enemy_stays_unchanged_on_fatal_tick();
     prototype_preserves_old_pickup_order();
     finishing_before_damage_is_unchanged();
-    900_frame_replay();
+    replay_900_frames();
     puts("PASS: 9 retry-pickup and immunity scenarios; 900 deterministic frames");
     return 0;
 }
