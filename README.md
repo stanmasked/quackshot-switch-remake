@@ -31,6 +31,13 @@ This is a self-authored convenience mechanic, **not** a claim about
 the original 1991 QuackShot. See
 [checkpoint gameplay and tests](docs/REFERENCE_CITY_CHECKPOINT_GAMEPLAY_RU.md).
 
+Stage 59 also shows a cyan/gold checkpoint indicator in the CITY TEST
+HUD at all camera positions, including when the world marker has
+scrolled away. A genuine retry keeps the indicator gold; leaving and
+reentering restores cyan. SDL2 raster smoke tests verify both colors,
+the distant-camera state, and isolation from the regular prototype.
+See [checkpoint HUD proof](docs/REFERENCE_CITY_CHECKPOINT_HUD_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
