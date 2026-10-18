@@ -18,6 +18,10 @@ static QsGame scene(void) {
     memset(g.enemies,0,sizeof(g.enemies));
     memset(g.shots,0,sizeof(g.shots));
     memset(g.pickups,0,sizeof(g.pickups));
+    /* This fixture isolates projectile/foe rational ordering on
+     * empty terrain. The independently tested stage-72 crate is
+     * deliberately absent, just like unrelated authored walls. */
+    g.city_crate_active=0;
     g.hero.x=40;g.hero.y=188;g.hero.vx=g.hero.vy=0;
     /* No unrelated artificial wall or pits, only safe ground. */
     for(r=0;r<QS_ROWS;r++)
