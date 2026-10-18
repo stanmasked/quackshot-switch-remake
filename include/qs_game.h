@@ -90,6 +90,8 @@ int qs_city_checkpoint_split_time(const QsGame *game); /* 0 or 1..9999 frames */
 int qs_city_best_checkpoint_time(const QsGame *game); /* 0 or 1..9999 frames */
 int qs_city_sector_time(const QsGame *game); /* live post-checkpoint sector, 0..9998 */
 int qs_city_best_sector_time(const QsGame *game); /* 0 or 1..9998 frames */
+int qs_city_sector_budget_valid(const QsGame *game); /* has earned split AND completed-sector PB */
+int qs_city_sector_budget_frames(const QsGame *game); /* signed best minus current sector: negative is over PB */
 int qs_city_checkpoint_gap_valid(const QsGame *game); /* measured comparison available */
 int qs_city_checkpoint_gap_time(const QsGame *game); /* signed, negative=faster */
 
