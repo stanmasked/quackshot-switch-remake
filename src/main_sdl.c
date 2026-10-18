@@ -2470,6 +2470,98 @@ static int run_cross_stage_record_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 67: verify a real SDL timer with 0000 -> 0003, a completed
+ * four-tick run, a slower replay, a faster new record, and the legacy
+ * map with no synthetic timer. Exact colors and frame hashes ensure
+ * that the new digits reach the display rather than just core state.
+ */
+static int run_city_time_trial_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g, blank;
+    QsInput in={0};
+    uint64_t first=0,elapsed=0,medal=0,none=0,fast=0,legacy=0;
+    uint32_t green=0,old_left=0,new_left=0,map_green=0,plain=0;
+    SDL_Rect mark={239,61,1,1};
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    if(qs_city_attempt_time(&g)!=0 ||
+       !capture_frame(renderer,&g,&first) ||
+       !read_multishot_pixel(renderer,&g,167,4,&green) ||
+       green!=UINT32_C(0xff5edd8a) ||
+       !read_multishot_pixel(renderer,&g,190,5,&old_left) ||
+       old_left!=green)
+        return 0;
+    qs_step(&g,in);qs_step(&g,in);qs_step(&g,in);
+    if(qs_city_attempt_time(&g)!=3 ||
+       !capture_frame(renderer,&g,&elapsed) ||
+       elapsed==first ||
+       !read_multishot_pixel(renderer,&g,190,5,&new_left) ||
+       new_left!=UINT32_C(0xff1c2636))
+        return 0;
+    /* Crossing an already-met goal records the fourth counted tick. */
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_clear_time(&g)!=4 ||
+       g.city_attempt_frames!=0 ||
+       !capture_frame(renderer,&g,&medal) ||
+       SDL_RenderReadPixels(renderer,&mark,SDL_PIXELFORMAT_ARGB8888,
+                            &map_green,(int)sizeof(map_green))!=0 ||
+       map_green!=green) {
+        fprintf(stderr,"CITY_TIME_TRIAL_SDL_FAIL: best=%d green=%08x\n",
+                qs_city_best_clear_time(&g),(unsigned)map_green);
+        return 0;
+    }
+    blank=g;
+    blank.city_best_clear_frames=0;
+    if(!capture_frame(renderer,&blank,&none) || none==medal)
+        return 0;
+    /* Slower clear must not overwrite the personal best. */
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    for(int i=0;i<12;i++)qs_step(&g,in);
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;
+    qs_step(&g,in);
+    if(qs_city_best_clear_time(&g)!=4)return 0;
+    /* Fresh faster clear must replace the old record. */
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;
+    qs_step(&g,in);
+    if(qs_city_best_clear_time(&g)!=1 ||
+       !capture_frame(renderer,&g,&fast) || fast==medal)
+        return 0;
+    /* Regular second stage hides the clock in gameplay, yet the map
+     * still displays the record after leaving that stage. */
+    qs_begin_stage(&g,1);
+    if(g.physics_profile!=QS_PHYSICS_PROTOTYPE ||
+       qs_city_best_clear_time(&g)!=0) return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_clear_time(&g)!=1 ||
+       !capture_frame(renderer,&g,&legacy) ||
+       SDL_RenderReadPixels(renderer,&mark,SDL_PIXELFORMAT_ARGB8888,
+                            &map_green,(int)sizeof(map_green))!=0 ||
+       map_green!=green) return 0;
+    qs_init(&blank);
+    if(qs_city_best_clear_time(&blank)!=0 ||
+       !capture_frame(renderer,&blank,&legacy) ||
+       SDL_RenderReadPixels(renderer,&mark,SDL_PIXELFORMAT_ARGB8888,
+                            &plain,(int)sizeof(plain))!=0 ||
+       plain==green)
+        return 0;
+    printf("CITY_TIME_TRIAL_SDL_PASS: initial=%016llx tick3=%016llx clear4=%016llx clear1=%016llx\n",
+           (unsigned long long)first,(unsigned long long)elapsed,
+           (unsigned long long)medal,(unsigned long long)fast);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2546,6 +2638,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_bonus_score_sdl_smoke(renderer)) return 1;
     if (!run_map_best_score_sdl_smoke(renderer)) return 1;
     if (!run_cross_stage_record_sdl_smoke(renderer)) return 1;
+    if (!run_city_time_trial_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
