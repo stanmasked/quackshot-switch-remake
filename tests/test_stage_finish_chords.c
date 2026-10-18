@@ -50,6 +50,9 @@ static void achieved_finish_wins_full_button_chord(void){
 }
 static void unfinished_stage_back_still_aborts(void){
     QsGame g=city();QsInput q=chord();
+    /* Stage 73: R+Start is an intentional quick retry. Test the
+     * unchanged plain-Start abort separately from the finish chord. */
+    q.dash=0;
     plant_transients(&g);
     g.hero.x=(QS_COLUMNS-4)*QS_TILE-30;
     qs_step(&g,q);
