@@ -53,6 +53,14 @@ indicates the set has already been completed. Dead/pit retry frames
 cannot claim it. See
 [bonus set health reward](docs/REFERENCE_CITY_BONUS_SET_HEAL_RU.md).
 
+Stage 62 adds a **four-digit 0000 / 0500 / 1000 practice score**
+on the experimental city HUD. It is derived directly from the two
+collected-token bits and therefore remains correct through retries;
+a new attempt resets to 0000. The seven-segment display is drawn
+with original-free procedural geometry. A dedicated SDL2 regression
+checks every pixel of the full 29×7 raster against an independent
+digit oracle. See [decimal bonus score](docs/REFERENCE_CITY_BONUS_SCORE_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
