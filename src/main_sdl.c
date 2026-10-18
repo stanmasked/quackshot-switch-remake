@@ -1554,6 +1554,59 @@ static int run_scene_recovery_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 57: two corrupted projectile snapshots (NaN / Infinity)
+ * must collapse to the same finite retired metadata. Real SDL frames
+ * must match a clean scene exactly, with a healthy support retained.
+ */
+static int run_shot_canonical_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame a,b,clean;
+    QsInput idle={0};
+    uint64_t a_hash=0,b_hash=0,clean_hash=0;
+    uint32_t hero_pixel=0;
+    qs_init(&clean);
+    clean.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&clean,0);
+    memset(clean.enemies,0,sizeof(clean.enemies));
+    memset(clean.pickups,0,sizeof(clean.pickups));
+    memset(clean.shots,0,sizeof(clean.shots));
+    clean.hero.x=100;clean.hero.y=139.92f;
+    clean.hero.vx=clean.hero.vy=0;clean.hero.grounded=0;
+    clean.shots[1].active=clean.shots[1].attached=clean.shots[1].red=1;
+    clean.shots[1].x=100;clean.shots[1].y=160.02f;
+    clean.shots[1].frames=40;
+    a=b=clean;
+    a.shots[0].active=a.shots[0].attached=a.shots[0].red=1;
+    a.shots[0].x=NAN;a.shots[0].y=160;a.shots[0].frames=40;
+    b.shots[0].active=b.shots[0].attached=1;
+    b.shots[0].red=INT_MAX;
+    b.shots[0].x=100;b.shots[0].y=INFINITY;
+    b.shots[0].vx=INFINITY;b.shots[0].frames=40;
+    qs_step(&a,idle);qs_step(&b,idle);qs_step(&clean,idle);
+    if(a.shots[0].active || b.shots[0].active ||
+       a.shots[0].attached || b.shots[0].attached ||
+       a.shots[0].frames!=40 || b.shots[0].frames!=40 ||
+       a.shots[0].x!=0 || a.shots[0].y!=0 || a.shots[0].vx!=0 ||
+       b.shots[0].x!=0 || b.shots[0].y!=0 || b.shots[0].vx!=0 ||
+       !a.hero.grounded || !b.hero.grounded ||
+       a.hero.y!=clean.hero.y || b.hero.y!=clean.hero.y ||
+       !capture_frame(renderer,&a,&a_hash) ||
+       !capture_frame(renderer,&b,&b_hash) ||
+       !capture_frame(renderer,&clean,&clean_hash) ||
+       a_hash!=clean_hash || b_hash!=clean_hash ||
+       !read_multishot_pixel(renderer,&a,101,142,&hero_pixel) ||
+       hero_pixel!=UINT32_C(0xfffaeda7)) {
+        fprintf(stderr,"SHOT_CANONICAL_SDL_FAIL: A=%016llx B=%016llx C=%016llx px=%08x\n",
+                (unsigned long long)a_hash,
+                (unsigned long long)b_hash,
+                (unsigned long long)clean_hash,(unsigned)hero_pixel);
+        return 0;
+    }
+    printf("SHOT_CANONICAL_SDL_PASS: matching=%016llx finite_idle_slot=0 hero=%08x\n",
+           (unsigned long long)clean_hash,(unsigned)hero_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1622,6 +1675,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_weapon_queue_sdl_smoke(renderer)) return 1;
     if (!run_city_map_integrity_sdl_smoke(renderer)) return 1;
     if (!run_scene_recovery_sdl_smoke(renderer)) return 1;
+    if (!run_shot_canonical_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
