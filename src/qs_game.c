@@ -704,6 +704,30 @@ static int sanitize_city_hero_camera(QsGame *g) {
         return 1;
     }
 
+    /* Stage 52: damaged health is not a fourth heart or an already
+     * dead actor that can collect rewards or cross the exit. A fresh
+     * life also prevents INT_MIN decrement inside hurt(). Treat it
+     * like a numeric retry and delay spawn pickups until next tick. */
+    if (h->hearts < 1 || h->hearts > 3) {
+        respawn(g);
+        return 1;
+    }
+
+    /* Facing is multiplied into projectile velocity; a damaged integer
+     * must never create an unbounded shot. Preserve valid +/-1 and the
+     * direction sign when a malformed nonzero facing can be recovered. */
+    if (h->facing != -1 && h->facing != 1)
+        h->facing = h->facing < 0 ? -1 : 1;
+    if (h->grounded != 0 && h->grounded != 1)
+        h->grounded = h->grounded > 0 ? 1 : 0;
+
+    /* Original-free CITY TEST jump hold is at most 16 counted ticks
+     * (15 held plus the release sentinel), not an arbitrary int. */
+    if (g->reference_jump_steps < 0)
+        g->reference_jump_steps = 0;
+    else if (g->reference_jump_steps > QS_CITY_MAX_JUMP_HOLD + 1)
+        g->reference_jump_steps = QS_CITY_MAX_JUMP_HOLD + 1;
+
     /* Never call ceilf -> int or enter substep loops with corrupt speeds.
      * Preserve valid near-wall, jumping and pit motion exactly. */
     if (!isfinite(h->vx) || absolute(h->vx) > 8.0f)
