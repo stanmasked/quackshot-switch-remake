@@ -66,6 +66,9 @@ static void expiry_removes_support_on_exact_step(void) {
     VERIFY(g.shots[0].active && g.shots[0].frames == 1);
     qs_step(&g, idle());
     VERIFY(!g.shots[0].active);
+    fprintf(stderr, "ANCHOR_EXPIRE_DIAG: y=%.9f vy=%.9f grounded=%d life=%d frame=%d jumpsteps=%d\n",
+            g.hero.y, g.hero.vy, g.hero.grounded, g.shots[0].frames,
+            g.frames, g.reference_jump_steps);
     VERIFY(!g.hero.grounded && g.hero.y > 140);
     VERIFY(g.hero.vy > 0);
 }
