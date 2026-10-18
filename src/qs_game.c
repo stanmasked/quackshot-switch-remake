@@ -727,6 +727,32 @@ static void sanitize_city_hero_camera(QsGame *g) {
     }
 }
 
+/*
+ * Stage 49: invalid CITY TEST pickups are retired BEFORE contact/exit
+ * arbitration and SDL float-to-int conversion. Legitimate objects can
+ * be partially visible at the edge; wholly outside the authored world,
+ * non-finite or unknown-kind objects cannot be collected or rendered.
+ * Only the opt-in research scene uses this validator.
+ */
+static void sanitize_city_pickups(QsGame *g) {
+    int i;
+    const float world_w = (float)(QS_COLUMNS * QS_TILE);
+    const float world_h = (float)(QS_ROWS * QS_TILE);
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    for (i = 0; i < QS_MAX_PICKUPS; ++i) {
+        QsPickup *p = &g->pickups[i];
+        if (!p->active) continue;
+        if (!isfinite(p->x) || !isfinite(p->y) ||
+            p->x < -10.0f || p->x > world_w ||
+            p->y < -10.0f || p->y > world_h ||
+            (p->kind != QS_PICKUP_RED && p->kind != QS_PICKUP_HEART)) {
+            /* Prevent discarded NaNs from persisting in snapshots too. */
+            memset(p, 0, sizeof(*p));
+        }
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
         int held_back = input.left || input.up;
@@ -766,6 +792,7 @@ void qs_step(QsGame *g, QsInput input) {
          * no invalid actor may survive into the next rendered state. */
         sanitize_city_hero_camera(g);
         sanitize_city_enemies(g);
+        sanitize_city_pickups(g);
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the
