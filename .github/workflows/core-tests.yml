@@ -114,6 +114,7 @@ jobs:
           grep -q '^PERSONAL_BEST_SDL_PASS:' smoke.log
           grep -q '^MAP_BEST_SCORE_SDL_PASS:' smoke.log
           grep -q '^CROSS_STAGE_RECORD_SDL_PASS:' smoke.log
+          grep -q '^CITY_TIME_TRIAL_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
