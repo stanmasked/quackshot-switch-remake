@@ -205,6 +205,8 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->reference_jump_steps = 0;
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
+    g->city_crate_active =
+        stage == 0 && g->physics_profile == QS_PHYSICS_REFERENCE_CITY;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
     g->city_checkpoint_gap_frames = 0;
@@ -243,6 +245,13 @@ static int overlaps(float ax, float ay, float aw, float ah,
 }
 
 static int hits_tiles(const QsGame *g, float x, float y, float w, float h) {
+    /* Stage 72: the independent box blocks the hero like a solid,
+     * but is not copied into tile geometry or legacy stage maps. */
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0 &&
+        g->city_crate_active == 1 &&
+        overlaps(x,y,w,h,QS_CITY_CRATE_X,QS_CITY_CRATE_Y,
+                 QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE))
+        return 1;
     int x0 = (int)floorf(x / QS_TILE);
     int x1 = (int)floorf((x + w - 0.01f) / QS_TILE);
     int y0 = (int)floorf(y / QS_TILE);
@@ -280,6 +289,7 @@ static void city_leave_to_map(QsGame *g) {
         g->render_camera_x = 0;
         g->city_checkpoint_active = 0; /* next attempt starts fresh */
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
+        g->city_crate_active = 0; /* next stage entry recreates the obstacle */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
         g->city_checkpoint_gap_frames = 0;
@@ -465,6 +475,22 @@ static void update_shots_reference_city(QsGame *g) {
             continue;
         }
         wall_hit=city_first_wall_face(g,s,step,&wall_face,&face_col);
+        /*
+         * Chronologically first projectile touching the independent
+         * crate destroys it; the projectile is spent (including red)
+         * and cannot simultaneously anchor or stun an enemy. Other
+         * projectiles on this frame then see an open path. The fixed
+         * 16x16 area sits ahead of the first bonus beacon.
+         */
+        if (g->city_crate_active == 1 &&
+            overlaps(s->x,s->y,7,4,
+                     QS_CITY_CRATE_X,QS_CITY_CRATE_Y,
+                     QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE)) {
+            g->city_crate_active=0;
+            s->active=0;
+            s->attached=0;
+            continue;
+        }
         for (j=0; j<QS_MAX_ENEMIES; ++j) {
             const QsEnemy *e=&g->enemies[j];
             float candidate;
@@ -1208,6 +1234,8 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_best_checkpoint_frames = 0;
             if (g->city_bonus_mask < 0 || g->city_bonus_mask > 3)
                 g->city_bonus_mask = 0;
+            if (g->city_crate_active != 0 && g->city_crate_active != 1)
+                g->city_crate_active = 1; /* fail-closed collision */
             if (g->city_best_bonus_score != 0 &&
                 g->city_best_bonus_score != 500 &&
                 g->city_best_bonus_score != 1000)
