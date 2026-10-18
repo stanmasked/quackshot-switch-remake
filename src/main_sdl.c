@@ -148,6 +148,23 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
                                  color(255,180,129));
         score/=10;
     }
+    /* Stage 70: show signed comparison with the PREVIOUS split PB.
+     * Amber is the actual split, green is quicker, coral is slower,
+     * cyan is a tie. No number on the session's first-ever split. */
+    if (qs_city_checkpoint_gap_valid(game)) {
+        int delta=qs_city_checkpoint_gap_time(game);
+        int magnitude=delta<0?-delta:delta;
+        SDL_Color pace=delta<0 ? color(94,221,138) :
+                      delta>0 ? color(239,96,108) :
+                                color(112,202,221);
+        rectangle(renderer,79,7,5,1,pace);
+        if (delta>0) rectangle(renderer,81,5,1,5,pace);
+        for(place=3;place>=0;--place) {
+            int digit=magnitude%10;
+            render_bonus_score_digit(renderer,89+8*place,4,digit,pace);
+            magnitude/=10;
+        }
+    }
 }
 
 static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
