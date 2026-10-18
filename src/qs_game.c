@@ -599,9 +599,27 @@ void qs_step(QsGame *g, QsInput input) {
             }
             retire_city_expiring_anchors(g);
             move_hero(g, input, edge(input.jump, g->previous.jump));
-            update_shots(g);
-            update_enemies(g);
-            update_pickups(g);
+            /*
+             * CITY TEST: reaching the exit during movement is a
+             * committed finish. Process reachable pickups once (so a
+             * red unlock or heart at the goal is not lost), but do not
+             * let subsequent enemy contact kill/respawn the hero and
+             * erase the just-achieved goal coordinate. Retire all
+             * projectiles through the usual city map handoff.
+             *
+             * This exit arbitration is a self-authored test rule;
+             * the legacy prototype retains its existing update order.
+             */
+            if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                g->stage == 0 &&
+                g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
+                update_pickups(g);
+                g->cleared[g->stage] = 1;
+                city_leave_to_map(g);
+            } else {
+                update_shots(g);
+                update_enemies(g);
+                update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
              * the VDP HScroll buffer can trail the gameplay RAM position.
@@ -636,6 +654,7 @@ void qs_step(QsGame *g, QsInput input) {
                 g->cleared[g->stage] = 1;
                 city_leave_to_map(g);
             }
+            } /* non-finish path (CITY TEST and standard prototype) */
         }
     }
     g->frames++;

@@ -52,6 +52,14 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 37 resolves the finish boundary crossed DURING a CITY TEST
+simulation tick: overlapping exit pickups are applied before finishing,
+while enemy contact after crossing no longer causes a fatal respawn
+that erases the finish. Initial-boundary completion and premature Back
+retain existing semantics, and the default prototype remains unchanged.
+An independent collision regression suite and SDL raster check cover
+the goal, red unlock and map reentry. See
+[exit interaction arbitration](docs/REFERENCE_CITY_EXIT_INTERACTIONS_RU.md).
 Stage 36 makes an already-reached CITY TEST exit win over a
 same-tick Back/Select/Fire chord. A premature Back still aborts an
 unfinished run, normal prototype rules are unchanged, and persistent

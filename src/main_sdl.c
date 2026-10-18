@@ -560,6 +560,76 @@ static int run_finish_chord_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage-37 asset-free SDL raster test: a hero crossing the city exit
+ * while overlapping a lethal enemy and a red unlock must still display
+ * the completed-stage marker. The unlocked red state survives reentry.
+ */
+static int run_exit_interaction_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame game, expected, fresh;
+    QsInput right = {0}, start = {0}, none = {0};
+    uint64_t actual_map, reference_map, actual_reentry, reference_reentry;
+    const float exit_x = (QS_COLUMNS - 4) * QS_TILE;
+    qs_init(&game);
+    game.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&game, 0);
+    game.hero.x = exit_x - 0.1f;
+    game.hero.y = 188;
+    game.hero.vx = game.hero.vy = 0;
+    game.hero.hearts = 1;
+    game.hero.hurt_frames = 0;
+    game.enemies[0].active = 1;
+    game.enemies[0].x = exit_x + 0.5f;
+    game.enemies[0].y = 188;
+    game.enemies[0].min_x = game.enemies[0].max_x =
+        game.enemies[0].x;
+    game.enemies[0].stunned_frames = 0;
+    game.pickups[0].active = 1;
+    game.pickups[0].x = exit_x + 1;
+    game.pickups[0].y = 189;
+    game.pickups[0].kind = QS_PICKUP_RED;
+    right.right = 1;
+    qs_step(&game,right);
+    if (game.mode != QS_MAP || !game.cleared[0] ||
+        !game.red_unlocked || game.weapon != QS_RED ||
+        game.hero.hearts != 1 || game.pickups[0].active ||
+        game.camera_x != 0 || game.render_camera_x != 0) {
+        fprintf(stderr, "EXIT_INTERACTION_SDL_FAIL: exit progress/unlock lost\n");
+        return 0;
+    }
+    qs_init(&expected);
+    expected.cleared[0] = 1;
+    expected.red_unlocked = 1;
+    expected.weapon = QS_RED;
+    if (!capture_frame(renderer,&game,&actual_map) ||
+        !capture_frame(renderer,&expected,&reference_map) ||
+        actual_map != reference_map) {
+        fprintf(stderr, "EXIT_INTERACTION_SDL_FAIL: map pixels disagree\n");
+        return 0;
+    }
+    qs_step(&game,none);
+    start.select = start.dash = 1;
+    qs_step(&game,start);
+    qs_init(&fresh);
+    fresh.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    fresh.cleared[0] = 1;
+    fresh.red_unlocked = 1;
+    fresh.weapon = QS_RED;
+    qs_begin_stage(&fresh,0);
+    if (game.mode != QS_STAGE || !game.red_unlocked ||
+        game.weapon != QS_RED || game.pickups[0].active ||
+        !capture_frame(renderer,&game,&actual_reentry) ||
+        !capture_frame(renderer,&fresh,&reference_reentry) ||
+        actual_reentry != reference_reentry) {
+        fprintf(stderr, "EXIT_INTERACTION_SDL_FAIL: first-stage pixels differ\n");
+        return 0;
+    }
+    printf("EXIT_INTERACTION_SDL_PASS: map=%016llx reentry=%016llx red unlock retained\n",
+           (unsigned long long)actual_map,
+           (unsigned long long)actual_reentry);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -609,6 +679,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     if (!run_map_chord_sdl_smoke(renderer)) return 1;
     if (!run_finish_chord_sdl_smoke(renderer)) return 1;
+    if (!run_exit_interaction_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
