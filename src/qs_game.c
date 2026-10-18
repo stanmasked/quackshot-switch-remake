@@ -448,8 +448,8 @@ static void update_shots_reference_city(QsGame *g) {
         QsShot *s;
         float step;
         int arrival_step, arrival_slices;
-        int target=-1, face_col=0, wall_hit;
-        float enemy_face=0, wall_face=0;
+        int target=-1, face_col=0, wall_hit, crate_hit;
+        float enemy_face=0, wall_face=0, crate_face=0;
         /*
          * Advance exactly one substep of the chronologically next
          * projectile. Completed, attached and expired projectiles
@@ -478,22 +478,18 @@ static void update_shots_reference_city(QsGame *g) {
         }
         wall_hit=city_first_wall_face(g,s,step,&wall_face,&face_col);
         /*
-         * Chronologically first projectile touching the independent
-         * crate destroys it; the projectile is spent (including red)
-         * and cannot simultaneously anchor or stun an enemy. Other
-         * projectiles on this frame then see an open path. The fixed
-         * 16x16 area sits ahead of the first bonus beacon.
+         * Stage 75: the crate participates in the SAME nearest-face
+         * collision decision as tiles and foes. Merely overlapping its
+         * AABB is not sufficient if a wall or enemy face is closer.
+         * Wall wins equal-face ties; crate wins ties with enemies.
          */
-        if (g->city_crate_active == 1 &&
+        crate_hit=g->city_crate_active == 1 &&
             overlaps(s->x,s->y,7,4,
                      QS_CITY_CRATE_X,QS_CITY_CRATE_Y,
-                     QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE)) {
-            g->city_crate_active=0;
-            g->city_crate_fx_frames=QS_CITY_CRATE_FX_TICKS;
-            s->active=0;
-            s->attached=0;
-            continue;
-        }
+                     QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE);
+        if (crate_hit)
+            crate_face=step >= 0 ? QS_CITY_CRATE_X :
+                                   QS_CITY_CRATE_X+QS_CITY_CRATE_SIZE;
         for (j=0; j<QS_MAX_ENEMIES; ++j) {
             const QsEnemy *e=&g->enemies[j];
             float candidate;
@@ -514,7 +510,10 @@ static void update_shots_reference_city(QsGame *g) {
          * win exact face ties. A red shot anchors on a real wall only. */
         if (wall_hit && (target < 0 ||
             (step >= 0 ? wall_face <= enemy_face :
-                         wall_face >= enemy_face))) {
+                         wall_face >= enemy_face)) &&
+            (!crate_hit ||
+             (step >= 0 ? wall_face <= crate_face :
+                          wall_face >= crate_face))) {
             if (s->red) {
                 s->x=step >= 0 ? wall_face-8.0f : wall_face;
                 s->attached=1;
@@ -522,6 +521,22 @@ static void update_shots_reference_city(QsGame *g) {
             } else {
                 s->active=0;
             }
+            continue;
+        }
+        if (crate_hit &&
+            (target < 0 ||
+             (step >= 0 ? crate_face <= enemy_face :
+                          crate_face >= enemy_face)) &&
+            (!wall_hit ||
+             (step >= 0 ? crate_face < wall_face :
+                          crate_face > wall_face))) {
+            /* Real impact, not a projectile that passed through the
+             * wall or an enemy. Spend this projectile, show debris.
+             * A later shot in the same tick observes a missing crate. */
+            g->city_crate_active=0;
+            g->city_crate_fx_frames=QS_CITY_CRATE_FX_TICKS;
+            s->active=0;
+            s->attached=0;
             continue;
         }
         if (target >= 0) {
