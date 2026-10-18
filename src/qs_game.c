@@ -819,6 +819,35 @@ static void sanitize_city_shots(QsGame *g) {
     }
 }
 
+/*
+ * Stage 54: only the optional CITY TEST uses one-tick, color-latched
+ * fire events. Reject damaged queue flags and weapon metadata before
+ * dispatch: an arbitrary int must never behave as a pending shot or
+ * unlock a red projectile. A legitimate snapshot (shot=1, red=1)
+ * remains RED even if the weapon changes during the next tick.
+ */
+static void sanitize_city_weapon_queue(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+
+    if (g->red_unlocked != 0 && g->red_unlocked != 1)
+        g->red_unlocked = g->red_unlocked > 0 ? 1 : 0;
+    if (g->weapon != QS_YELLOW && g->weapon != QS_RED)
+        g->weapon = QS_YELLOW;
+    if (!g->red_unlocked && g->weapon == QS_RED)
+        g->weapon = QS_YELLOW;
+
+    if (g->pending_reference_shot != 1) {
+        g->pending_reference_shot = 0;
+        g->pending_reference_red = 0;
+    } else {
+        if (g->pending_reference_red != 0 && g->pending_reference_red != 1)
+            g->pending_reference_red = 0;
+        if (!g->red_unlocked)
+            g->pending_reference_red = 0;
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
         int held_back = input.left || input.up;
@@ -861,6 +890,7 @@ void qs_step(QsGame *g, QsInput input) {
         sanitize_city_enemies(g);
         sanitize_city_pickups(g);
         sanitize_city_shots(g);
+        sanitize_city_weapon_queue(g);
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the
