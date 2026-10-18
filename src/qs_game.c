@@ -560,7 +560,20 @@ void qs_step(QsGame *g, QsInput input) {
             qs_begin_stage(g, g->selected_stage);
         }
     } else {
-        if (edge(input.back, g->previous.back)) {
+        /*
+         * A CITY TEST exit already crossed at tick start is a completed
+         * stage, even if the same input also presses Back. Treat the
+         * achievement as committed before processing voluntary exits.
+         * Do not grant a completion when Back occurs before the exit:
+         * physics are intentionally skipped by that explicit exit.
+         * The original v0.1 prototype's Back priority stays intact.
+         */
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+            g->stage == 0 &&
+            g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
+            g->cleared[g->stage] = 1;
+            city_leave_to_map(g);
+        } else if (edge(input.back, g->previous.back)) {
             city_leave_to_map(g);
         } else {
             if (edge(input.change, g->previous.change) && g->red_unlocked)

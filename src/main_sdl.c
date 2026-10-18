@@ -489,6 +489,77 @@ static int run_map_chord_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Pixel proof of an already-achieved CITY TEST finish with all stage
+ * action buttons held in the same frame. Map markers and first-stage
+ * pixels must be identical to an independent legitimate completion;
+ * no held select/right button may re-enter or navigate on the next tick.
+ */
+static int run_finish_chord_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame simultaneous, expected, fresh;
+    QsInput chord = {0}, released = {0};
+    uint64_t completed_map, expected_map, actual_first, expected_first;
+    qs_init(&simultaneous);
+    simultaneous.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    simultaneous.red_unlocked = 1;
+    simultaneous.weapon = QS_RED;
+    qs_begin_stage(&simultaneous, 0);
+    simultaneous.hero.x = (QS_COLUMNS - 4) * QS_TILE + 0.25f;
+    simultaneous.camera_x = 820;
+    simultaneous.render_camera_x = 805;
+    simultaneous.pending_reference_shot = 1;
+    simultaneous.pending_reference_red = 1;
+    simultaneous.shots[0].active = 1;
+    simultaneous.shots[0].attached = 1;
+    simultaneous.shots[0].red = 1;
+    simultaneous.shots[0].frames = 100;
+    chord.back = chord.right = chord.select = chord.fire = chord.change = 1;
+    chord.dash = 1;
+    qs_step(&simultaneous, chord);
+    if (simultaneous.mode != QS_MAP || !simultaneous.cleared[0] ||
+        simultaneous.selected_stage != 0 ||
+        simultaneous.camera_x != 0 || simultaneous.render_camera_x != 0 ||
+        simultaneous.shots[0].active || simultaneous.pending_reference_shot) {
+        fprintf(stderr, "FINISH_CHORD_SDL_FAIL: completion lost to Back chord\n");
+        return 0;
+    }
+    qs_init(&expected);
+    expected.red_unlocked = 1;
+    expected.weapon = QS_RED;
+    expected.cleared[0] = 1;
+    if (!capture_frame(renderer,&simultaneous,&completed_map) ||
+        !capture_frame(renderer,&expected,&expected_map) ||
+        completed_map != expected_map) {
+        fprintf(stderr, "FINISH_CHORD_SDL_FAIL: completed map raster differs\n");
+        return 0;
+    }
+    qs_step(&simultaneous, chord); /* all buttons held: do nothing */
+    if (simultaneous.mode != QS_MAP || simultaneous.selected_stage != 0)
+        return 0;
+    qs_step(&simultaneous, released);
+    chord = released;
+    chord.select = chord.dash = 1;
+    qs_step(&simultaneous, chord);
+    qs_init(&fresh);
+    fresh.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    fresh.red_unlocked = 1;
+    fresh.weapon = QS_RED;
+    fresh.cleared[0] = 1;
+    qs_begin_stage(&fresh, 0);
+    if (simultaneous.mode != QS_STAGE ||
+        simultaneous.physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        !capture_frame(renderer,&simultaneous,&actual_first) ||
+        !capture_frame(renderer,&fresh,&expected_first) ||
+        actual_first != expected_first) {
+        fprintf(stderr, "FINISH_CHORD_SDL_FAIL: re-entry raster differs\n");
+        return 0;
+    }
+    printf("FINISH_CHORD_SDL_PASS: finish-map=%016llx reentry=%016llx held-input ignored\n",
+           (unsigned long long)completed_map,
+           (unsigned long long)actual_first);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -537,6 +608,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     if (!run_map_chord_sdl_smoke(renderer)) return 1;
+    if (!run_finish_chord_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

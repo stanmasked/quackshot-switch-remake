@@ -52,6 +52,12 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 36 makes an already-reached CITY TEST exit win over a
+same-tick Back/Select/Fire chord. A premature Back still aborts an
+unfinished run, normal prototype rules are unchanged, and persistent
+progress remains stable through repeat re-entry. Dedicated CTest
+scenarios and an SDL rendered-frame comparison guard the finish/map
+handoff against held inputs. See [stage finish chord priority](docs/STAGE_FINISH_CHORD_PRIORITY_RU.md).
 Stage 35 prevents staggered opposing button holds from moving the
 map and blocks stage entry until all directions are released. Short
 rapid-input regressions and a 1,200-step reproducible state-machine
