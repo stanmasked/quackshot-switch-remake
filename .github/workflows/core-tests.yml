@@ -83,6 +83,7 @@ jobs:
           grep -q '^OPPOSING_TIES_SDL_PASS:' smoke.log
           grep -q '^GLOBAL_TIMELINE_SDL_PASS:' smoke.log
           grep -q '^VELOCITY_GUARD_SDL_PASS:' smoke.log
+          grep -q '^ENEMY_NUMERIC_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:

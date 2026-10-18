@@ -12,7 +12,7 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Portable C99 simulation (60 fixed steps/second, deterministic for equal inputs).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
-- 29 executable CTest groups, checked with GCC and Clang in Debug and Release, including exact CITY TEST timing and numeric-safety regressions.
+- 30 executable CTest groups, checked with GCC and Clang in Debug and Release, including exact CITY TEST timing and numeric-safety regressions.
 - **Optional city-reference physics envelope**, fitted to numeric observations from privately emulated original Mega Drive gameplay. Default prototype movement is unchanged.
 - Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
@@ -52,6 +52,15 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 46 extends CITY TEST numeric validation to enemy positions
+and patrol bounds before any projectile collision or SDL render:
+NaN/Infinity, extreme finite coordinates and completely off-world
+actors are discarded and their data canonicalized. Valid edge
+patrols remain unchanged; the ordinary prototype is unaffected.
+A new regression group runs in all four GCC/Clang configurations,
+and SDL2 checks that the corrupted actor vanishes while a valid
+stunned enemy still appears. See
+[city enemy numeric guard](docs/REFERENCE_CITY_ENEMY_NUMERIC_RU.md).
 Stage 45 replaces floating-point fractions for projectile event
 ordering with exact rational comparisons using bounded 32-bit integer
 cross-products. Same-instant impacts stay simultaneous; genuinely

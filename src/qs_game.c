@@ -649,6 +649,36 @@ static int move_hero(QsGame *g, QsInput in, int jump_pressed) {
     return 0;
 }
 
+/*
+ * Corrupt enemy data is rejected before it can enter projectile
+ * geometry, contact arbitration or SDL's float-to-int drawing.
+ * The 14x16 body may legitimately start partly outside the world
+ * while patrolling in, but completely out-of-world coordinates and
+ * non-finite inputs are not meaningful CITY TEST actors.
+ *
+ * This safety boundary is opt-in and deliberately does not alter
+ * the legacy prototype's actor behavior.
+ */
+static void sanitize_city_enemies(QsGame *g) {
+    int i;
+    const float world_w = (float)(QS_COLUMNS * QS_TILE);
+    const float world_h = (float)(QS_ROWS * QS_TILE);
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    for (i=0; i<QS_MAX_ENEMIES; ++i) {
+        QsEnemy *e=&g->enemies[i];
+        if (!e->active) continue;
+        if (!isfinite(e->x) || !isfinite(e->y) ||
+            !isfinite(e->min_x) || !isfinite(e->max_x) ||
+            e->x < -14.0f || e->x > world_w ||
+            e->y < -16.0f || e->y > world_h) {
+            /* Canonicalize discarded actor too: avoid keeping NaN
+             * in replay/snapshot data even after it is inactive. */
+            memset(e,0,sizeof(*e));
+        }
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
         int held_back = input.left || input.up;
@@ -684,6 +714,9 @@ void qs_step(QsGame *g, QsInput input) {
             qs_begin_stage(g, g->selected_stage);
         }
     } else {
+        /* Validation precedes even the early Back/finish handoffs:
+         * no invalid actor may survive into the next rendered state. */
+        sanitize_city_enemies(g);
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the

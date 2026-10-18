@@ -4,6 +4,7 @@
 #include "qs_parallax.h"
 #include <SDL.h>
 #include <stdio.h>
+#include <float.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -972,6 +973,39 @@ static int run_velocity_guard_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* A non-finite enemy must be removed BEFORE any SDL int conversion.
+ * The independent valid enemy should still draw a blue stun pixel. */
+static int run_enemy_numeric_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t valid_pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    g.hero.x=40;g.hero.y=188;
+    g.enemies[0].active=1;
+    g.enemies[0].x=NAN;g.enemies[0].y=FLT_MAX;
+    g.enemies[0].min_x=0;g.enemies[0].max_x=80;
+    g.enemies[1].active=1;
+    g.enemies[1].x=135;g.enemies[1].y=184;
+    g.enemies[1].min_x=g.enemies[1].max_x=135;
+    g.enemies[1].stunned_frames=2;
+    qs_step(&g,idle);
+    if (g.enemies[0].active ||
+        g.enemies[0].x!=0 || g.enemies[0].y!=0 ||
+        g.enemies[1].stunned_frames!=1 ||
+        !read_multishot_pixel(renderer,&g,138,186,&valid_pixel) ||
+        valid_pixel!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"ENEMY_NUMERIC_SDL_FAIL: valid-pixel=%08x active=%d\n",
+                (unsigned)valid_pixel,g.enemies[0].active);
+        return 0;
+    }
+    printf("ENEMY_NUMERIC_SDL_PASS: invalid removed, valid pixel=%08x\n",
+           (unsigned)valid_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1029,6 +1063,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_opposing_ties_sdl_smoke(renderer)) return 1;
     if (!run_global_timeline_sdl_smoke(renderer)) return 1;
     if (!run_velocity_guard_sdl_smoke(renderer)) return 1;
+    if (!run_enemy_numeric_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
