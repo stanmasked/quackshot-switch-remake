@@ -274,6 +274,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_crate_active =
         stage == 0 && g->physics_profile == QS_PHYSICS_REFERENCE_CITY;
     g->city_crate_fx_frames = 0; /* new attempt has no old debris */
+    g->city_spring_flash_frames = 0;
     g->city_paused = 0;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
@@ -359,6 +360,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
         g->city_crate_active = 0; /* next stage entry recreates the obstacle */
         g->city_crate_fx_frames = 0; /* no debris carried onto the map */
+        g->city_spring_flash_frames = 0;
         g->city_paused = 0; /* no pause state carried onto the map */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
@@ -959,6 +961,26 @@ static int move_hero(QsGame *g, QsInput in, int jump_pressed) {
     }
     if (h->grounded && g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
         g->reference_jump_steps = 0;
+    /*
+     * Stage 80: a one-way, non-solid spring pad sits flush with the
+     * final original-free CITY TEST ground. It activates ONLY on a
+     * grounded landing (not when passing beside it or in midair).
+     * The impulse is applied AFTER vertical collision resolution,
+     * then the next simulation tick performs the upward motion.
+     * Setting jump-hold to its cap prevents a held Jump from turning
+     * this fixed spring impulse into a variable-length super-jump.
+     */
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        g->stage == 0 && h->grounded &&
+        h->x < QS_CITY_SPRING_X + QS_CITY_SPRING_WIDTH &&
+        h->x + 12 > QS_CITY_SPRING_X &&
+        h->y + 20 >= QS_CITY_SPRING_TOP-0.01f &&
+        h->y + 20 <= QS_CITY_SPRING_TOP+0.01f) {
+        h->vy = QS_CITY_SPRING_BOUNCE;
+        h->grounded = 0;
+        g->reference_jump_steps = QS_CITY_MAX_JUMP_HOLD+1;
+        g->city_spring_flash_frames = QS_CITY_SPRING_FLASH_TICKS;
+    }
     if (h->y > QS_VIEW_H + 22) {
         int city_retry = g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
                          g->stage == 0;
@@ -1332,6 +1354,11 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_crate_fx_frames=0;
             else if (g->city_crate_fx_frames > 0)
                 --g->city_crate_fx_frames;
+            if (g->city_spring_flash_frames < 0 ||
+                g->city_spring_flash_frames > QS_CITY_SPRING_FLASH_TICKS)
+                g->city_spring_flash_frames=0;
+            else if (g->city_spring_flash_frames > 0)
+                --g->city_spring_flash_frames;
             if (g->city_best_clear_frames < 0 ||
                 g->city_best_clear_frames > QS_CITY_TIMER_MAX)
                 g->city_best_clear_frames = 0;
