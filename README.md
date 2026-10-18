@@ -83,6 +83,13 @@ CITY map row. Back without a clear never awards a time, and ordinary
 prototype stages remain unchanged. See
 [time-trial gameplay and tests](docs/REFERENCE_CITY_TIME_TRIAL_RU.md).
 
+Stage 69 adds an **optional checkpoint split** to the same time trial.
+The first safe contact with the CITY TEST flag freezes an amber
+per-attempt split; the fastest split in the game session remains visible
+on the map. Fatal contact cannot earn a split, retries keep the current
+one, and the ordinary prototype is unaffected. See
+[checkpoint split verification](docs/REFERENCE_CITY_CHECKPOINT_SPLIT_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
