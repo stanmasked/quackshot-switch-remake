@@ -174,6 +174,12 @@ collection persists through life respawns but resets on a fresh attempt.
 It does not change the two-beacon score or the legacy prototype. See
 [airborne heart gameplay and checks](docs/REFERENCE_CITY_AIR_REWARD_RU.md).
 
+Stage 82 adds a **short collection sparkle** for the airborne heart,
+plus regression coverage for enemy-contact ordering, stun, checkpoint
+respawn, camera phase and pause. Its visual timer is not a hitbox and
+cannot change movement or score. See
+[airborne heart interaction checks](docs/REFERENCE_CITY_AIR_REWARD_INTERACTIONS_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and

@@ -34,6 +34,7 @@
 #define QS_CITY_AIR_REWARD_X 1152.0f
 #define QS_CITY_AIR_REWARD_Y 96.0f
 #define QS_CITY_AIR_REWARD_SIZE 10.0f
+#define QS_CITY_AIR_REWARD_FX_TICKS 16 /* presentation-only earned burst */
 #define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
 
 #ifdef __cplusplus
@@ -66,6 +67,7 @@ typedef struct {
     int city_crate_fx_frames; /* remaining visible debris ticks, never collidable */
     int city_spring_flash_frames; /* bounded flash after successful landing */
     int city_air_reward_collected; /* per-attempt single-use airborne heart */
+    int city_air_reward_fx_frames; /* brief cosmetic collection witness */
     int city_paused; /* opt-in X+Start training pause, not gameplay time */
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int city_attempt_frames; /* reset at every stage/map handoff */

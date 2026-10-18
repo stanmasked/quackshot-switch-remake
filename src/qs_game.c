@@ -276,6 +276,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_crate_fx_frames = 0; /* new attempt has no old debris */
     g->city_spring_flash_frames = 0;
     g->city_air_reward_collected = 0;
+    g->city_air_reward_fx_frames = 0;
     g->city_paused = 0;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
@@ -346,6 +347,7 @@ static void clear_city_transients(QsGame *g) {
     g->pending_reference_shot = 0;
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
+    g->city_air_reward_fx_frames = 0; /* a respawn retires the burst only */
 }
 
 /* Both manual and automatic CITY TEST exits must leave a consistent
@@ -363,6 +365,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_crate_fx_frames = 0; /* no debris carried onto the map */
         g->city_spring_flash_frames = 0;
         g->city_air_reward_collected = 0;
+        g->city_air_reward_fx_frames = 0;
         g->city_paused = 0; /* no pause state carried onto the map */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
@@ -814,6 +817,7 @@ static void update_city_air_reward(QsGame *g) {
                  QS_CITY_AIR_REWARD_X, QS_CITY_AIR_REWARD_Y,
                  QS_CITY_AIR_REWARD_SIZE, QS_CITY_AIR_REWARD_SIZE)) {
         g->city_air_reward_collected = 1;
+        g->city_air_reward_fx_frames = QS_CITY_AIR_REWARD_FX_TICKS;
         if (g->hero.hearts < 3) ++g->hero.hearts;
     }
 }
@@ -1381,6 +1385,13 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_spring_flash_frames=0;
             else if (g->city_spring_flash_frames > 0)
                 --g->city_spring_flash_frames;
+            /* New collection is awarded after this timer ages. Pausing
+             * returns above before decrement and leaves the raster fixed. */
+            if (g->city_air_reward_fx_frames < 0 ||
+                g->city_air_reward_fx_frames > QS_CITY_AIR_REWARD_FX_TICKS)
+                g->city_air_reward_fx_frames=0;
+            else if (g->city_air_reward_fx_frames > 0)
+                --g->city_air_reward_fx_frames;
             if (g->city_best_clear_frames < 0 ||
                 g->city_best_clear_frames > QS_CITY_TIMER_MAX)
                 g->city_best_clear_frames = 0;

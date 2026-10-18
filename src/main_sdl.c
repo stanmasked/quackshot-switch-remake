@@ -330,6 +330,20 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                   (int)QS_CITY_AIR_REWARD_SIZE,color(95,228,218));
         rectangle(renderer,x+3,y+3,4,4,color(255,240,174));
     }
+    /* Stage 82: a temporary two-color earned burst, never collidable.
+     * Position remains in world coordinates; the two camera phases
+     * affect raster only, never pickup arbitration or timer state. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0 && game->city_air_reward_collected == 1 &&
+        game->city_air_reward_fx_frames > 0 &&
+        game->city_air_reward_fx_frames <= QS_CITY_AIR_REWARD_FX_TICKS) {
+        int age=QS_CITY_AIR_REWARD_FX_TICKS-game->city_air_reward_fx_frames;
+        int x=(int)QS_CITY_AIR_REWARD_X-cam;
+        int y=(int)QS_CITY_AIR_REWARD_Y;
+        rectangle(renderer,x-6-age/3,y+4,4,2,color(183,160,255));
+        rectangle(renderer,x+12+age/3,y+4,4,2,color(255,201,92));
+        rectangle(renderer,x+4,y-6-age/3,2,4,color(255,239,173));
+    }
     /* Stage 72: a small original-free barricade can be shot away,
      * or bypassed by jumping. It is only present in CITY TEST. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
@@ -3649,6 +3663,68 @@ static int run_city_sector_budget_sdl_smoke(SDL_Renderer *renderer) {
  * the opt-in city, disappears on collection and returns on retry.
  * The render path consumes state but never changes health or pickups.
  */
+/*
+ * Stage 82: camera-phase-independent airborne heart collection burst
+ * must appear for its full first frame, freeze under pause, age to zero,
+ * and clear on retry. All pixel readings are from the real SDL raster.
+ */
+static int run_city_air_reward_fx_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    const int cam=QS_COLUMNS*QS_TILE-QS_VIEW_W;
+    const int x=(int)QS_CITY_AIR_REWARD_X-cam;
+    const int y=(int)QS_CITY_AIR_REWARD_Y;
+    uint32_t unearned=0,lit=0,paused=0,gone=0,retry=0,prototype=0;
+    const uint32_t cream=UINT32_C(0xffffefad);
+    qs_init(&g);g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.camera_x=g.render_camera_x=(float)cam;
+    g.hero.x=100;g.hero.y=188;
+    if(!read_multishot_pixel(renderer,&g,x+4,y-5,&unearned) ||
+       unearned==cream) return 0;
+    g.hero.x=QS_CITY_AIR_REWARD_X;
+    g.hero.y=QS_CITY_AIR_REWARD_Y;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=0;g.hero.hearts=2;
+    qs_step(&g,in);
+    if(!g.city_air_reward_collected || g.hero.hearts!=3 ||
+       g.city_air_reward_fx_frames!=QS_CITY_AIR_REWARD_FX_TICKS ||
+       !read_multishot_pixel(renderer,&g,x+4,y-5,&lit) ||
+       lit!=cream) {
+        fprintf(stderr,"CITY_AIR_FX_SDL_FAIL: earned=%08x frames=%d\n",
+                (unsigned)lit,g.city_air_reward_fx_frames);
+        return 0;
+    }
+    in.back=in.change=1;
+    qs_step(&g,in);
+    for(int t=0;t<40;t++)qs_step(&g,(QsInput){0});
+    if(!g.city_paused || g.city_air_reward_fx_frames!=QS_CITY_AIR_REWARD_FX_TICKS ||
+       !read_multishot_pixel(renderer,&g,x+4,y-5,&paused) ||
+       paused!=lit) return 0;
+    qs_step(&g,in);
+    for(int t=0;t<QS_CITY_AIR_REWARD_FX_TICKS;t++)
+        qs_step(&g,(QsInput){0});
+    if(g.city_air_reward_fx_frames ||
+       !read_multishot_pixel(renderer,&g,x+4,y-5,&gone) ||
+       gone==cream) return 0;
+    in=(QsInput){0};in.back=in.dash=1;qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_air_reward_fx_frames || g.city_air_reward_collected ||
+       !read_multishot_pixel(renderer,&g,x+4,y-5,&retry) ||
+       retry==cream) return 0;
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.camera_x=legacy.render_camera_x=(float)cam;
+    legacy.city_air_reward_collected=1;
+    legacy.city_air_reward_fx_frames=QS_CITY_AIR_REWARD_FX_TICKS;
+    if(!read_multishot_pixel(renderer,&legacy,x+4,y-5,&prototype) ||
+       prototype==cream) return 0;
+    printf("CITY_AIR_FX_SDL_PASS: new=%08x paused=%08x gone=%08x\n",
+           (unsigned)lit,(unsigned)paused,(unsigned)gone);
+    return 1;
+}
+
 static int run_city_air_reward_sdl_smoke(SDL_Renderer *renderer) {
     QsGame g,legacy;
     QsInput in={0};
@@ -3887,6 +3963,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_sector_budget_sdl_smoke(renderer)) return 1;
     if (!run_city_spring_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_sdl_smoke(renderer)) return 1;
+    if (!run_city_air_reward_fx_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
