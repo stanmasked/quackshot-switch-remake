@@ -106,6 +106,14 @@ unlocked ammo and clears remain intact. Ordinary Start still
 returns to the stage map, and legacy gameplay is untouched.
 See [quick retry behavior](docs/REFERENCE_CITY_QUICK_RETRY_RU.md).
 
+Stage 72 introduces a small **procedurally drawn breakable obstacle**
+between the two CITY TEST bonus beacons. The crate blocks ordinary
+movement but may be jumped over or destroyed by a yellow/red shot.
+Its destruction remains for the current life-retry sequence and the
+object returns on a new attempt. Neither other stages nor the
+ordinary prototype is changed. See
+[breakable crate gameplay](docs/REFERENCE_CITY_BREAKABLE_CRATE_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
