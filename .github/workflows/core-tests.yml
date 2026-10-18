@@ -100,6 +100,7 @@ jobs:
           grep -q '^BONUS_BEACONS_SDL_PASS:' smoke.log
           grep -q '^BONUS_SET_HEAL_SDL_PASS:' smoke.log
           grep -q '^BONUS_SCORE_SDL_PASS:' smoke.log
+          grep -q '^PERSONAL_BEST_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
