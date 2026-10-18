@@ -46,6 +46,7 @@ typedef struct {
     int red_unlocked;
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
+    int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
@@ -66,6 +67,7 @@ void qs_step(QsGame *game, QsInput input);
 int qs_solid(const QsGame *game, int col, int row);
 const char *qs_stage_name(int stage);
 int qs_city_bonus_score(const QsGame *game); /* optional practice score, max 1000 */
+int qs_city_best_bonus_score(const QsGame *game); /* session PB, 0/500/1000 */
 
 #ifdef __cplusplus
 }
