@@ -3080,6 +3080,99 @@ static int run_breakable_crate_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 74: read REAL SDL pixels for the transient crate fragments.
+ * 18-tick countdown is simulation-driven: the initial flash stays
+ * in the impact frame, fragments drift, then pixels restore exactly
+ * to the no-crate background. A quick retry has no lingering debris.
+ */
+static int run_city_crate_debris_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    uint32_t base_left=0,base_top=0,base_right=0;
+    uint32_t first_left=0,first_top=0,first_right=0;
+    uint32_t moved_left=0,gone_left=0,gone_top=0,restored=0;
+    uint32_t forged=0;
+    const int cam=840;
+    const int x=(int)QS_CITY_CRATE_X-cam;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    /* Baseline has no FX and the crate cannot occupy the pixels
+     * outside its own 16x16 body. */
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x-6,188,&base_left) ||
+       !read_multishot_pixel(renderer,&g,x+7,183,&base_top) ||
+       !read_multishot_pixel(renderer,&g,x+18,190,&base_right))
+        return 0;
+    g.shots[0].active=1;
+    g.shots[0].frames=65;
+    g.shots[0].x=QS_CITY_CRATE_X-11;
+    g.shots[0].y=197;
+    g.shots[0].vx=5.5f;
+    for(int i=0;i<4 && g.city_crate_active;i++)qs_step(&g,in);
+    if(g.city_crate_active || g.city_crate_fx_frames!=QS_CITY_CRATE_FX_TICKS)
+        return 0;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x-6,188,&first_left) ||
+       !read_multishot_pixel(renderer,&g,x+7,183,&first_top) ||
+       !read_multishot_pixel(renderer,&g,x+18,190,&first_right) ||
+       first_left!=UINT32_C(0xffffd67f) ||
+       first_top!=UINT32_C(0xfffff2be) ||
+       first_right!=UINT32_C(0xffe69d68) ||
+       first_left==base_left || first_top==base_top ||
+       first_right==base_right) {
+        fprintf(stderr,"CRATE_DEBRIS_SDL_FAIL: impact=%08x/%08x/%08x base=%08x/%08x/%08x\n",
+                (unsigned)first_left,(unsigned)first_top,
+                (unsigned)first_right,(unsigned)base_left,
+                (unsigned)base_top,(unsigned)base_right);
+        return 0;
+    }
+    for(int t=0;t<6;t++)qs_step(&g,in);
+    if(g.city_crate_fx_frames!=QS_CITY_CRATE_FX_TICKS-6)return 0;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x-9,186,&moved_left) ||
+       !read_multishot_pixel(renderer,&g,x-6,188,&gone_left) ||
+       moved_left!=first_left || gone_left!=base_left)
+        return 0;
+    for(int t=6;t<QS_CITY_CRATE_FX_TICKS;t++)qs_step(&g,in);
+    if(g.city_crate_fx_frames!=0 || g.city_crate_active)return 0;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x-6,188,&gone_left) ||
+       !read_multishot_pixel(renderer,&g,x+7,183,&gone_top) ||
+       gone_left!=base_left || gone_top!=base_top)
+        return 0;
+
+    /* A fresh crate must have no fragments from the prior attempt. */
+    in.back=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || !g.city_crate_active ||
+       g.city_crate_fx_frames!=0)return 0;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x-6,188,&restored) ||
+       restored!=base_left)return 0;
+
+    /* Even an injected FX flag may not render in legacy gameplay. */
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.camera_x=legacy.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&legacy,x-6,188,&restored))
+        return 0;
+    legacy.city_crate_active=0;
+    legacy.city_crate_fx_frames=QS_CITY_CRATE_FX_TICKS;
+    if(!read_multishot_pixel(renderer,&legacy,x-6,188,&forged) ||
+       forged!=restored)
+        return 0;
+    printf("CRATE_DEBRIS_SDL_PASS: impact=%08x/%08x/%08x moved=%08x fade=%08x legacy=%08x\n",
+           (unsigned)first_left,(unsigned)first_top,
+           (unsigned)first_right,(unsigned)moved_left,
+           (unsigned)gone_left,(unsigned)forged);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3161,6 +3254,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_checkpoint_pace_sdl_smoke(renderer)) return 1;
     if (!run_city_quick_retry_sdl_smoke(renderer)) return 1;
     if (!run_breakable_crate_sdl_smoke(renderer)) return 1;
+    if (!run_city_crate_debris_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
