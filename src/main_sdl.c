@@ -684,9 +684,20 @@ static int run_finish_chord_sdl_smoke(SDL_Renderer *renderer) {
         return 0;
     }
     qs_init(&expected);
+    expected.physics_profile = QS_PHYSICS_REFERENCE_CITY;
     expected.red_unlocked = 1;
     expected.weapon = QS_RED;
     expected.cleared[0] = 1;
+    /*
+     * The stage is already completed at tick start, so the one-tick
+     * successful time trial is part of the independent map oracle.
+     */
+    if (simultaneous.city_best_clear_frames != 1) {
+        fprintf(stderr,"FINISH_CHORD_SDL_FAIL: expected one-tick best, got %d\n",
+                simultaneous.city_best_clear_frames);
+        return 0;
+    }
+    expected.city_best_clear_frames = simultaneous.city_best_clear_frames;
     if (!capture_frame(renderer,&simultaneous,&completed_map) ||
         !capture_frame(renderer,&expected,&expected_map) ||
         completed_map != expected_map) {
@@ -758,9 +769,18 @@ static int run_exit_interaction_sdl_smoke(SDL_Renderer *renderer) {
         return 0;
     }
     qs_init(&expected);
+    expected.physics_profile = QS_PHYSICS_REFERENCE_CITY;
     expected.cleared[0] = 1;
     expected.red_unlocked = 1;
     expected.weapon = QS_RED;
+    /* Completion during movement now records the first counted tick.
+     * Match that EARNED map outcome, not a pre-time-trial map. */
+    if (game.city_best_clear_frames != 1) {
+        fprintf(stderr,"EXIT_INTERACTION_SDL_FAIL: expected one-tick best, got %d\n",
+                game.city_best_clear_frames);
+        return 0;
+    }
+    expected.city_best_clear_frames = game.city_best_clear_frames;
     if (!capture_frame(renderer,&game,&actual_map) ||
         !capture_frame(renderer,&expected,&reference_map) ||
         actual_map != reference_map) {
