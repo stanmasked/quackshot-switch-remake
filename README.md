@@ -12,7 +12,7 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Portable C99 simulation (60 fixed steps/second, deterministic for equal inputs).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
-- 28 executable CTest groups in Release and Debug, including the CITY TEST safety and timing regressions.
+- 29 executable CTest groups, checked with GCC and Clang in Debug and Release, including exact CITY TEST timing and numeric-safety regressions.
 - **Optional city-reference physics envelope**, fitted to numeric observations from privately emulated original Mega Drive gameplay. Default prototype movement is unchanged.
 - Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
@@ -52,6 +52,13 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 45 replaces floating-point fractions for projectile event
+ordering with exact rational comparisons using bounded 32-bit integer
+cross-products. Same-instant impacts stay simultaneous; genuinely
+later shots pass earlier-stunned enemies, even when their timestamps
+differ by less than 0.00001 of a frame. GitHub Actions compares an
+independent collision-outcome digest across GCC/Clang in Debug/Release.
+See [rational timeline validation](docs/REFERENCE_CITY_RATIONAL_TIMELINE_RU.md).
 Stage 44 bounds the CITY TEST projectile scheduler: reject NaN,
 infinite or out-of-world coordinates, unsafe lifetimes, and any
 velocity exceeding the 1280-pixel synthetic world width per frame.

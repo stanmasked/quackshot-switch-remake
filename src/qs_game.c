@@ -242,8 +242,15 @@ static void update_shots_reference_city(QsGame *g) {
     int slices[QS_MAX_SHOTS] = {0};
     int progressed[QS_MAX_SHOTS] = {0};
     float delta[QS_MAX_SHOTS] = {0};
-    float hit_at_time[QS_MAX_ENEMIES];
-    for (j=0; j<QS_MAX_ENEMIES; ++j) hit_at_time[j] = -1.0f;
+    int hit_step[QS_MAX_ENEMIES] = {0};
+    int hit_slices[QS_MAX_ENEMIES] = {0};
+    /*
+     * Exact rational timestamps replace floats. Both numerator and
+     * denominator are <= 1280 (bounded by the city speed guard),
+     * so cross-products are <= 1,638,400 and fit a signed 32-bit int.
+     * This makes chronological ties independent of compiler floating
+     * point division/rounding. A zero numerator is the "not hit" mark.
+     */
     for (i=0; i<QS_MAX_SHOTS; ++i) {
         QsShot *s=&g->shots[i];
         if (!s->active) continue;
@@ -280,9 +287,9 @@ static void update_shots_reference_city(QsGame *g) {
     }
     for (;;) {
         int selected=-1;
-        float next_time=0;
         QsShot *s;
-        float step, arrival;
+        float step;
+        int arrival_step, arrival_slices;
         int target=-1, face_col=0, wall_hit;
         float enemy_face=0, wall_face=0;
         /*
@@ -291,21 +298,21 @@ static void update_shots_reference_city(QsGame *g) {
          * never reserve the timeline.
          */
         for (i=0; i<QS_MAX_SHOTS; ++i) {
-            float t;
             if (!g->shots[i].active || g->shots[i].attached ||
                 !slices[i] || progressed[i] >= slices[i])
                 continue;
-            t=(float)(progressed[i]+1)/(float)slices[i];
-            if (selected < 0 || t < next_time) {
+            /* Rational comparison (k+1)/N without float division. */
+            if (selected < 0 ||
+                (progressed[i]+1)*slices[selected] <
+                (progressed[selected]+1)*slices[i])
                 selected=i;
-                next_time=t;
-            }
         }
         if (selected < 0) break;
         s=&g->shots[selected];
         step=delta[selected];
         ++progressed[selected];
-        arrival=(float)progressed[selected]/(float)slices[selected];
+        arrival_step=progressed[selected];
+        arrival_slices=slices[selected];
         s->x += step;
         if (s->x < 0 || s->x + 7.0f > QS_COLUMNS * QS_TILE) {
             s->active=0;
@@ -316,8 +323,9 @@ static void update_shots_reference_city(QsGame *g) {
             const QsEnemy *e=&g->enemies[j];
             float candidate;
             if (!e->active ||
-                (hit_at_time[j] >= 0.0f &&
-                 arrival > hit_at_time[j]+0.00001f) ||
+                (hit_step[j] > 0 &&
+                 arrival_step*hit_slices[j] >
+                 hit_step[j]*arrival_slices) ||
                 !overlaps(s->x,s->y,7,4,e->x,e->y,14,16))
                 continue;
             candidate=step >= 0 ? e->x : e->x+14;
@@ -346,15 +354,20 @@ static void update_shots_reference_city(QsGame *g) {
                 QsEnemy *e=&g->enemies[j];
                 float face;
                 if (!e->active ||
-                    (hit_at_time[j] >= 0.0f &&
-                     arrival > hit_at_time[j]+0.00001f) ||
+                    (hit_step[j] > 0 &&
+                     arrival_step*hit_slices[j] >
+                     hit_step[j]*arrival_slices) ||
                     !overlaps(s->x,s->y,7,4,e->x,e->y,14,16))
                     continue;
                 face=step >= 0 ? e->x : e->x+14;
                 if (absolute(face-enemy_face) <= 0.0001f) {
                     e->stunned_frames=180;
-                    if (hit_at_time[j] < 0.0f || arrival < hit_at_time[j])
-                        hit_at_time[j]=arrival;
+                    if (hit_step[j] == 0 ||
+                        arrival_step*hit_slices[j] <
+                        hit_step[j]*arrival_slices) {
+                        hit_step[j]=arrival_step;
+                        hit_slices[j]=arrival_slices;
+                    }
                 }
             }
             s->active=0;

@@ -9,14 +9,47 @@ jobs:
     strategy:
       matrix:
         build_type: [Debug, Release]
+        compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
       - name: Configure
+        env:
+          CC: ${{ matrix.compiler }}
         run: cmake -S . -B build-desktop -DQS_BUILD_DESKTOP=OFF -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       - name: Build
         run: cmake --build build-desktop --parallel
       - name: Test
         run: ctest --test-dir build-desktop --output-on-failure
+      - name: Record deterministic rational-timeline digest
+        run: |
+          ./build-desktop/qs_city_fraction_tests > timeline-digest.txt
+          cat timeline-digest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: city-timeline-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: timeline-digest.txt
+          if-no-files-found: error
+  compare-city-timeline:
+    needs: core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: city-timeline-*
+          path: city-timeline-results
+      - name: Compare GCC/Clang Debug/Release timeline digests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          roots = sorted(Path("city-timeline-results").glob("city-timeline-*/timeline-digest.txt"))
+          assert len(roots) == 4, [str(p) for p in roots]
+          values = [p.read_text().strip() for p in roots]
+          for p, v in zip(roots, values):
+              assert v.startswith("TIMELINE_DIGEST="), (p, v)
+              print(f"{p.parent.name}: {v}")
+          assert len(set(values)) == 1, values
+          print("CITY_CROSS_COMPILER_PASS: four identical exact-timeline digests")
+          PY
   sdl-desktop:
     runs-on: ubuntu-latest
     steps:
