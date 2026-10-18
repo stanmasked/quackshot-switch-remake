@@ -70,6 +70,44 @@ int qs_city_best_bonus_score(const QsGame *g) {
          ? g->city_best_bonus_score : 0;
 }
 
+/*
+ * Stage 67: opt-in practice clock; renderable at 4 decimal digits.
+ * Current time is visible only in the live measured city stage.
+ * Best clear time is session-level and remains visible on the map,
+ * even after playing other stages under ordinary prototype physics.
+ */
+int qs_city_attempt_time(const QsGame *g) {
+    if (!g || g->mode != QS_STAGE ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0 ||
+        g->city_attempt_frames < 0 || g->city_attempt_frames > QS_CITY_TIMER_MAX)
+        return 0;
+    return g->city_attempt_frames;
+}
+
+int qs_city_best_clear_time(const QsGame *g) {
+    if (!g || g->city_best_clear_frames < 1 ||
+        g->city_best_clear_frames > QS_CITY_TIMER_MAX)
+        return 0;
+    if (g->mode != QS_MAP &&
+        (g->mode != QS_STAGE ||
+         g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0))
+        return 0;
+    return g->city_best_clear_frames;
+}
+
+static void record_city_clear_time(QsGame *g) {
+    int elapsed;
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    elapsed = g->city_attempt_frames;
+    if (elapsed < 1 || elapsed > QS_CITY_TIMER_MAX)
+        return;
+    if (g->city_best_clear_frames < 1 ||
+        g->city_best_clear_frames > QS_CITY_TIMER_MAX ||
+        elapsed < g->city_best_clear_frames)
+        g->city_best_clear_frames = elapsed;
+}
+
 int qs_solid(const QsGame *g, int col, int row) {
     if (col < 0 || col >= QS_COLUMNS || row < 0) return 1;
     if (row >= QS_ROWS) return 0; /* Pits have no invisible floor. */
@@ -121,6 +159,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->reference_jump_steps = 0;
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
+    g->city_attempt_frames = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -192,6 +231,7 @@ static void city_leave_to_map(QsGame *g) {
         g->render_camera_x = 0;
         g->city_checkpoint_active = 0; /* next attempt starts fresh */
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
+        g->city_attempt_frames = 0;
     }
     g->mode = QS_MAP;
 }
@@ -1055,6 +1095,20 @@ void qs_step(QsGame *g, QsInput input) {
             qs_begin_stage(g, g->selected_stage);
         }
     } else {
+        /* Every CITY TEST simulation tick belongs to this attempt:
+         * include retries, held inputs and the successful finish tick,
+         * but exclude map navigation. Saturate before incrementing;
+         * corrupted counters never overflow signed int arithmetic. */
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+            if (g->city_attempt_frames < 0 ||
+                g->city_attempt_frames > QS_CITY_TIMER_MAX)
+                g->city_attempt_frames = 0;
+            if (g->city_attempt_frames < QS_CITY_TIMER_MAX)
+                ++g->city_attempt_frames;
+            if (g->city_best_clear_frames < 0 ||
+                g->city_best_clear_frames > QS_CITY_TIMER_MAX)
+                g->city_best_clear_frames = 0;
+        }
         /* Validation precedes even the early Back/finish handoffs:
          * no invalid actor may survive into the next rendered state.
          * Remember a numeric respawn for this frame's reward arbitration. */
@@ -1085,6 +1139,7 @@ void qs_step(QsGame *g, QsInput input) {
             g->stage == 0 &&
             g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
             g->cleared[g->stage] = 1;
+            record_city_clear_time(g);
             city_leave_to_map(g);
         } else if (edge(input.back, g->previous.back)) {
             city_leave_to_map(g);
@@ -1134,6 +1189,7 @@ void qs_step(QsGame *g, QsInput input) {
                 g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
                 update_pickups(g);
                 g->cleared[g->stage] = 1;
+                record_city_clear_time(g);
                 city_leave_to_map(g);
             } else {
                 int lethal_retry;
