@@ -3629,6 +3629,102 @@ static int run_city_sector_budget_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 80: actual SDL ARGB8888 pad pixels prove drawing, landing
+ * impulse, short bounce glow, paused/fading raster and stage retry.
+ * Probe left-edge pixels outside the hero to avoid sprite occlusion.
+ */
+static int run_city_spring_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    const int cam=960;
+    const int x=(int)QS_CITY_SPRING_X-cam;
+    uint32_t metal=0,accent=0,idle_glow=0,active_glow=0;
+    uint32_t aged=0,faded=0,reset=0,legacy_plain=0,legacy_forged=0;
+    uint64_t frozen_first=0,frozen_later=0;
+    const uint32_t orange=UINT32_C(0xffffc95c);
+    const uint32_t cream=UINT32_C(0xffffefad);
+    const uint32_t cyan=UINT32_C(0xff70cadd);
+    qs_init(&g);g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x+1,205,&metal) ||
+       !read_multishot_pixel(renderer,&g,x+4,202,&accent) ||
+       !read_multishot_pixel(renderer,&g,x+5,198,&idle_glow) ||
+       metal!=orange || accent!=cream || idle_glow==cyan) {
+        fprintf(stderr,"CITY_SPRING_SDL_FAIL: idle=%08x/%08x/%08x\n",
+                (unsigned)metal,(unsigned)accent,(unsigned)idle_glow);
+        return 0;
+    }
+    g.hero.x=QS_CITY_SPRING_X+6;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.hero.vy!=QS_CITY_SPRING_BOUNCE || g.hero.grounded ||
+       g.city_spring_flash_frames!=QS_CITY_SPRING_FLASH_TICKS ||
+       !read_multishot_pixel(renderer,&g,x+5,198,&active_glow) ||
+       active_glow!=cyan ||
+       !read_multishot_pixel(renderer,&g,x+1,205,&metal) ||
+       metal!=orange) {
+        fprintf(stderr,"CITY_SPRING_SDL_FAIL: launch vy=%f flash=%d pixel=%08x\n",
+                g.hero.vy,g.city_spring_flash_frames,(unsigned)active_glow);
+        return 0;
+    }
+    /* Pause holds both sprite and short-lived spring highlight. */
+    in.back=in.change=1;qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!g.city_paused ||
+       g.city_spring_flash_frames!=QS_CITY_SPRING_FLASH_TICKS ||
+       !capture_frame(renderer,&g,&frozen_first))
+        return 0;
+    in=(QsInput){0};
+    for(int t=0;t<20;t++)qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_spring_flash_frames!=QS_CITY_SPRING_FLASH_TICKS ||
+       !capture_frame(renderer,&g,&frozen_later) ||
+       frozen_first!=frozen_later)
+        return 0;
+    in.back=in.change=1;qs_step(&g,in);
+    if(g.city_paused)return 0;
+    in=(QsInput){0};
+    for(int t=0;t<6;t++)qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_spring_flash_frames!=QS_CITY_SPRING_FLASH_TICKS-6 ||
+       !read_multishot_pixel(renderer,&g,x+5,198,&aged) ||
+       aged!=cyan)
+        return 0;
+    for(int t=6;t<QS_CITY_SPRING_FLASH_TICKS;t++)qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_spring_flash_frames!=0 ||
+       !read_multishot_pixel(renderer,&g,x+5,198,&faded) ||
+       faded!=idle_glow)
+        return 0;
+    /* R+Start restores a normal ready pad without a ghost highlight. */
+    in.back=in.dash=1;qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.mode!=QS_STAGE || g.city_spring_flash_frames!=0 ||
+       g.hero.x!=40 ||
+       !read_multishot_pixel(renderer,&g,x+5,198,&reset) ||
+       reset!=idle_glow)
+        return 0;
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.camera_x=legacy.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&legacy,x+1,205,&legacy_plain))
+        return 0;
+    legacy.city_spring_flash_frames=QS_CITY_SPRING_FLASH_TICKS;
+    if(!read_multishot_pixel(renderer,&legacy,x+1,205,&legacy_forged) ||
+       legacy_plain!=legacy_forged || legacy_plain==orange)
+        return 0;
+    printf("CITY_SPRING_SDL_PASS: metal=%08x accent=%08x glow=%08x faded=%08x paused=%016llx\n",
+           (unsigned)metal,(unsigned)accent,(unsigned)active_glow,
+           (unsigned)faded,(unsigned long long)frozen_first);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3715,6 +3811,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_training_pause_sdl_smoke(renderer)) return 1;
     if (!run_city_sector_time_sdl_smoke(renderer)) return 1;
     if (!run_city_sector_budget_sdl_smoke(renderer)) return 1;
+    if (!run_city_spring_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
