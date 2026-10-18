@@ -1424,6 +1424,71 @@ static int run_weapon_queue_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 55: after a real CITY TEST -> MAP handoff, only an exactly
+ * committed completion flag should paint a green progress indicator.
+ * Repair an invalid selected row BEFORE directional arithmetic.
+ * Compare complete SDL map raster with a canonical clean reference.
+ */
+static int run_city_map_integrity_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,reference;
+    QsInput in={0};
+    uint32_t progress[QS_STAGE_COUNT]={0};
+    uint64_t fixed_hash=0,expected_hash=0;
+    const uint32_t green=UINT32_C(0xff5edd8a);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    in.back=1;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.physics_profile!=QS_PHYSICS_REFERENCE_CITY)
+        return 0;
+    memset(&in,0,sizeof(in));
+    qs_step(&g,in);
+    g.cleared[0]=1;
+    reference=g;
+    g.selected_stage=INT_MIN;
+    g.cleared[1]=INT_MAX;
+    g.cleared[2]=-1;
+    qs_step(&g,in);
+    if(g.selected_stage!=0 ||
+       g.cleared[0]!=1 || g.cleared[1] || g.cleared[2] ||
+       !capture_frame(renderer,&g,&fixed_hash) ||
+       !capture_frame(renderer,&reference,&expected_hash) ||
+       fixed_hash!=expected_hash ||
+       !read_map_progress_pixels(renderer,&g,progress) ||
+       progress[0]!=green || progress[1]==green || progress[2]==green ||
+       !map_selection_pixels(renderer,&g,0)) {
+        fprintf(stderr,"MAP_INTEGRITY_SDL_FAIL: fixed=%016llx clean=%016llx\n",
+                (unsigned long long)fixed_hash,
+                (unsigned long long)expected_hash);
+        return 0;
+    }
+    /* Corrupt MAX_INT selection, then press direction + confirmation:
+     * the map must move one row and never start a stage on that tick. */
+    g.selected_stage=INT_MAX;
+    in.right=in.select=in.dash=1;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.selected_stage!=1 ||
+       !map_selection_pixels(renderer,&g,1)) {
+        fputs("MAP_INTEGRITY_SDL_FAIL: chord navigated incorrectly\n",stderr);
+        return 0;
+    }
+    in=(QsInput){0};
+    qs_step(&g,in);
+    in.select=1;
+    qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=1 ||
+       g.physics_profile!=QS_PHYSICS_PROTOTYPE ||
+       g.cleared[0]!=1 || g.cleared[1]!=0 || g.cleared[2]!=0) {
+        fputs("MAP_INTEGRITY_SDL_FAIL: normal reentry mismatch\n",stderr);
+        return 0;
+    }
+    printf("MAP_INTEGRITY_SDL_PASS: fixed=%016llx green=%08x safe_reentry=%d\n",
+           (unsigned long long)fixed_hash,(unsigned)progress[0],g.stage);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1490,6 +1555,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_hero_status_sdl_smoke(renderer)) return 1;
     if (!run_pre_move_shots_sdl_smoke(renderer)) return 1;
     if (!run_weapon_queue_sdl_smoke(renderer)) return 1;
+    if (!run_city_map_integrity_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
