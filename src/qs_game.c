@@ -247,8 +247,33 @@ static void update_shots_reference_city(QsGame *g) {
     for (i=0; i<QS_MAX_SHOTS; ++i) {
         QsShot *s=&g->shots[i];
         if (!s->active) continue;
-        if (--s->frames <= 0) { s->active=0; continue; }
+        /*
+         * Malformed injected speeds/coordinates must never reach
+         * ceilf -> int or floorf -> int. Reject these shots before
+         * the first timeline step, including damaged attached shots.
+         * Any finite velocity spanning more than the 80-tile world
+         * in ONE 60-Hz tick is likewise invalid synthetic input.
+         * A maximum legal velocity of 1280 px/tick yields at most
+         * 8 * 1280 = 10240 substeps for this entire frame.
+         *
+         * frames<=1 is tested BEFORE decrement to avoid overflow
+         * when corrupt metadata supplies INT_MIN.
+         * This strict guard is limited to opt-in CITY TEST.
+         */
+        if (!isfinite(s->x) || !isfinite(s->y) ||
+            !isfinite(s->vx) ||
+            s->x < 0.0f || s->x + 7.0f > QS_COLUMNS * QS_TILE ||
+            s->y < -4.0f || s->y > QS_ROWS * QS_TILE ||
+            absolute(s->vx) > QS_COLUMNS * QS_TILE ||
+            s->frames <= 1) {
+            s->active=0;
+            s->attached=0;
+            continue;
+        }
+        --s->frames;
         if (s->attached) continue;
+        /* abs(vx) is now finite and <= world width, so casting
+         * ceilf() to int has a proven bounded range [0,1280]. */
         slices[i]=(int)ceilf(absolute(s->vx));
         if (slices[i] < 1) slices[i]=1;
         delta[i]=s->vx/slices[i];

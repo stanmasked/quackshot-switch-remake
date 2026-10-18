@@ -12,7 +12,7 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Portable C99 simulation (60 fixed steps/second, deterministic for equal inputs).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
-- Twelve executable regression checks in Release and Debug builds.
+- 28 executable CTest groups in Release and Debug, including the CITY TEST safety and timing regressions.
 - **Optional city-reference physics envelope**, fitted to numeric observations from privately emulated original Mega Drive gameplay. Default prototype movement is unchanged.
 - Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
@@ -52,6 +52,15 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 44 bounds the CITY TEST projectile scheduler: reject NaN,
+infinite or out-of-world coordinates, unsafe lifetimes, and any
+velocity exceeding the 1280-pixel synthetic world width per frame.
+The supported endpoint of 1280 px/tick and all eight active shot
+slots remain functional, with at most 10,240 swept substeps per tick.
+The regular prototype's historic shot logic remains unchanged.
+Native tests plus an actual SDL two-lane eight-shot raster check
+cover the limit and invalid numeric inputs. See
+[city projectile numeric safety](docs/REFERENCE_CITY_VELOCITY_SAFETY_RU.md).
 Stage 43 advances ALL opt-in CITY TEST projectiles on one
 fractional-frame timeline instead of sorting WHOLE projectiles by
 their first predicted contact. This prevents a shot from consuming

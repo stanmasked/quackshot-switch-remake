@@ -924,6 +924,54 @@ static int run_global_timeline_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stress all 8 projectile slots at the MAXIMUM supported finite
+ * velocity (1280px/tick) in two vertically disjoint lanes. Both
+ * independently rendered foes must turn blue; malformed ninth data
+ * is not required to exercise the bounded scheduler.
+ */
+static int run_velocity_guard_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t top=0, bottom=0;
+    int i;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=40;g.hero.y=188;
+    for(i=0;i<2;i++) {
+        QsEnemy *e=&g.enemies[i];
+        e->active=1;
+        e->x=i==0 ? 135.0f : 235.0f;
+        e->y=i==0 ? 170.0f : 192.0f;
+        e->min_x=e->max_x=e->x;
+        e->dir=1;
+    }
+    for(i=0;i<QS_MAX_SHOTS;i++) {
+        QsShot *s=&g.shots[i];
+        s->active=1;s->frames=65;
+        s->x=40;s->y=i<4 ? 177.0f : 195.0f;
+        s->vx=1280.0f;
+        s->red=(i&1);
+    }
+    qs_step(&g,idle);
+    if(g.enemies[0].stunned_frames!=179 ||
+       g.enemies[1].stunned_frames!=179 ||
+       !read_multishot_pixel(renderer,&g,138,172,&top) ||
+       !read_multishot_pixel(renderer,&g,238,203,&bottom) ||
+       top!=UINT32_C(0xff70a7dd) ||
+       bottom!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"VELOCITY_GUARD_SDL_FAIL top=%08x bottom=%08x\n",
+                (unsigned)top,(unsigned)bottom);
+        return 0;
+    }
+    printf("VELOCITY_GUARD_SDL_PASS: 8 full-width projectiles top=%08x bottom=%08x\n",
+           (unsigned)top,(unsigned)bottom);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -980,6 +1028,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_multishot_priority_sdl_smoke(renderer)) return 1;
     if (!run_opposing_ties_sdl_smoke(renderer)) return 1;
     if (!run_global_timeline_sdl_smoke(renderer)) return 1;
+    if (!run_velocity_guard_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
