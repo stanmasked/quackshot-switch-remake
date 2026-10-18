@@ -3344,6 +3344,27 @@ static int run_city_training_pause_sdl_smoke(SDL_Renderer *renderer) {
     if(!capture_frame(renderer,&legacy,&legacy_forged) ||
        legacy_forged!=legacy_normal)
         return 0;
+    /*
+     * Stage 77: regression for the CI failures in older safety chords.
+     * Back+X+Fire/Confirm is NOT the standalone X+Start pause; the
+     * legacy map exit must still render the actual map immediately.
+     */
+    {
+        QsGame mixed;
+        QsInput keys={0};
+        uint64_t exit_map=0;
+        qs_init(&mixed);
+        mixed.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+        qs_begin_stage(&mixed,0);
+        keys.back=keys.change=keys.fire=keys.select=1;
+        qs_step(&mixed,keys);
+        if(mixed.mode!=QS_MAP || mixed.city_paused ||
+           !capture_frame(renderer,&mixed,&exit_map) ||
+           exit_map==paused) {
+            fprintf(stderr,"CITY_PAUSE_SDL_FAIL: mixed safety chord triggered pause\n");
+            return 0;
+        }
+    }
     printf("CITY_PAUSE_SDL_PASS: before=%016llx paused=%016llx resume=%016llx retry=%016llx\n",
            (unsigned long long)before,(unsigned long long)paused,
            (unsigned long long)resumed,(unsigned long long)retry);
