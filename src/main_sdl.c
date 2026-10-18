@@ -1839,6 +1839,111 @@ static int run_checkpoint_hud_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 60: test real SDL pixels for two collectible city beacons and
+ * their persistent 500-point HUD stamps. Gold world beacons disappear
+ * on contact, but their stamps survive a checkpoint respawn. Starting
+ * another attempt resets both. No original copyrighted sprites used.
+ */
+static int run_bonus_beacons_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    uint32_t grey_a=0,grey_b=0,token_before=0;
+    uint32_t earned_a=0,still_grey_b=0,empty_a=0,token_b=0;
+    uint32_t earned_b=0,empty_b=0,retry_a=0,retry_b=0;
+    uint32_t reset_a=0,reset_b=0,legacy_ui=0;
+    int ax,bx;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.camera_x=759;g.render_camera_x=759;
+    ax=(int)QS_CITY_BONUS_A_X-(int)g.render_camera_x+3;
+    bx=(int)QS_CITY_BONUS_B_X-(int)g.render_camera_x+3;
+    if(g.city_bonus_mask ||
+       !read_multishot_pixel(renderer,&g,303,8,&grey_a) ||
+       !read_multishot_pixel(renderer,&g,319,8,&grey_b) ||
+       grey_a!=UINT32_C(0xff5a586b) || grey_b!=grey_a ||
+       !read_multishot_pixel(renderer,&g,ax,186,&token_before) ||
+       token_before!=UINT32_C(0xffffe16c)) {
+        fprintf(stderr,"BONUS_BEACONS_SDL_FAIL: grey=%08x/%08x token=%08x\n",
+                (unsigned)grey_a,(unsigned)grey_b,(unsigned)token_before);
+        return 0;
+    }
+    /* Earn checkpoint normally so the lethal retry is a real one. */
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;
+    g.hero.grounded=1;
+    qs_step(&g,in);
+    if (!g.city_checkpoint_active || g.city_bonus_mask) return 0;
+    /* Collect A while its world sprite is visibly in this viewport. */
+    g.hero.x=QS_CITY_BONUS_A_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    g.camera_x=759;g.render_camera_x=759;
+    qs_step(&g,in);
+    ax=(int)QS_CITY_BONUS_A_X-(int)g.render_camera_x+3;
+    bx=(int)QS_CITY_BONUS_B_X-(int)g.render_camera_x+3;
+    if(g.city_bonus_mask!=1 ||
+       !read_multishot_pixel(renderer,&g,303,8,&earned_a) ||
+       !read_multishot_pixel(renderer,&g,319,8,&still_grey_b) ||
+       earned_a!=UINT32_C(0xffffe16c) || still_grey_b!=grey_b ||
+       !read_multishot_pixel(renderer,&g,ax,186,&empty_a) ||
+       empty_a!=UINT32_C(0xff85bad4) ||
+       !read_multishot_pixel(renderer,&g,bx,186,&token_b) ||
+       token_b!=token_before) {
+        fprintf(stderr,"BONUS_BEACONS_SDL_FAIL: A=%08x B=%08x empty=%08x Btoken=%08x\n",
+                (unsigned)earned_a,(unsigned)still_grey_b,
+                (unsigned)empty_a,(unsigned)token_b);
+        return 0;
+    }
+    g.hero.x=QS_CITY_BONUS_B_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    bx=(int)QS_CITY_BONUS_B_X-(int)g.render_camera_x+3;
+    if(g.city_bonus_mask!=3 ||
+       !read_multishot_pixel(renderer,&g,319,8,&earned_b) ||
+       earned_b!=earned_a ||
+       !read_multishot_pixel(renderer,&g,bx,186,&empty_b) ||
+       empty_b!=empty_a) {
+        fprintf(stderr,"BONUS_BEACONS_SDL_FAIL: B=%08x empty=%08x\n",
+                (unsigned)earned_b,(unsigned)empty_b);
+        return 0;
+    }
+    g.hero.hearts=1;g.hero.hurt_frames=0;
+    g.enemies[0].active=1;
+    g.enemies[0].x=g.enemies[0].min_x=g.enemies[0].max_x=g.hero.x;
+    g.enemies[0].y=188;g.enemies[0].dir=1;
+    qs_step(&g,in);
+    if(g.hero.x!=QS_CITY_CHECKPOINT_X ||
+       g.hero.hearts!=3 || g.hero.hurt_frames!=89 ||
+       g.city_bonus_mask!=3 ||
+       !read_multishot_pixel(renderer,&g,303,8,&retry_a) ||
+       !read_multishot_pixel(renderer,&g,319,8,&retry_b) ||
+       retry_a!=earned_a || retry_b!=earned_b) {
+        fprintf(stderr,"BONUS_BEACONS_SDL_FAIL: retry=%08x/%08x mask=%d\n",
+                (unsigned)retry_a,(unsigned)retry_b,g.city_bonus_mask);
+        return 0;
+    }
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.city_bonus_mask) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_bonus_mask ||
+       !read_multishot_pixel(renderer,&g,303,8,&reset_a) ||
+       !read_multishot_pixel(renderer,&g,319,8,&reset_b) ||
+       reset_a!=grey_a || reset_b!=grey_b) return 0;
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    if(!read_multishot_pixel(renderer,&legacy,303,8,&legacy_ui) ||
+       legacy_ui!=UINT32_C(0xff1c2636)) return 0;
+    printf("BONUS_BEACONS_SDL_PASS: token=%08x earned=%08x/%08x retry=%08x/%08x reset=%08x/%08x\n",
+           (unsigned)token_before,(unsigned)earned_a,(unsigned)earned_b,
+           (unsigned)retry_a,(unsigned)retry_b,
+           (unsigned)reset_a,(unsigned)reset_b);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1910,6 +2015,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_shot_canonical_sdl_smoke(renderer)) return 1;
     if (!run_city_checkpoint_sdl_smoke(renderer)) return 1;
     if (!run_checkpoint_hud_sdl_smoke(renderer)) return 1;
+    if (!run_bonus_beacons_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
