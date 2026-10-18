@@ -168,6 +168,15 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                   (game->city_bonus_mask & 2)
                      ? color(255, 225, 108) : color(90, 88, 107));
     }
+    /* Stage 61: full bonus set marks the one-heart reward milestone.
+     * The icon indicates the set was earned; it does not repeat
+     * healing on subsequent frames or after later damage. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        rectangle(renderer, 281, 4, 10, 8,
+                  game->city_bonus_mask == 3
+                    ? color(94, 221, 138) : color(90, 88, 107));
+    }
 }
 
 static int pressed(const Uint8 *keys, SDL_Scancode key) { return keys[key] != 0; }
