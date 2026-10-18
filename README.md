@@ -129,6 +129,15 @@ shots, and a dedicated CTest plus SDL ARGB8888 scene checks
 wall/foe/box priority. See
 [crate impact priority](docs/REFERENCE_CITY_CRATE_PRIORITY_RU.md).
 
+Stage 76 adds a **CITY TEST training pause**: hold Nintendo
+**X + Start** (desktop **K + Escape**) to stop/resume the
+synthetic level without advancing gameplay, camera, projectiles
+or time-trial clocks. Bare Start still returns to the map;
+R + Start restarts the attempt even while paused. The pause
+overlay is drawn using original-free geometry and verified
+using actual SDL2 frame comparisons. See
+[training pause behavior](docs/REFERENCE_CITY_TRAINING_PAUSE_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
