@@ -214,10 +214,73 @@ static int city_first_wall_face(const QsGame *g, const QsShot *s,
     return found;
 }
 
+/*
+ * Rank simultaneously travelling shots by estimated time to their
+ * nearest intersectable enemy face. The previous slot-index order
+ * could waste a second plunger on a foe already hit in the SAME tick
+ * while leaving another foe behind it untouched. This ranking is a
+ * synthetic CITY TEST rule; it is not an original game algorithm.
+ *
+ * No candidate -> large key; ties use immutable geometric shot fields,
+ * with array index as a last resort for physically identical shots.
+ */
+static float city_shot_arrival_key(const QsGame *g, const QsShot *s) {
+    float closest = 1000000.0f;
+    float speed = absolute(s->vx);
+    int j;
+    if (!s->active || s->attached || s->frames <= 1) return closest;
+    for (j = 0; j < QS_MAX_ENEMIES; ++j) {
+        const QsEnemy *e = &g->enemies[j];
+        float distance, time;
+        if (!e->active || s->y + 4 <= e->y || s->y >= e->y + 16)
+            continue;
+        if (s->vx >= 0) {
+            if (s->x >= e->x + 14) continue;
+            distance = e->x - (s->x + 7);
+        } else {
+            if (s->x + 7 <= e->x) continue;
+            distance = s->x - (e->x + 14);
+        }
+        if (distance < 0) distance = 0;
+        if (speed <= 0.000001f && distance > 0) continue;
+        time = speed > 0.000001f ? distance / speed : 0;
+        if (time < closest) closest = time;
+    }
+    return closest;
+}
+
 static void update_shots_reference_city(QsGame *g) {
     int i, j, k;
+    int order[QS_MAX_SHOTS], used[QS_MAX_SHOTS] = {0};
+    unsigned char hit_this_tick[QS_MAX_ENEMIES] = {0};
+    /* Build an order independent of array-slot assignment. */
     for (i = 0; i < QS_MAX_SHOTS; ++i) {
-        QsShot *s = &g->shots[i];
+        int best = -1;
+        float best_key = 0;
+        for (j = 0; j < QS_MAX_SHOTS; ++j) {
+            const QsShot *s = &g->shots[j];
+            float key;
+            if (used[j]) continue;
+            key = city_shot_arrival_key(g, s);
+            if (best < 0 || key < best_key ||
+                (key == best_key &&
+                 (s->x < g->shots[best].x ||
+                  (s->x == g->shots[best].x &&
+                   (s->y < g->shots[best].y ||
+                    (s->y == g->shots[best].y &&
+                     (s->vx < g->shots[best].vx ||
+                      (s->vx == g->shots[best].vx &&
+                       (s->red < g->shots[best].red ||
+                        (s->red == g->shots[best].red && j < best)))))))))) {
+                best = j;
+                best_key = key;
+            }
+        }
+        order[i] = best;
+        used[best] = 1;
+    }
+    for (i = 0; i < QS_MAX_SHOTS; ++i) {
+        QsShot *s = &g->shots[order[i]];
         float step;
         int slices;
         if (!s->active) continue;
@@ -242,7 +305,7 @@ static void update_shots_reference_city(QsGame *g) {
             for (j = 0; j < QS_MAX_ENEMIES; ++j) {
                 const QsEnemy *e = &g->enemies[j];
                 float candidate;
-                if (!e->active ||
+                if (!e->active || hit_this_tick[j] ||
                     !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
                     continue;
                 candidate = step >= 0 ? e->x : e->x + 14;
@@ -280,12 +343,14 @@ static void update_shots_reference_city(QsGame *g) {
                 for (j = 0; j < QS_MAX_ENEMIES; ++j) {
                     QsEnemy *e = &g->enemies[j];
                     float face;
-                    if (!e->active ||
+                    if (!e->active || hit_this_tick[j] ||
                         !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
                         continue;
                     face = step >= 0 ? e->x : e->x + 14;
-                    if (absolute(face - enemy_face) <= 0.0001f)
+                    if (absolute(face - enemy_face) <= 0.0001f) {
                         e->stunned_frames = 180;
+                        hit_this_tick[j] = 1;
+                    }
                 }
                 s->active = 0;
                 break;

@@ -779,6 +779,62 @@ static int run_coplanar_impacts_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Two simultaneous synthetic projectiles approach two enemies on the
+ * same horizontal line, one near and one behind. Both enemies must
+ * appear stunned on the software-rendered SDL image. Position test
+ * pixels outside the other enemy and outside the 7x4 shot silhouettes.
+ */
+static int read_multishot_pixel(SDL_Renderer *renderer,
+                                const QsGame *g, int x, int y,
+                                uint32_t *pixel) {
+    SDL_Rect at = {x,y,1,1};
+    if (SDL_SetRenderDrawColor(renderer,0,0,0,255)!=0 ||
+        SDL_RenderClear(renderer)!=0) return 0;
+    render_stage(renderer,g);
+    return SDL_RenderReadPixels(renderer,&at,SDL_PIXELFORMAT_ARGB8888,
+                                pixel,(int)sizeof(*pixel))==0;
+}
+static int run_multishot_priority_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t near_pixel=0, far_pixel=0;
+    int i;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=40;g.hero.y=188;
+    for (i=0; i<2; ++i) {
+        g.enemies[i].active=1;
+        g.enemies[i].x=(float)(135 + 30*i);
+        g.enemies[i].y=(float)(184 + 8*i);
+        g.enemies[i].min_x=g.enemies[i].max_x=g.enemies[i].x;
+        g.enemies[i].dir=1;
+    }
+    /* Intentionally put the trailing projectile in slot ZERO. */
+    g.shots[0].active=1;g.shots[0].frames=65;
+    g.shots[0].x=110;g.shots[0].y=194;g.shots[0].vx=70;
+    g.shots[1].active=1;g.shots[1].frames=65;
+    g.shots[1].x=130;g.shots[1].y=194;g.shots[1].vx=65;
+    qs_step(&g,idle);
+    if (g.enemies[0].stunned_frames!=179 ||
+        g.enemies[1].stunned_frames!=179 ||
+        g.shots[0].active || g.shots[1].active ||
+        !read_multishot_pixel(renderer,&g,138,186,&near_pixel) ||
+        !read_multishot_pixel(renderer,&g,168,205,&far_pixel) ||
+        near_pixel!=UINT32_C(0xff70a7dd) ||
+        far_pixel!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"MULTISHOT_PRIORITY_SDL_FAIL near=%08x far=%08x\n",
+                (unsigned)near_pixel,(unsigned)far_pixel);
+        return 0;
+    }
+    printf("MULTISHOT_PRIORITY_SDL_PASS: near=%08x far=%08x\n",
+           (unsigned)near_pixel,(unsigned)far_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -832,6 +888,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_retry_pickup_sdl_smoke(renderer)) return 1;
     if (!run_multi_enemy_immunity_sdl_smoke(renderer)) return 1;
     if (!run_coplanar_impacts_sdl_smoke(renderer)) return 1;
+    if (!run_multishot_priority_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

@@ -52,6 +52,13 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 41 resolves simultaneous projectiles by estimated time to their
+nearest overlapping enemy, independent of shot slots. A foe stunned
+earlier within the SAME tick is transparent to a later plunger, which
+can reach the next enemy; a preexisting stun from an earlier tick still
+absorbs shots, and walls remain solid. New native replay tests and an
+SDL2 two-target pixel check verify no unnecessary duplicate shot
+consumption. See [multishot collision ordering](docs/REFERENCE_CITY_MULTISHOT_PRIORITY_RU.md).
 Stage 40 makes simultaneous projectile hits on co-planar enemy
 faces independent of array-slot order in opt-in CITY TEST. Both
 vertically overlapping enemies at exactly the nearest leading face
