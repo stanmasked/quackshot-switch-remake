@@ -3264,6 +3264,92 @@ static int run_city_crate_priority_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 76: verify the exact pause-emblem raster and unchanged game
+ * frame across simulated input and 60 skipped ticks. The display
+ * returns byte-for-byte to its original view on resume; R+Start
+ * from paused redraws a clean new stage. No copyrighted bitmaps.
+ */
+static int run_city_training_pause_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,baseline,legacy;
+    QsInput in={0};
+    uint64_t before=0,paused=0,still_paused=0,resumed=0,retry=0,fresh=0;
+    uint64_t legacy_normal=0,legacy_forged=0;
+    uint32_t bar=0,gap=0,unpaused_bar=0;
+    const uint32_t yellow=UINT32_C(0xffffe16c);
+    const uint32_t dark=UINT32_C(0xff1c2636);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.grounded=1;
+    g.hero.vx=g.hero.vy=0;
+    g.city_best_bonus_score=500;
+    g.city_best_checkpoint_frames=7;
+    g.city_best_clear_frames=49;
+    if(!capture_frame(renderer,&g,&before))return 0;
+    in.back=in.change=1;
+    qs_step(&g,in);
+    if(!g.city_paused || g.city_attempt_frames!=0 ||
+       !capture_frame(renderer,&g,&paused) || paused==before ||
+       !read_multishot_pixel(renderer,&g,193,110,&bar) || bar!=yellow ||
+       !read_multishot_pixel(renderer,&g,200,111,&gap) || gap!=dark) {
+        fprintf(stderr,"CITY_PAUSE_SDL_FAIL: initial before=%016llx paused=%016llx left=%08x gap=%08x\n",
+                (unsigned long long)before,(unsigned long long)paused,
+                (unsigned)bar,(unsigned)gap);
+        return 0;
+    }
+    in=(QsInput){0};in.right=in.jump=in.fire=in.dash=1;
+    for(int i=0;i<60;i++)qs_step(&g,in);
+    if(!g.city_paused || g.city_attempt_frames!=0 ||
+       g.hero.x!=100 || g.city_crate_fx_frames!=0 ||
+       !capture_frame(renderer,&g,&still_paused) ||
+       still_paused!=paused) {
+        fprintf(stderr,"CITY_PAUSE_SDL_FAIL: frozen=%016llx initial=%016llx\n",
+                (unsigned long long)still_paused,(unsigned long long)paused);
+        return 0;
+    }
+    in=(QsInput){0};in.change=in.back=1;
+    qs_step(&g,in);
+    if(g.city_paused || g.city_attempt_frames!=0 ||
+       !capture_frame(renderer,&g,&resumed) || resumed!=before ||
+       !read_multishot_pixel(renderer,&g,193,110,&unpaused_bar) ||
+       unpaused_bar==yellow) {
+        fprintf(stderr,"CITY_PAUSE_SDL_FAIL: resumed=%016llx before=%016llx\n",
+                (unsigned long long)resumed,(unsigned long long)before);
+        return 0;
+    }
+    /* Stop again, then use R+Start to restart without a menu frame. */
+    in=(QsInput){0};qs_step(&g,in);
+    in.back=in.change=1;qs_step(&g,in);
+    if(!g.city_paused || g.city_attempt_frames!=1)return 0;
+    baseline=g;
+    qs_begin_stage(&baseline,0);
+    in=(QsInput){0};qs_step(&g,in);
+    in.back=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_paused || g.hero.x!=40 ||
+       g.city_attempt_frames!=0 || g.city_best_bonus_score!=500 ||
+       g.city_best_checkpoint_frames!=7 || g.city_best_clear_frames!=49 ||
+       !capture_frame(renderer,&g,&retry) ||
+       !capture_frame(renderer,&baseline,&fresh) || retry!=fresh) {
+        fprintf(stderr,"CITY_PAUSE_SDL_FAIL: retry=%016llx fresh=%016llx\n",
+                (unsigned long long)retry,(unsigned long long)fresh);
+        return 0;
+    }
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    if(!capture_frame(renderer,&legacy,&legacy_normal))return 0;
+    legacy.city_paused=1; /* forged state in the ordinary profile */
+    if(!capture_frame(renderer,&legacy,&legacy_forged) ||
+       legacy_forged!=legacy_normal)
+        return 0;
+    printf("CITY_PAUSE_SDL_PASS: before=%016llx paused=%016llx resume=%016llx retry=%016llx\n",
+           (unsigned long long)before,(unsigned long long)paused,
+           (unsigned long long)resumed,(unsigned long long)retry);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3347,6 +3433,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_breakable_crate_sdl_smoke(renderer)) return 1;
     if (!run_city_crate_debris_sdl_smoke(renderer)) return 1;
     if (!run_city_crate_priority_sdl_smoke(renderer)) return 1;
+    if (!run_city_training_pause_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
