@@ -3183,7 +3183,10 @@ static int run_city_crate_priority_sdl_smoke(SDL_Renderer *renderer) {
     QsInput in={0};
     uint32_t shielded=0,enemy_shielded=0,destroyed=0;
     const int cam=840;
-    const int x=(int)QS_CITY_CRATE_X-cam;
+    /* Probe right-hand exposed body pixel: an enemy in front of the
+     * box can visually cover its LEFT pixels while the box is intact.
+     * Enemy 963..977, sampled crate pixel world 980 lies beyond it. */
+    const int x=(int)QS_CITY_CRATE_X-cam+12;
     qs_init(&g);
     g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
     qs_begin_stage(&g,0);
