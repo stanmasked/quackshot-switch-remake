@@ -1227,6 +1227,22 @@ void qs_step(QsGame *g, QsInput input) {
             g->cleared[g->stage] = 1;
             record_city_clear_time(g);
             city_leave_to_map(g);
+        } else if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                   g->stage == 0 && input.dash &&
+                   edge(input.back, g->previous.back)) {
+            /*
+             * Stage 71: R + Start is a one-press practice retry of
+             * the synthetic CITY TEST, without navigating through
+             * the map. Preserve session PBs/unlocks/cleared flags,
+             * but re-create every stage-local pickup, enemy, shot,
+             * checkpoint, pace delta and timer from qs_begin_stage.
+             * The completed-exit arbitration above still wins.
+             *
+             * g->previous is set to input at the end of qs_step:
+             * holding Start cannot repeat the quick retry and the
+             * same input tick cannot also fire, move or collect.
+             */
+            qs_begin_stage(g, 0);
         } else if (edge(input.back, g->previous.back)) {
             city_leave_to_map(g);
         } else {
