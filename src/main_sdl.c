@@ -241,6 +241,26 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                       4, 4, color(255, 242, 190));
         }
     }
+    /*
+     * Stage 74: short, purely visual fragments from a destroyed box.
+     * Three original-free pixel shards travel outward/upward over 18
+     * simulation ticks; they never affect tile or projectile physics.
+     * Drawing is strictly gated to the opt-in CITY TEST.
+     */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0 && game->city_crate_active == 0 &&
+        game->city_crate_fx_frames > 0 &&
+        game->city_crate_fx_frames <= QS_CITY_CRATE_FX_TICKS) {
+        int age=QS_CITY_CRATE_FX_TICKS-game->city_crate_fx_frames;
+        int x=(int)QS_CITY_CRATE_X-cam;
+        int y=(int)QS_CITY_CRATE_Y;
+        rectangle(renderer,x-6-age/2,y-4-age/3,3,2,
+                  color(255,214,127));
+        rectangle(renderer,x+18+age/2,y-2-age/4,3,2,
+                  color(230,157,104));
+        rectangle(renderer,x+7,y-9-age/2,2,2,
+                  color(255,242,190));
+    }
     /* Stage 72: a small original-free barricade can be shot away,
      * or bypassed by jumping. It is only present in CITY TEST. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
