@@ -114,6 +114,13 @@ object returns on a new attempt. Neither other stages nor the
 ordinary prototype is changed. See
 [breakable crate gameplay](docs/REFERENCE_CITY_BREAKABLE_CRATE_RU.md).
 
+Stage 74 adds **18 simulation ticks of procedural debris** when that
+crate is destroyed. Three non-colliding pixel fragments briefly move
+outward, disappear completely, and reset with the next attempt.
+The original-free animation is checked by native C replay tests and
+exact SDL2 ARGB8888 pixel probes. See
+[crate debris feedback](docs/REFERENCE_CITY_CRATE_DEBRIS_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
