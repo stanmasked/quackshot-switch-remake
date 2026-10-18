@@ -415,6 +415,14 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                     ? color(94, 221, 138) : color(90, 88, 107));
     }
     render_city_bonus_score(renderer,game);
+    /* Stage 83: persistent city-only airborne heart status.
+     * Position is fixed in the HUD and never follows parallax. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        rectangle(renderer,389,4,8,8,
+                  game->city_air_reward_collected == 1
+                      ? color(95,228,218) : color(90,88,107));
+    }
     /*
      * Stage 76: asset-free paused-state emblem, rendered LAST so it
      * stays visible even when the camera is moving through scenery.
@@ -3725,6 +3733,68 @@ static int run_city_air_reward_fx_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+
+/* Stage 83: precise SDL HUD pixels for earned, pause, retry and both
+ * camera extremes. A forged flag in the legacy profile stays invisible. */
+static int run_city_air_reward_hud_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    uint32_t idle_pixel=0,earned=0,front=0,back=0;
+    uint32_t respawn=0,expired=0,paused=0,retry=0,old=0;
+    const uint32_t grey=UINT32_C(0xff5a586b);
+    const uint32_t mint=UINT32_C(0xff5fe4da);
+    const uint32_t dark=UINT32_C(0xff1c2636);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    if(!read_multishot_pixel(renderer,&g,391,8,&idle_pixel) ||
+       idle_pixel!=grey) return 0;
+    g.hero.x=QS_CITY_AIR_REWARD_X;
+    g.hero.y=QS_CITY_AIR_REWARD_Y;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=0;g.hero.hearts=2;
+    qs_step(&g,in);
+    if(g.city_air_reward_collected!=1 || g.hero.hearts!=3 ||
+       !read_multishot_pixel(renderer,&g,391,8,&earned) ||
+       earned!=mint) return 0;
+    g.camera_x=g.render_camera_x=0;
+    if(!read_multishot_pixel(renderer,&g,391,8,&front) ||
+       front!=mint) return 0;
+    g.camera_x=g.render_camera_x=(float)(QS_COLUMNS*QS_TILE-QS_VIEW_W);
+    if(!read_multishot_pixel(renderer,&g,391,8,&back) ||
+       back!=mint) return 0;
+    g.hero.y=NAN;
+    qs_step(&g,in);
+    if(g.hero.x!=40 || !g.city_air_reward_collected ||
+       !read_multishot_pixel(renderer,&g,391,8,&respawn) ||
+       respawn!=mint) return 0;
+    for(int i=0;i<QS_CITY_AIR_REWARD_FX_TICKS+2;i++)
+        qs_step(&g,in);
+    if(g.city_air_reward_fx_frames ||
+       !read_multishot_pixel(renderer,&g,391,8,&expired) ||
+       expired!=mint) return 0;
+    in.back=in.change=1;qs_step(&g,in);
+    if(!g.city_paused) return 0;
+    for(int i=0;i<20;i++)qs_step(&g,(QsInput){0});
+    if(!read_multishot_pixel(renderer,&g,391,8,&paused) ||
+       paused!=mint) return 0;
+    in.back=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_paused || g.city_air_reward_collected ||
+       !read_multishot_pixel(renderer,&g,391,8,&retry) ||
+       retry!=grey) return 0;
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.city_air_reward_collected=1;
+    if(!read_multishot_pixel(renderer,&legacy,391,8,&old) ||
+       old!=dark) return 0;
+    printf("CITY_AIR_HUD_SDL_PASS idle=%08x earned=%08x retry=%08x\n",
+           (unsigned)idle_pixel,(unsigned)earned,(unsigned)retry);
+    return 1;
+}
+
 static int run_city_air_reward_sdl_smoke(SDL_Renderer *renderer) {
     QsGame g,legacy;
     QsInput in={0};
@@ -3964,6 +4034,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_spring_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_fx_sdl_smoke(renderer)) return 1;
+    if (!run_city_air_reward_hud_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
