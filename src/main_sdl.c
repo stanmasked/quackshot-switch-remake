@@ -1045,6 +1045,64 @@ static int run_hero_camera_numeric_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Stage 48: prove the real SDL map image is safe immediately after
+ * numeric recovery plus Back, then prove a held Select cannot relaunch.
+ * Only a release/new edge may enter a freshly initialized CITY TEST. */
+static int run_numeric_transition_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,baseline;
+    QsInput in={0};
+    uint64_t map_before=0,map_after=0,city_after=0;
+    uint32_t progress[QS_STAGE_COUNT]={0};
+    uint32_t hero_pixel=0;
+    qs_init(&g);g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    g.cleared[2]=1;g.red_unlocked=1;g.weapon=QS_RED;
+    g.hero.x=NAN;g.hero.y=FLT_MAX;
+    g.camera_x=NAN;g.render_camera_x=INFINITY;
+    g.pending_reference_shot=1;g.pending_reference_red=1;
+    g.shots[0].active=g.shots[0].attached=1;
+    g.shots[0].x=150;g.shots[0].y=166;g.shots[0].frames=230;
+    qs_init(&baseline);baseline.cleared[2]=1;
+    if (!capture_frame(renderer,&baseline,&map_before)) return 0;
+    in.back=in.select=in.dash=1;
+    qs_step(&g,in);
+    if (g.mode!=QS_MAP || g.cleared[0] || !g.cleared[2] ||
+        g.camera_x!=0 || g.render_camera_x!=0 ||
+        g.pending_reference_shot || g.shots[0].active ||
+        !capture_frame(renderer,&g,&map_after) ||
+        map_after!=map_before ||
+        !read_map_progress_pixels(renderer,&g,progress) ||
+        progress[2]!=UINT32_C(0xff5edd8a) ||
+        progress[0]==UINT32_C(0xff5edd8a)) {
+        fprintf(stderr,"NUMERIC_TRANSITION_SDL_FAIL: corrupt->map before=%016llx after=%016llx\n",
+                (unsigned long long)map_before,(unsigned long long)map_after);
+        return 0;
+    }
+    in.back=0;qs_step(&g,in);
+    if (g.mode!=QS_MAP) {
+        fputs("NUMERIC_TRANSITION_SDL_FAIL: held Select reentered stage\n",stderr);
+        return 0;
+    }
+    memset(&in,0,sizeof(in));qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if (g.mode!=QS_STAGE || g.stage!=0 ||
+        g.physics_profile!=QS_PHYSICS_REFERENCE_CITY ||
+        g.hero.x!=40 || g.hero.y!=188 ||
+        g.camera_x!=0 || g.render_camera_x!=0 ||
+        !capture_frame(renderer,&g,&city_after) ||
+        city_after==map_after ||
+        !read_multishot_pixel(renderer,&g,41,191,&hero_pixel) ||
+        hero_pixel!=UINT32_C(0xfffaeda7)) {
+        fprintf(stderr,"NUMERIC_TRANSITION_SDL_FAIL: map->city hero=%08x stage=%d\n",
+                (unsigned)hero_pixel,g.stage);
+        return 0;
+    }
+    printf("NUMERIC_TRANSITION_SDL_PASS: safe map=%016llx city=%016llx hero=%08x\n",
+           (unsigned long long)map_after,
+           (unsigned long long)city_after,(unsigned)hero_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1104,6 +1162,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_velocity_guard_sdl_smoke(renderer)) return 1;
     if (!run_enemy_numeric_sdl_smoke(renderer)) return 1;
     if (!run_hero_camera_numeric_sdl_smoke(renderer)) return 1;
+    if (!run_numeric_transition_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
