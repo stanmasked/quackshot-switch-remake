@@ -52,6 +52,13 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 39 verifies multi-enemy contact and exact immunity transitions,
+including recovery of stunned enemies and several consecutive life
+cycles. It also normalizes malformed negative stun timers in CITY TEST
+(the legacy nonzero check would keep such an enemy stunned forever).
+New native regressions and an SDL HUD-pixel check verify the precise
+frame in which three hearts become two after immunity expires. See
+[multi-enemy immunity](docs/REFERENCE_CITY_MULTI_ENEMY_IMMUNITY_RU.md).
 Stage 38 prevents CITY TEST pickups from triggering in the SAME tick
 as a remote lethal hit or a pit retry. Spawn pickups work on the next
 simulation tick; hurt-frame timing, finishing and persistent progress

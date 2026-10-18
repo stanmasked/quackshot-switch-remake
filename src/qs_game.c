@@ -311,6 +311,17 @@ static int update_enemies(QsGame *g) {
     for (i = 0; i < QS_MAX_ENEMIES; i++) {
         QsEnemy *e = &g->enemies[i];
         if (!e->active) continue;
+        /*
+         * CITY TEST must not treat a malformed negative stun timer as
+         * "stunned forever": the old nonzero check decremented -1 to -2
+         * indefinitely. Valid positive timers keep their exact
+         * decrement-and-skip ordering, so stun=1 is safe on this tick
+         * and the enemy becomes dangerous only on the NEXT tick.
+         * Retain legacy semantics outside the research profile.
+         */
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+            g->stage == 0 && e->stunned_frames < 0)
+            e->stunned_frames = 0;
         if (e->stunned_frames) { --e->stunned_frames; continue; }
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
             /*

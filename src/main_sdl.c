@@ -673,6 +673,61 @@ static int run_retry_pickup_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Read a rendered red/empty HUD heart, not merely g.hero.hearts.
+ * The spawn is overlapped by another active enemy. Its next hit must
+ * occur only AFTER the 89 protected post-respawn simulation steps. */
+static int read_immunity_heart_pixel(SDL_Renderer *r,const QsGame *g,uint32_t *p) {
+    SDL_Rect point={36,5,1,1};
+    if(SDL_SetRenderDrawColor(r,0,0,0,255)!=0 || SDL_RenderClear(r)!=0)
+        return 0;
+    render_stage(r,g);
+    return SDL_RenderReadPixels(r,&point,SDL_PIXELFORMAT_ARGB8888,
+                                p,(int)sizeof(*p))==0;
+}
+static int run_multi_enemy_immunity_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t protected_heart=0, exposed_heart=0;
+    int i;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    g.hero.x=100;g.hero.y=188;
+    g.hero.hearts=1;g.hero.hurt_frames=0;
+    for(i=0;i<3;i++) {
+        QsEnemy *e=&g.enemies[i];
+        e->active=1;
+        e->x=i==2 ? 40 : 100;
+        e->y=188;
+        e->min_x=e->max_x=e->x;
+        e->dir=1;
+        e->stunned_frames=0;
+    }
+    qs_step(&g,idle);
+    if(g.hero.x!=40 || g.hero.hearts!=3 || g.hero.hurt_frames!=89)
+        return 0;
+    for(i=0;i<89;i++) {
+        qs_step(&g,idle);
+        if(g.hero.hearts!=3) return 0;
+    }
+    if(g.hero.hurt_frames!=0 ||
+       !read_immunity_heart_pixel(renderer,&g,&protected_heart) ||
+       protected_heart!=UINT32_C(0xffef606c)) {
+        fprintf(stderr,"MULTI_ENEMY_IMMUNITY_SDL_FAIL protected HUD\n");
+        return 0;
+    }
+    qs_step(&g,idle);
+    if(g.hero.hearts!=2 || g.hero.hurt_frames!=69 ||
+       !read_immunity_heart_pixel(renderer,&g,&exposed_heart) ||
+       exposed_heart!=UINT32_C(0xff5a586b)) {
+        fprintf(stderr,"MULTI_ENEMY_IMMUNITY_SDL_FAIL exposed HUD\n");
+        return 0;
+    }
+    printf("MULTI_ENEMY_IMMUNITY_SDL_PASS: protected=%08x exposed=%08x\n",
+           (unsigned)protected_heart,(unsigned)exposed_heart);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -724,6 +779,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_finish_chord_sdl_smoke(renderer)) return 1;
     if (!run_exit_interaction_sdl_smoke(renderer)) return 1;
     if (!run_retry_pickup_sdl_smoke(renderer)) return 1;
+    if (!run_multi_enemy_immunity_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

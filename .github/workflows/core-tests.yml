@@ -44,6 +44,7 @@ jobs:
           grep -q '^FINISH_CHORD_SDL_PASS:' smoke.log
           grep -q '^EXIT_INTERACTION_SDL_PASS:' smoke.log
           grep -q '^RETRY_PICKUP_SDL_PASS:' smoke.log
+          grep -q '^MULTI_ENEMY_IMMUNITY_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
