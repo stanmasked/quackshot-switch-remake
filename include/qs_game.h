@@ -19,6 +19,7 @@
 #define QS_CITY_BONUS_B_X 1040.0f
 #define QS_CITY_BONUS_Y 188.0f
 #define QS_CITY_BONUS_VALUE 500
+#define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +48,8 @@ typedef struct {
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
+    int city_attempt_frames; /* reset at every stage/map handoff */
+    int city_best_clear_frames; /* 0 means no finish; lowest wins */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
@@ -68,6 +71,8 @@ int qs_solid(const QsGame *game, int col, int row);
 const char *qs_stage_name(int stage);
 int qs_city_bonus_score(const QsGame *game); /* optional practice score, max 1000 */
 int qs_city_best_bonus_score(const QsGame *game); /* session PB, 0/500/1000 */
+int qs_city_attempt_time(const QsGame *game); /* 0..9999 frames */
+int qs_city_best_clear_time(const QsGame *game); /* 0 or 1..9999 frames */
 
 #ifdef __cplusplus
 }
