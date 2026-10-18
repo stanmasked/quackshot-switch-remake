@@ -848,8 +848,30 @@ static void sanitize_city_weapon_queue(QsGame *g) {
     }
 }
 
+/*
+ * Stage 55: a completed CITY TEST keeps its research profile while
+ * returning to the map. Imported/corrupted menu state must not enter
+ * modulo navigation or claim completion with arbitrary nonzero ints.
+ * Only an exactly committed 1 is a completion witness. The ordinary
+ * prototype's map behavior is deliberately unchanged.
+ */
+static void sanitize_city_map_progress(QsGame *g) {
+    int i;
+    if (g->mode != QS_MAP ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0)
+        return;
+    if (g->selected_stage < 0 || g->selected_stage >= QS_STAGE_COUNT)
+        g->selected_stage = 0;
+    for (i=0;i<QS_STAGE_COUNT;i++) {
+        if (g->cleared[i] != 1)
+            g->cleared[i] = 0;
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
+        sanitize_city_map_progress(g);
         int held_back = input.left || input.up;
         int held_forward = input.right || input.down;
         int nav_back = edge(input.left, g->previous.left) ||
