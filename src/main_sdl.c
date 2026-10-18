@@ -1103,6 +1103,47 @@ static int run_numeric_transition_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 49: a NaN/huge pickup is retired before the real SDL raster
+ * converts its coordinates, while a valid red item stays visible and can
+ * be collected normally. The geometry and color are original placeholders.
+ */
+static int run_pickup_numeric_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t red_pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.enemies,0,sizeof(g.enemies));
+    g.pickups[0].active=1;
+    g.pickups[0].x=NAN;g.pickups[0].y=FLT_MAX;
+    g.pickups[0].kind=QS_PICKUP_HEART;
+    g.pickups[1].active=1;
+    g.pickups[1].x=179;g.pickups[1].y=140;
+    g.pickups[1].kind=QS_PICKUP_RED;
+    qs_step(&g,idle);
+    if (g.pickups[0].active || g.pickups[0].x!=0 || g.pickups[0].y!=0 ||
+        !g.pickups[1].active || g.red_unlocked ||
+        !read_multishot_pixel(renderer,&g,180,142,&red_pixel) ||
+        red_pixel!=UINT32_C(0xfff44f50)) {
+        fprintf(stderr,"PICKUP_NUMERIC_SDL_FAIL: red=%08x active=%d\n",
+                (unsigned)red_pixel,g.pickups[0].active);
+        return 0;
+    }
+    g.hero.x=179;g.hero.y=140;
+    g.hero.vx=g.hero.vy=0;
+    qs_step(&g,idle);
+    if (g.pickups[1].active || !g.red_unlocked || g.weapon!=QS_RED) {
+        fputs("PICKUP_NUMERIC_SDL_FAIL: healthy red pickup did not award\n",stderr);
+        return 0;
+    }
+    printf("PICKUP_NUMERIC_SDL_PASS: invalid retired, healthy red=%08x collected\n",
+           (unsigned)red_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1163,6 +1204,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_enemy_numeric_sdl_smoke(renderer)) return 1;
     if (!run_hero_camera_numeric_sdl_smoke(renderer)) return 1;
     if (!run_numeric_transition_sdl_smoke(renderer)) return 1;
+    if (!run_pickup_numeric_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
