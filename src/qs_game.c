@@ -869,7 +869,36 @@ static void sanitize_city_map_progress(QsGame *g) {
     }
 }
 
+/*
+ * Stage 56: only CITY TEST may carry the reference physics profile.
+ * An invalid mode or stage index must not reach an array subscript
+ * (cleared[g->stage]) or masquerade as a second research stage.
+ * Convert damaged scene metadata to a clean map handoff and consume
+ * the current input edge. No completion is granted by recovery.
+ *
+ * This guard is opt-in. Legacy prototype state flow is unchanged.
+ */
+static int recover_city_invalid_scene(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY)
+        return 0;
+    if ((g->mode == QS_MAP || g->mode == QS_STAGE) && g->stage == 0)
+        return 0;
+
+    g->stage = 0; /* Make the established city teardown applicable. */
+    city_leave_to_map(g);
+    g->selected_stage = 0;
+    sanitize_city_map_progress(g);
+    return 1;
+}
+
 void qs_step(QsGame *g, QsInput input) {
+    if (recover_city_invalid_scene(g)) {
+        /* One safe recovery tick, not a hidden menu action from the
+         * corrupted scene's jump/confirm/back chord. */
+        ++g->frames;
+        g->previous = input;
+        return;
+    }
     if (g->mode == QS_MAP) {
         sanitize_city_map_progress(g);
         int held_back = input.left || input.up;
