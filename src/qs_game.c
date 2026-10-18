@@ -207,6 +207,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_bonus_mask = 0;
     g->city_crate_active =
         stage == 0 && g->physics_profile == QS_PHYSICS_REFERENCE_CITY;
+    g->city_crate_fx_frames = 0; /* new attempt has no old debris */
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
     g->city_checkpoint_gap_frames = 0;
@@ -290,6 +291,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_checkpoint_active = 0; /* next attempt starts fresh */
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
         g->city_crate_active = 0; /* next stage entry recreates the obstacle */
+        g->city_crate_fx_frames = 0; /* no debris carried onto the map */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
         g->city_checkpoint_gap_frames = 0;
@@ -487,6 +489,7 @@ static void update_shots_reference_city(QsGame *g) {
                      QS_CITY_CRATE_X,QS_CITY_CRATE_Y,
                      QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE)) {
             g->city_crate_active=0;
+            g->city_crate_fx_frames=QS_CITY_CRATE_FX_TICKS;
             s->active=0;
             s->attached=0;
             continue;
@@ -1201,6 +1204,14 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_attempt_frames = 0;
             if (g->city_attempt_frames < QS_CITY_TIMER_MAX)
                 ++g->city_attempt_frames;
+            /* Old debris ages at most once each simulation tick.
+             * The impact sets it to the full lifetime later in this
+             * frame, after the countdown has already run. */
+            if (g->city_crate_fx_frames < 0 ||
+                g->city_crate_fx_frames > QS_CITY_CRATE_FX_TICKS)
+                g->city_crate_fx_frames=0;
+            else if (g->city_crate_fx_frames > 0)
+                --g->city_crate_fx_frames;
             if (g->city_best_clear_frames < 0 ||
                 g->city_best_clear_frames > QS_CITY_TIMER_MAX)
                 g->city_best_clear_frames = 0;
@@ -1236,6 +1247,8 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_bonus_mask = 0;
             if (g->city_crate_active != 0 && g->city_crate_active != 1)
                 g->city_crate_active = 1; /* fail-closed collision */
+            if (g->city_crate_active == 1)
+                g->city_crate_fx_frames=0; /* intact object has no shards */
             if (g->city_best_bonus_score != 0 &&
                 g->city_best_bonus_score != 500 &&
                 g->city_best_bonus_score != 1000)
