@@ -503,8 +503,10 @@ static void update_city_checkpoint(QsGame *g) {
  * is needed, eliminating overflow and duplicate rewards.
  */
 static void update_city_bonus(QsGame *g) {
+    int before;
     if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
         return;
+    before = g->city_bonus_mask;
     if (!(g->city_bonus_mask & 1) &&
         overlaps(g->hero.x,g->hero.y,12,20,
                  QS_CITY_BONUS_A_X,QS_CITY_BONUS_Y,10,10))
@@ -513,6 +515,13 @@ static void update_city_bonus(QsGame *g) {
         overlaps(g->hero.x,g->hero.y,12,20,
                  QS_CITY_BONUS_B_X,QS_CITY_BONUS_Y,10,10))
         g->city_bonus_mask |= 2;
+    /* Stage 61: finishing the two-beacon set restores one missing
+     * heart exactly once, in addition to the existing practice score.
+     * The transition (not a permanent bit check) guards re-awards
+     * following damage, respawn or repeated contact. Health never
+     * exceeds the ordinary three-heart maximum. */
+    if (before != 3 && g->city_bonus_mask == 3 && g->hero.hearts < 3)
+        ++g->hero.hearts;
 }
 
 static void shoot_as(QsGame *g, int red) {
