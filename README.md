@@ -46,6 +46,13 @@ a token during the failed frame. Returning to the map resets both
 beacons for a fresh attempt. The default prototype remains untouched.
 See [bonus beacon gameplay](docs/REFERENCE_CITY_BONUS_BEACONS_RU.md).
 
+Stage 61 adds an optional one-heart recovery **only when the second
+bonus beacon is first collected**. The reward never exceeds three
+hearts and never repeats after later damage; a green HUD stamp
+indicates the set has already been completed. Dead/pit retry frames
+cannot claim it. See
+[bonus set health reward](docs/REFERENCE_CITY_BONUS_SET_HEAL_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
