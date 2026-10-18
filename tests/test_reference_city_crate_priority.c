@@ -95,7 +95,9 @@ static void test_leftward_red_wall_anchor(void){
 static void test_wall_behind_box_does_not_protect_box(void){
     QsGame g=scene();
     g.terrain[12][61]='#'; /* right-hand wall, behind crate from left */
-    shot(&g,0,QS_CITY_CRATE_X-7,1.0f,0);
+    /* Inject an in-flight shot overlapping BOTH the crate and the
+     * wall in the same substep; wall at 976 is farther than crate 968. */
+    shot(&g,0,QS_CITY_CRATE_X+3,1.0f,0);
     qs_step(&g,idle());
     CHECK(!g.city_crate_active);
     CHECK(g.city_crate_fx_frames==QS_CITY_CRATE_FX_TICKS);
@@ -121,7 +123,7 @@ static void test_red_enemy_in_front_of_box_wins(void){
 }
 static void test_box_face_in_front_of_enemy_wins(void){
     QsGame g=scene();
-    foe(&g,0,QS_CITY_CRATE_X+1);
+    foe(&g,0,QS_CITY_CRATE_X+0.5f);
     shot(&g,0,QS_CITY_CRATE_X-7,1.0f,0);
     qs_step(&g,idle());
     CHECK(!g.city_crate_active);
