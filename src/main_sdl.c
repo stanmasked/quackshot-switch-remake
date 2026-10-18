@@ -81,6 +81,16 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
             split/=10;
         }
     }
+    /* Stage 78: lavender best checkpoint-to-finish sector, only
+     * after a completed run through the checkpoint. No false zero. */
+    if (qs_city_best_sector_time(game)>0) {
+        int sector=qs_city_best_sector_time(game),place;
+        for(place=3;place>=0;--place) {
+            render_bonus_score_digit(renderer,278+8*place,203,sector%10,
+                                     color(183,160,255));
+            sector/=10;
+        }
+    }
     rectangle(renderer, 50, 215, 300, 4, color(130, 146, 167));
 }
 
@@ -147,6 +157,17 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
         render_bonus_score_digit(renderer,126+8*place,4,decimal,
                                  color(255,180,129));
         score/=10;
+    }
+    /* Live duration of the second sector in a valid attempt.
+     * A zero-length sector at checkpoint touch is intentionally
+     * shown as 0000; before the checkpoint this slot is empty. */
+    if (qs_city_checkpoint_split_time(game)>0) {
+        score=qs_city_sector_time(game);
+        for(place=3;place>=0;--place) {
+            render_bonus_score_digit(renderer,42+8*place,4,score%10,
+                                     color(183,160,255));
+            score/=10;
+        }
     }
     /* Stage 70: show signed comparison with the PREVIOUS split PB.
      * Amber is the actual split, green is quicker, coral is slower,
