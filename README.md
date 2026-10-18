@@ -180,6 +180,14 @@ respawn, camera phase and pause. Its visual timer is not a hitbox and
 cannot change movement or score. See
 [airborne heart interaction checks](docs/REFERENCE_CITY_AIR_REWARD_INTERACTIONS_RU.md).
 
+Stage 83 adds a **persistent airborne-heart HUD marker** at the far
+right of the city-only status strip. It is grey until collection and
+mint after collection, independent of the world camera or short sparkle.
+The status survives a life respawn and pause, resets on practice
+restart, and does not appear in the normal prototype. The SDL2 smoke
+suite samples the actual pixels. See
+[airborne-heart HUD checks](docs/REFERENCE_CITY_AIR_REWARD_HUD_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
