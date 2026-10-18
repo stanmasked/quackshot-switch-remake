@@ -49,8 +49,9 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
      * city map selector. It survives Back/finish and does not pretend
      * that this record is an original QuackShot game feature.
      */
-    if (game->stage == 0 &&
-        game->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+    if ((game->stage == 0 &&
+         game->physics_profile == QS_PHYSICS_REFERENCE_CITY) ||
+        qs_city_best_bonus_score(game) > 0) {
         int value=qs_city_best_bonus_score(game),i;
         for(i=3;i>=0;--i) {
             render_bonus_score_digit(renderer,278+8*i,61,value%10,
