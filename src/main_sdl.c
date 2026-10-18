@@ -728,6 +728,57 @@ static int run_multi_enemy_immunity_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage-40 screen-level proof: two co-planar targets have staggered
+ * y ranges, so a synthetic projectile may hit BOTH while distinct
+ * SDL pixels exist exclusively inside either target's silhouette.
+ */
+static int coplanar_sprite_pixel(SDL_Renderer *renderer,
+                                 const QsGame *g,int y,uint32_t *p) {
+    SDL_Rect one={138,y,1,1};
+    if(SDL_SetRenderDrawColor(renderer,0,0,0,255)!=0 ||
+       SDL_RenderClear(renderer)!=0) return 0;
+    render_stage(renderer,g);
+    return SDL_RenderReadPixels(renderer,&one,SDL_PIXELFORMAT_ARGB8888,
+                                p,(int)sizeof(*p))==0;
+}
+static int run_coplanar_impacts_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t upper=0,lower=0;
+    int i;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    g.hero.x=40;g.hero.y=188;
+    for(i=0;i<2;i++) {
+        QsEnemy *e=&g.enemies[i];
+        e->active=1;e->x=135;e->y=184+i*8;
+        e->dir=1;e->min_x=e->max_x=135;
+    }
+    g.shots[0].active=1;
+    g.shots[0].frames=65;
+    g.shots[0].x=129;g.shots[0].y=194;
+    g.shots[0].vx=1;g.shots[0].red=1;
+    qs_step(&g,idle);
+    if(g.shots[0].active ||
+       g.enemies[0].stunned_frames!=179 ||
+       g.enemies[1].stunned_frames!=179 ||
+       !coplanar_sprite_pixel(renderer,&g,186,&upper) ||
+       !coplanar_sprite_pixel(renderer,&g,205,&lower) ||
+       upper!=UINT32_C(0xff70a7dd) ||
+       lower!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,
+                "COPLANAR_IMPACTS_SDL_FAIL: upper=%08x lower=%08x\n",
+                (unsigned)upper,(unsigned)lower);
+        return 0;
+    }
+    printf("COPLANAR_IMPACTS_SDL_PASS: upper=%08x lower=%08x\n",
+           (unsigned)upper,(unsigned)lower);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -780,6 +831,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_exit_interaction_sdl_smoke(renderer)) return 1;
     if (!run_retry_pickup_sdl_smoke(renderer)) return 1;
     if (!run_multi_enemy_immunity_sdl_smoke(renderer)) return 1;
+    if (!run_coplanar_impacts_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

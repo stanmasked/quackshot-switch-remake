@@ -268,7 +268,25 @@ static void update_shots_reference_city(QsGame *g) {
                 break;
             }
             if (target >= 0) {
-                g->enemies[target].stunned_frames = 180;
+                /*
+                 * Several synthetic enemy hitboxes may share the
+                 * SAME nearest leading face (including partial vertical
+                 * overlaps). Stun every actor on that co-planar face,
+                 * rather than just the first array slot. Strictly
+                 * farther faces must remain untouched; the earlier
+                 * wall arbitration still wins exact wall/enemy ties.
+                 * Limit tolerance to sub-pixel float representation.
+                 */
+                for (j = 0; j < QS_MAX_ENEMIES; ++j) {
+                    QsEnemy *e = &g->enemies[j];
+                    float face;
+                    if (!e->active ||
+                        !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
+                        continue;
+                    face = step >= 0 ? e->x : e->x + 14;
+                    if (absolute(face - enemy_face) <= 0.0001f)
+                        e->stunned_frames = 180;
+                }
                 s->active = 0;
                 break;
             }

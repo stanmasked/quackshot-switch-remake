@@ -52,6 +52,14 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 40 makes simultaneous projectile hits on co-planar enemy
+faces independent of array-slot order in opt-in CITY TEST. Both
+vertically overlapping enemies at exactly the nearest leading face
+are stunned; farther enemies and wall-occluded actors are not.
+The ordinary prototype retains its slot-first collision behavior.
+Tests verify both shot colors and directions, multiple projectiles,
+wall precedence, stun recovery, and real SDL sprite pixels. See
+[coplanar projectile arbitration](docs/REFERENCE_CITY_COPLANAR_IMPACTS_RU.md).
 Stage 39 verifies multi-enemy contact and exact immunity transitions,
 including recovery of stunned enemies and several consecutive life
 cycles. It also normalizes malformed negative stun timers in CITY TEST
