@@ -48,6 +48,10 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 27 adds simultaneous tile/anchor height arbitration plus
+long original-free city physics replay: controlled jump/fire/reverse traces,
+permuted anchor lifetimes, and expiry-to-floor transitions. See
+[extended anchor collision tests](docs/REFERENCE_CITY_ANCHOR_LONG_RUN_RU.md).
 Stage 26 strengthens red-anchor lifecycle and landing: the closest
 world-space anchor surface wins irrespective of shot slot order, expiry
 drops the hero onto a surviving lower anchor, and only attached red
