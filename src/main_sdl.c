@@ -2970,6 +2970,85 @@ static int run_city_quick_retry_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 72: actual SDL pixels for a new, breakable original-free
+ * obstacle. Its exterior and inner highlights must disappear after
+ * a yellow projectile. Respawn keeps the destruction, R+Start
+ * rebuilds it, and ordinary CITY prototype never draws it.
+ */
+static int run_breakable_crate_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,prototype;
+    QsInput in={0};
+    uint32_t before=0,inner=0,after=0,after_inner=0;
+    uint32_t life=0,retry=0,legacy=0;
+    const int cam=840;
+    const int pixel_x=(int)QS_CITY_CRATE_X-cam;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.grounded=1;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_crate_active!=1 ||
+       !read_multishot_pixel(renderer,&g,pixel_x,193,&before) ||
+       before!=UINT32_C(0xffb66059) ||
+       !read_multishot_pixel(renderer,&g,pixel_x+4,196,&inner) ||
+       inner!=UINT32_C(0xffe69d68)) {
+        fprintf(stderr,"CRATE_SDL_FAIL: initial=%08x inner=%08x\n",
+                (unsigned)before,(unsigned)inner);
+        return 0;
+    }
+    g.shots[0].active=1;
+    g.shots[0].x=QS_CITY_CRATE_X-11;
+    g.shots[0].y=197;
+    g.shots[0].vx=5.5f;
+    g.shots[0].frames=65;
+    for(int t=0;t<5 && g.city_crate_active;t++) qs_step(&g,in);
+    if(g.city_crate_active!=0 || g.shots[0].active)return 0;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,pixel_x,193,&after) ||
+       !read_multishot_pixel(renderer,&g,pixel_x+4,196,&after_inner) ||
+       after!=UINT32_C(0xff85bad4) || after_inner!=after) {
+        fprintf(stderr,"CRATE_SDL_FAIL: removed=%08x interior=%08x\n",
+                (unsigned)after,(unsigned)after_inner);
+        return 0;
+    }
+    /* Respawn from a pit does NOT rebuild this attempt's crate. */
+    g.hero.x=21*QS_TILE;g.hero.y=261;
+    g.hero.grounded=0;g.hero.vy=7.5f;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.hero.x!=40 || g.city_crate_active ||
+       !read_multishot_pixel(renderer,&g,pixel_x,193,&life) ||
+       life!=after)return 0;
+    /* R+Start creates a fresh attempt without leaving the scene. */
+    in.back=in.dash=1;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.mode!=QS_STAGE || g.city_crate_active!=1 ||
+       g.hero.x!=40 ||
+       !read_multishot_pixel(renderer,&g,pixel_x,193,&retry) ||
+       retry!=before) {
+        fprintf(stderr,"CRATE_SDL_FAIL: retry=%08x active=%d\n",
+                (unsigned)retry,g.city_crate_active);
+        return 0;
+    }
+    qs_init(&prototype);qs_begin_stage(&prototype,0);
+    prototype.camera_x=prototype.render_camera_x=(float)cam;
+    if(prototype.city_crate_active ||
+       !read_multishot_pixel(renderer,&prototype,pixel_x,193,&legacy) ||
+       legacy!=after) {
+        fprintf(stderr,"CRATE_SDL_FAIL: legacy=%08x\n",(unsigned)legacy);
+        return 0;
+    }
+    printf("CRATE_SDL_PASS: intact=%08x inner=%08x destroyed=%08x life=%08x retry=%08x legacy=%08x\n",
+           (unsigned)before,(unsigned)inner,(unsigned)after,
+           (unsigned)life,(unsigned)retry,(unsigned)legacy);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3050,6 +3129,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_checkpoint_split_sdl_smoke(renderer)) return 1;
     if (!run_checkpoint_pace_sdl_smoke(renderer)) return 1;
     if (!run_city_quick_retry_sdl_smoke(renderer)) return 1;
+    if (!run_breakable_crate_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
