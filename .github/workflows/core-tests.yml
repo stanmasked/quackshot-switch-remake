@@ -95,6 +95,7 @@ jobs:
           grep -q '^MAP_INTEGRITY_SDL_PASS:' smoke.log
           grep -q '^SCENE_RECOVERY_SDL_PASS:' smoke.log
           grep -q '^SHOT_CANONICAL_SDL_PASS:' smoke.log
+          grep -q '^CITY_CHECKPOINT_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
