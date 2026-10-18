@@ -173,6 +173,13 @@ and uses the uppermost crossed surface when red-shot anchors are also
 present. No standard prototype physics are changed. See
 [sky ledge checks](docs/REFERENCE_CITY_SKY_LEDGE_RU.md).
 
+Stage 85 adds a **controller-input final-route regression**: spring,
+airborne heart, one-way ledge and completion all occur in order,
+with no character teleport after final-segment fixture setup. Both
+walking and jumping finishes are checked, along with pause timing,
+early Back exit and opt-in isolation. See
+[final segment route checks](docs/REFERENCE_CITY_FINAL_ROUTE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
