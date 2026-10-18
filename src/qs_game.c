@@ -418,13 +418,6 @@ static int update_enemies(QsGame *g) {
          * and the enemy becomes dangerous only on the NEXT tick.
          * Retain legacy semantics outside the research profile.
          */
-        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
-            g->stage == 0) {
-            if (e->stunned_frames < 0)
-                e->stunned_frames = 0;
-            else if (e->stunned_frames > 180)
-                e->stunned_frames = 180;
-        }
         if (e->stunned_frames) { --e->stunned_frames; continue; }
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
             /*
@@ -679,7 +672,15 @@ static void sanitize_city_enemies(QsGame *g) {
             /* Canonicalize discarded actor too: avoid keeping NaN
              * in replay/snapshot data even after it is inactive. */
             memset(e,0,sizeof(*e));
+            continue;
         }
+        /* Normalize ALL active actor timers before any enemy contact
+         * can end the loop in a fatal respawn. Later slots must not
+         * retain INT_MAX/INT_MIN on an early return or map exit. */
+        if (e->stunned_frames < 0)
+            e->stunned_frames = 0;
+        else if (e->stunned_frames > 180)
+            e->stunned_frames = 180;
     }
 }
 
