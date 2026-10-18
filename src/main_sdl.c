@@ -3173,6 +3173,83 @@ static int run_city_crate_debris_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 75: prove that overlapping a box is not enough when a real
+ * solid or enemy face is closer. The actual SDL crate pixel remains
+ * intact after blocked shots, then disappears after an unblocked hit.
+ */
+static int run_city_crate_priority_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t shielded=0,enemy_shielded=0,destroyed=0;
+    const int cam=840;
+    const int x=(int)QS_CITY_CRATE_X-cam;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    g.terrain[12][60]='#';
+    g.shots[0].active=1;g.shots[0].red=1;
+    g.shots[0].x=QS_CITY_CRATE_X-7;
+    g.shots[0].y=197;g.shots[0].vx=1;g.shots[0].frames=65;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!g.city_crate_active || g.city_crate_fx_frames ||
+       !g.shots[0].active || !g.shots[0].attached ||
+       g.shots[0].x!=952 ||
+       !read_multishot_pixel(renderer,&g,x,193,&shielded) ||
+       shielded!=UINT32_C(0xffb66059)) {
+        fprintf(stderr,"CRATE_PRIORITY_SDL_FAIL: wall active=%d x=%f pixel=%08x\n",
+                g.city_crate_active,g.shots[0].x,(unsigned)shielded);
+        return 0;
+    }
+    /* A closer foe wins the same overlapping substep. */
+    g.terrain[12][60]='.';
+    memset(g.shots,0,sizeof(g.shots));
+    g.enemies[0].active=1;
+    g.enemies[0].x=g.enemies[0].min_x=
+        g.enemies[0].max_x=QS_CITY_CRATE_X-5;
+    g.enemies[0].y=192;g.enemies[0].dir=1;
+    g.shots[0].active=1;
+    g.shots[0].x=QS_CITY_CRATE_X-7;
+    g.shots[0].y=197;g.shots[0].vx=1;g.shots[0].frames=65;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!g.city_crate_active || g.city_crate_fx_frames ||
+       g.enemies[0].stunned_frames!=179 ||
+       !read_multishot_pixel(renderer,&g,x,193,&enemy_shielded) ||
+       enemy_shielded!=shielded) {
+        fprintf(stderr,"CRATE_PRIORITY_SDL_FAIL: enemy active=%d stunned=%d pixel=%08x\n",
+                g.city_crate_active,g.enemies[0].stunned_frames,
+                (unsigned)enemy_shielded);
+        return 0;
+    }
+    /* No preceding wall/foe: the exact same bullet destroys crate. */
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.shots[0].active=1;g.shots[0].x=QS_CITY_CRATE_X-7;
+    g.shots[0].y=197;g.shots[0].vx=1;g.shots[0].frames=65;
+    qs_step(&g,in);
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(g.city_crate_active ||
+       g.city_crate_fx_frames!=QS_CITY_CRATE_FX_TICKS ||
+       !read_multishot_pixel(renderer,&g,x,193,&destroyed) ||
+       destroyed!=UINT32_C(0xff85bad4)) {
+        fprintf(stderr,"CRATE_PRIORITY_SDL_FAIL: clear active=%d fx=%d pixel=%08x\n",
+                g.city_crate_active,g.city_crate_fx_frames,
+                (unsigned)destroyed);
+        return 0;
+    }
+    printf("CRATE_PRIORITY_SDL_PASS: wall=%08x foe=%08x destroyed=%08x\n",
+           (unsigned)shielded,(unsigned)enemy_shielded,
+           (unsigned)destroyed);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3255,6 +3332,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_quick_retry_sdl_smoke(renderer)) return 1;
     if (!run_breakable_crate_sdl_smoke(renderer)) return 1;
     if (!run_city_crate_debris_sdl_smoke(renderer)) return 1;
+    if (!run_city_crate_priority_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
