@@ -419,8 +419,12 @@ static int update_enemies(QsGame *g) {
          * Retain legacy semantics outside the research profile.
          */
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
-            g->stage == 0 && e->stunned_frames < 0)
-            e->stunned_frames = 0;
+            g->stage == 0) {
+            if (e->stunned_frames < 0)
+                e->stunned_frames = 0;
+            else if (e->stunned_frames > 180)
+                e->stunned_frames = 180;
+        }
         if (e->stunned_frames) { --e->stunned_frames; continue; }
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
             /*
@@ -713,6 +717,15 @@ static int sanitize_city_hero_camera(QsGame *g) {
         h->grounded = 0;
         g->reference_jump_steps = 0;
     }
+
+    /* Stage 51: only 70 post-hit or 90 post-respawn protection ticks
+     * are authored. Negative counters used to decrement forever and
+     * INT_MAX could grant effectively permanent invulnerability.
+     * Keep valid counters and their final safe tick unchanged. */
+    if (h->hurt_frames < 0)
+        h->hurt_frames = 0;
+    else if (h->hurt_frames > 90)
+        h->hurt_frames = 90;
 
     /* A damaged camera must not reach parallax's integer conversion.
      * Recover both present/simulation phases together; keeping only one
