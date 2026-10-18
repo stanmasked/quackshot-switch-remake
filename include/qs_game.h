@@ -50,6 +50,8 @@ typedef struct {
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int city_attempt_frames; /* reset at every stage/map handoff */
     int city_best_clear_frames; /* 0 means no finish; lowest wins */
+    int city_checkpoint_split_frames; /* first valid flag touch in attempt, 0 if not earned */
+    int city_best_checkpoint_frames; /* fastest flag split of session, 0 if none */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
@@ -73,6 +75,8 @@ int qs_city_bonus_score(const QsGame *game); /* optional practice score, max 100
 int qs_city_best_bonus_score(const QsGame *game); /* session PB, 0/500/1000 */
 int qs_city_attempt_time(const QsGame *game); /* 0..9999 frames */
 int qs_city_best_clear_time(const QsGame *game); /* 0 or 1..9999 frames */
+int qs_city_checkpoint_split_time(const QsGame *game); /* 0 or 1..9999 frames */
+int qs_city_best_checkpoint_time(const QsGame *game); /* 0 or 1..9999 frames */
 
 #ifdef __cplusplus
 }
