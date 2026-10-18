@@ -161,7 +161,46 @@ static void repeated_anchor_lifecycle_is_deterministic(void) {
     }
 }
 
+static void tile_contact_wins_over_lower_red_anchor(void) {
+    QsGame g = scene(QS_PHYSICS_REFERENCE_CITY);
+    g.terrain[10][6] = '#'; /* solid tile top y=160 */
+    g.hero.y = 139.92f; /* bottom 159.92, crosses both this tick */
+    platform(&g, 0, 100, 160.05f, 40, 1);
+    qs_step(&g, idle());
+    VERIFY(g.hero.grounded);
+    VERIFY(g.hero.y == 140.0f);
+    VERIFY(g.shots[0].active && g.shots[0].attached);
+}
+
+static void higher_anchor_wins_over_lower_tile(void) {
+    QsGame g = scene(QS_PHYSICS_REFERENCE_CITY);
+    g.terrain[10][6] = '#';
+    g.hero.y = 139.92f;
+    platform(&g, 0, 100, 159.98f, 40, 1);
+    qs_step(&g, idle());
+    VERIFY(g.hero.grounded);
+    VERIFY(fabsf(g.hero.y - 139.98f) < 0.0001f);
+}
+
+static void mixed_collision_independent_of_anchor_slot_order(void) {
+    QsGame a = scene(QS_PHYSICS_REFERENCE_CITY);
+    QsGame b = scene(QS_PHYSICS_REFERENCE_CITY);
+    a.terrain[10][6] = b.terrain[10][6] = '#';
+    a.hero.y = b.hero.y = 139.92f;
+    platform(&a, 0, 100, 160.11f, 40, 1);
+    platform(&a, 1, 100, 160.05f, 40, 1);
+    platform(&b, 0, 100, 160.05f, 40, 1);
+    platform(&b, 1, 100, 160.11f, 40, 1);
+    qs_step(&a, idle());
+    qs_step(&b, idle());
+    VERIFY(a.hero.grounded && b.hero.grounded);
+    VERIFY(a.hero.y == b.hero.y && a.hero.y == 140);
+}
+
 int main(void) {
+    tile_contact_wins_over_lower_red_anchor();
+    higher_anchor_wins_over_lower_tile();
+    mixed_collision_independent_of_anchor_slot_order();
     nearer_anchor_beats_lower_index();
     slot_permutation_cannot_change_landing();
     expiry_removes_support_on_exact_step();
@@ -172,6 +211,6 @@ int main(void) {
     inactive_or_expired_platform_cannot_intercept();
     stage_transition_clears_all_supports();
     repeated_anchor_lifecycle_is_deterministic();
-    puts("PASS: 10 reference-city red anchor lifecycle, nearest-face, expiry and profile isolation cases");
+    puts("PASS: 13 reference-city anchor/tile ordering, lifecycle, expiry and profile isolation cases");
     return 0;
 }

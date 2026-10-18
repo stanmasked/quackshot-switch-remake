@@ -388,6 +388,14 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
                 }
             }
         }
+        /* City-only: the first *higher* world-space collision wins.
+         * An anchor just below the top of a solid tile cannot place
+         * the hero inside the tile. Keep legacy profile untouched. */
+        if (on_anchor && g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+            g->stage == 0 && hits_tiles(g, h->x, trial, 12, 20)) {
+            float tile_top = floorf((trial + 20) / QS_TILE) * QS_TILE;
+            if (tile_top <= h->y + 20) on_anchor = 0;
+        }
         if (on_anchor || hits_tiles(g, h->x, trial, 12, 20)) {
             if (dy > 0) {
                 h->grounded = 1;
