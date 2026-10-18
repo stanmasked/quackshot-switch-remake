@@ -148,6 +148,32 @@ int qs_city_best_sector_time(const QsGame *g) {
 }
 
 /*
+ * Stage 79: a completed checkpoint-to-exit PB provides a strict
+ * frame budget for the current second sector. A zero budget is a
+ * meaningful tie, so the validity bit is a separate predicate.
+ * No storage or mutation is required; pauses already freeze the
+ * same attempt-frame counter consumed here.
+ */
+int qs_city_sector_budget_valid(const QsGame *g) {
+    return g && g->mode == QS_STAGE && g->stage == 0 &&
+        g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        g->city_checkpoint_active == 1 &&
+        g->city_checkpoint_split_frames >= 1 &&
+        g->city_checkpoint_split_frames <= QS_CITY_TIMER_MAX &&
+        g->city_attempt_frames >= g->city_checkpoint_split_frames &&
+        g->city_attempt_frames <= QS_CITY_TIMER_MAX &&
+        g->city_best_sector_frames >= 1 &&
+        g->city_best_sector_frames < QS_CITY_TIMER_MAX;
+}
+
+int qs_city_sector_budget_frames(const QsGame *g) {
+    return qs_city_sector_budget_valid(g)
+        ? g->city_best_sector_frames -
+          (g->city_attempt_frames - g->city_checkpoint_split_frames)
+        : 0;
+}
+
+/*
  * Stage 70: compare this attempt's split against the PREVIOUS session
  * record, before the record is lowered. A signed negative gap is faster.
  * First-ever contact has no prior baseline and therefore no delta.
