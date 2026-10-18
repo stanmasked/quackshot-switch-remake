@@ -1489,6 +1489,71 @@ static int run_city_map_integrity_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 56: invalid CITY TEST scene metadata must make a clean map
+ * frame even if the prior screen was over the finish boundary.
+ * No phantom completion or delayed projectile may survive. Compare
+ * the exact SDL raster against a known canonical map.
+ */
+static int run_scene_recovery_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,reference;
+    QsInput in={0};
+    uint64_t repaired=0,expected=0,stage_frame=0;
+    uint32_t progress[QS_STAGE_COUNT]={0};
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    g.mode=(QsMode)INT_MAX;
+    g.stage=INT_MIN;
+    g.selected_stage=INT_MAX;
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+3;
+    g.camera_x=700;g.render_camera_x=690;
+    g.cleared[0]=1;g.cleared[1]=INT_MAX;g.cleared[2]=-1;
+    g.pending_reference_shot=g.pending_reference_red=1;
+    g.shots[0].active=g.shots[0].attached=g.shots[0].red=1;
+    g.shots[0].frames=30;g.shots[0].x=100;g.shots[0].y=160;
+    in.select=in.dash=1;
+    qs_step(&g,in);
+    qs_init(&reference);
+    reference.cleared[0]=1;
+    if(g.mode!=QS_MAP || g.stage!=0 || g.selected_stage!=0 ||
+       g.cleared[0]!=1 || g.cleared[1] || g.cleared[2] ||
+       g.camera_x!=0 || g.render_camera_x!=0 ||
+       g.pending_reference_shot || g.shots[0].active ||
+       !capture_frame(renderer,&g,&repaired) ||
+       !capture_frame(renderer,&reference,&expected) ||
+       repaired!=expected ||
+       !read_map_progress_pixels(renderer,&g,progress) ||
+       progress[0]!=UINT32_C(0xff5edd8a) ||
+       progress[1]==UINT32_C(0xff5edd8a) ||
+       progress[2]==UINT32_C(0xff5edd8a)) {
+        fprintf(stderr,"SCENE_RECOVERY_SDL_FAIL: restored=%016llx expected=%016llx\n",
+                (unsigned long long)repaired,(unsigned long long)expected);
+        return 0;
+    }
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP) {
+        fputs("SCENE_RECOVERY_SDL_FAIL: held Select relaunched immediately\n",stderr);
+        return 0;
+    }
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=0 ||
+       g.physics_profile!=QS_PHYSICS_REFERENCE_CITY ||
+       g.hero.x!=40 || g.hero.y!=188 ||
+       g.camera_x!=0 || g.render_camera_x!=0 ||
+       g.pending_reference_shot || g.shots[0].active ||
+       !capture_frame(renderer,&g,&stage_frame) ||
+       stage_frame==repaired) {
+        fputs("SCENE_RECOVERY_SDL_FAIL: valid fresh reentry unavailable\n",stderr);
+        return 0;
+    }
+    printf("SCENE_RECOVERY_SDL_PASS: map=%016llx fresh=%016llx progress=%08x\n",
+           (unsigned long long)repaired,
+           (unsigned long long)stage_frame,(unsigned)progress[0]);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1556,6 +1621,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_pre_move_shots_sdl_smoke(renderer)) return 1;
     if (!run_weapon_queue_sdl_smoke(renderer)) return 1;
     if (!run_city_map_integrity_sdl_smoke(renderer)) return 1;
+    if (!run_scene_recovery_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
