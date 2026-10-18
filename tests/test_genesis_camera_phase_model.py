@@ -124,7 +124,16 @@ class Tests(unittest.TestCase):
             verify_known_reference_anchors(data)
 
     def test_missing_published_anchor_is_rejected(self):
+        # Establish a *valid* published fixture first. Without this, the
+        # verifier rightly rejects the earlier mismatching right anchors
+        # before it can reach the deliberately absent reverse checkpoint.
         data = synthetic(1)
+        for scenario, landmarks in KNOWN_CAMERA_VDP_ANCHORS.items():
+            for frame, (camera, render) in landmarks.items():
+                data[scenario][frame] = {
+                    "software_camera_RAM_candidate": camera,
+                    "render_buffer_RAM_0x852c": render,
+                }
         del data["reverse"][2375]
         with self.assertRaisesRegex(ValueError, "anchor: missing checkpoint"):
             verify_known_reference_anchors(data)
