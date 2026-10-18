@@ -1295,7 +1295,9 @@ static int run_numeric_transition_sdl_smoke(SDL_Renderer *renderer) {
      * zero-valued HUD; a normal-prototype map is not an equivalent
      * pixel reference even when both have identical stage clears. */
     if (!capture_frame(renderer,&baseline,&map_before)) return 0;
-    in.back=in.select=in.dash=1;
+    in.back=in.select=1;
+    /* Stage 73: keep this corrupted-scene test on the plain Start
+     * (map-exit) path. R+Start now intentionally starts a fresh run. */
     qs_step(&g,in);
     if (g.mode!=QS_MAP || g.cleared[0] || !g.cleared[2] ||
         g.camera_x!=0 || g.render_camera_x!=0 ||
