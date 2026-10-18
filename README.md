@@ -138,6 +138,13 @@ overlay is drawn using original-free geometry and verified
 using actual SDL2 frame comparisons. See
 [training pause behavior](docs/REFERENCE_CITY_TRAINING_PAUSE_RU.md).
 
+Stage 77 clarifies that **X + Start** is a dedicated pause gesture,
+not a replacement for existing Back+Fire/Confirm/Jump safety chords.
+Those mixed inputs still exit to the map, protecting old transition
+and corrupted-state behavior. GCC/Clang and SDL regressions explicitly
+enforce the distinction. See
+[pause chord arbitration](docs/REFERENCE_CITY_PAUSE_CHORD_ARBITRATION_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
