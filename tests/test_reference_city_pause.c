@@ -195,6 +195,44 @@ static void paused_scene_does_not_change_camera_or_records(void) {
     CHECK(g.camera_x==250 && g.render_camera_x==250);
     CHECK(g.city_best_bonus_score==1000 && g.city_best_checkpoint_frames==7);
 }
+/*
+ * Stage 77: old safety chords deliberately include X (weapon change).
+ * Adding pause must not steal Back+Fire or Back+Confirm transactions
+ * from the legacy map/finish and numeric-recovery test paths.
+ */
+static void mixed_fire_change_back_is_plain_map_exit(void) {
+    QsGame g=city();QsInput in=idle();
+    in.back=in.change=in.fire=1;
+    qs_step(&g,in);
+    CHECK(g.mode==QS_MAP && !g.city_paused);
+}
+static void mixed_confirm_change_back_is_plain_map_exit(void) {
+    QsGame g=city();QsInput in=idle();
+    in.back=in.change=in.select=1;
+    qs_step(&g,in);
+    CHECK(g.mode==QS_MAP && !g.city_paused);
+}
+static void mixed_jump_change_back_is_plain_map_exit(void) {
+    QsGame g=city();QsInput in=idle();
+    in.back=in.change=in.jump=1;
+    qs_step(&g,in);
+    CHECK(g.mode==QS_MAP && !g.city_paused);
+}
+static void directional_x_start_still_pauses(void) {
+    QsGame g=city();QsInput in=pause_chord();
+    in.right=1;
+    qs_step(&g,in);
+    CHECK(g.mode==QS_STAGE && g.city_paused);
+    CHECK(g.hero.x==100 && !g.city_attempt_frames);
+}
+static void mixed_chord_at_goal_commits_finish_not_pause(void) {
+    QsGame g=city();QsInput in=pause_chord();
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;
+    in.fire=in.select=in.jump=in.right=1;
+    qs_step(&g,in);
+    CHECK(g.mode==QS_MAP && g.cleared[0] && !g.city_paused);
+    CHECK(qs_city_best_clear_time(&g)==1);
+}
 static void deterministic_480_tick_pause_replay(void) {
     QsGame a=city(),b=a;
     for(int t=0;t<480;t++) {
@@ -238,7 +276,12 @@ int main(void) {
     ordinary_prototype_start_remains_map_action();
     other_stages_have_no_pause();
     paused_scene_does_not_change_camera_or_records();
+    mixed_fire_change_back_is_plain_map_exit();
+    mixed_confirm_change_back_is_plain_map_exit();
+    mixed_jump_change_back_is_plain_map_exit();
+    directional_x_start_still_pauses();
+    mixed_chord_at_goal_commits_finish_not_pause();
     deterministic_480_tick_pause_replay();
-    puts("PASS: 17 pause scenarios and 480 deterministic ticks");
+    puts("PASS: 22 pause/chord scenarios and 480 deterministic ticks");
     return EXIT_SUCCESS;
 }
