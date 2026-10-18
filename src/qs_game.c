@@ -194,7 +194,11 @@ static void update_shots_reference_city(QsGame *g) {
             int target = -1, face_col = 0, wall_hit;
             float enemy_face = 0, wall_face = 0;
             s->x += step;
-            if (s->x < 0 || s->x >= QS_COLUMNS * QS_TILE) {
+            /* Discard an entire projectile when any part leaves the
+             * synthetic world. qs_solid() correctly treats out-of-range
+             * columns as walls for hero physics, but those INVISIBLE
+             * sentinels must never create red anchor platforms. */
+            if (s->x < 0 || s->x + 7.0f > QS_COLUMNS * QS_TILE) {
                 s->active = 0;
                 break;
             }
@@ -272,8 +276,36 @@ static void update_enemies(QsGame *g) {
         QsEnemy *e = &g->enemies[i];
         if (!e->active) continue;
         if (e->stunned_frames) { --e->stunned_frames; continue; }
-        e->x += e->dir * 0.55f;
-        if (e->x > e->max_x || e->x < e->min_x) e->dir = -e->dir;
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+            /*
+             * The city actor is 14 px wide. Constrain the whole actor to
+             * the world and to its chosen patrol interval, then reflect
+             * at the EXACT endpoint. Legacy patrol overshoot is retained
+             * outside this optional research profile.
+             */
+            const float world_last_x = QS_COLUMNS * QS_TILE - 14.0f;
+            float lo = clampf(e->min_x, 0.0f, world_last_x);
+            float hi = clampf(e->max_x, 0.0f, world_last_x);
+            float candidate;
+            if (lo > hi) {
+                float tmp = lo;
+                lo = hi;
+                hi = tmp;
+            }
+            candidate = e->x + e->dir * 0.55f;
+            if (candidate >= hi) {
+                e->x = hi;
+                e->dir = -1;
+            } else if (candidate <= lo) {
+                e->x = lo;
+                e->dir = 1;
+            } else {
+                e->x = candidate;
+            }
+        } else {
+            e->x += e->dir * 0.55f;
+            if (e->x > e->max_x || e->x < e->min_x) e->dir = -e->dir;
+        }
         if (overlaps(g->hero.x, g->hero.y, 12, 20, e->x, e->y, 14, 16)) hurt(g);
     }
 }

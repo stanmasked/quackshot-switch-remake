@@ -48,6 +48,12 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 31 checks world-edge collision safety: red plungers cannot
+anchor on *invisible sentinel columns*, while authored last-column
+walls still block shots. CITY TEST enemy patrols clamp the full
+14-pixel hitbox to the world and reflect at exact patrol endpoints.
+Normal prototype semantics remain unchanged. See
+[world-edge regression](docs/REFERENCE_CITY_WORLD_BOUNDS_RU.md).
 Stage 30 snapshots the CITY TEST projectile's color when the fire
 button is pressed, so one-tick deferred appearance cannot change weapon
 under a same-interval toggle. A new long-running CTest exercises enemy
