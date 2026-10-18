@@ -3500,6 +3500,116 @@ static int run_city_sector_time_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 79: read real ARGB8888 pixel bands under the lavender sector
+ * timer. A finished PB of six frames yields full green at checkpoint,
+ * a 15px green strip after three ticks, cyan on equal time, and red
+ * once over PB. Pauses keep identical pixels and quick retries clear
+ * only the LIVE strip without deleting the finished PB.
+ */
+static int run_city_sector_budget_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    uint32_t first=0,last=0,edge=0,outside=0,tie=0,over=0;
+    uint64_t full=0,half=0,matched=0,slower=0,paused=0,unpaused=0;
+    const uint32_t green=UINT32_C(0xff5edd8a);
+    const uint32_t cyan=UINT32_C(0xff70cadd);
+    const uint32_t red=UINT32_C(0xffef606c);
+    const uint32_t dark=UINT32_C(0xff1c2636);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.grounded=1;
+    g.hero.vx=g.hero.vy=0;
+
+    /* A legitimate clear after checkpoint creates the PB of 6. */
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    for(int t=0;t<5;t++)qs_step(&g,in);
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;g.hero.y=188;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_sector_time(&g)!=6)
+        return 0;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    if(qs_city_sector_budget_valid(&g) ||
+       !read_multishot_pixel(renderer,&g,48,12,&first) ||
+       first!=dark)return 0;
+
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!qs_city_sector_budget_valid(&g) ||
+       qs_city_sector_budget_frames(&g)!=6 ||
+       !capture_frame(renderer,&g,&full) ||
+       !read_multishot_pixel(renderer,&g,48,12,&first) ||
+       !read_multishot_pixel(renderer,&g,76,12,&last) ||
+       first!=green || last!=green)
+        return 0;
+    for(int t=0;t<3;t++)qs_step(&g,in);
+    if(qs_city_sector_budget_frames(&g)!=3 ||
+       !capture_frame(renderer,&g,&half) || half==full ||
+       !read_multishot_pixel(renderer,&g,62,12,&edge) ||
+       !read_multishot_pixel(renderer,&g,63,12,&outside) ||
+       edge!=green || outside!=dark) {
+        fprintf(stderr,"CITY_SECTOR_BUDGET_SDL_FAIL: half edge=%08x outside=%08x\n",
+                (unsigned)edge,(unsigned)outside);
+        return 0;
+    }
+    /* Pause freezes both budget and all visible HUD pixels. */
+    in.back=in.change=1;
+    qs_step(&g,in);
+    if(!g.city_paused || qs_city_sector_budget_frames(&g)!=3 ||
+       !capture_frame(renderer,&g,&paused))
+        return 0;
+    in=(QsInput){0};
+    for(int t=0;t<15;t++)qs_step(&g,in);
+    if(qs_city_sector_budget_frames(&g)!=3 ||
+       !capture_frame(renderer,&g,&unpaused) || paused!=unpaused)
+        return 0;
+    in.back=in.change=1;qs_step(&g,in);
+    if(g.city_paused || qs_city_sector_budget_frames(&g)!=3)
+        return 0;
+    in=(QsInput){0};
+    for(int t=0;t<3;t++)qs_step(&g,in);
+    if(qs_city_sector_budget_frames(&g)!=0 ||
+       !capture_frame(renderer,&g,&matched) ||
+       !read_multishot_pixel(renderer,&g,48,12,&tie) || tie!=cyan)
+        return 0;
+    qs_step(&g,in);
+    if(qs_city_sector_budget_frames(&g)!=-1 ||
+       !capture_frame(renderer,&g,&slower) ||
+       !read_multishot_pixel(renderer,&g,76,12,&over) ||
+       over!=red || slower==matched)
+        return 0;
+    in.back=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || qs_city_sector_budget_valid(&g) ||
+       qs_city_best_sector_time(&g)!=6 ||
+       !read_multishot_pixel(renderer,&g,48,12,&first) ||
+       first!=dark)
+        return 0;
+
+    /* Forged counters must not render the strip in the base profile. */
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.city_best_sector_frames=6;
+    legacy.city_checkpoint_active=1;
+    legacy.city_checkpoint_split_frames=1;
+    legacy.city_attempt_frames=4;
+    if(qs_city_sector_budget_valid(&legacy) ||
+       !read_multishot_pixel(renderer,&legacy,48,12,&first) ||
+       first!=dark)
+        return 0;
+    printf("CITY_SECTOR_BUDGET_SDL_PASS: green=%016llx half=%016llx tie=%016llx red=%016llx\n",
+           (unsigned long long)full,(unsigned long long)half,
+           (unsigned long long)matched,(unsigned long long)slower);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -3585,6 +3695,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_crate_priority_sdl_smoke(renderer)) return 1;
     if (!run_city_training_pause_sdl_smoke(renderer)) return 1;
     if (!run_city_sector_time_sdl_smoke(renderer)) return 1;
+    if (!run_city_sector_budget_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
