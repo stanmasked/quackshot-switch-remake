@@ -1259,6 +1259,61 @@ static int run_timer_boundary_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 52: corrupt hearts and facing are recovered before either the
+ * collision pipeline or SDL rasterization. The old frame must retain
+ * its spawn pickup; the following tick may collect it and dispatch a
+ * bounded fresh shot. HUD and item pixels are read from real SDL2.
+ */
+static int run_hero_status_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t item_before=0,item_after=0,heart=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.hearts=INT_MIN;
+    g.hero.facing=INT_MIN;
+    g.hero.grounded=INT_MAX;
+    g.reference_jump_steps=INT_MAX;
+    g.pickups[0].active=1;
+    g.pickups[0].x=36;g.pickups[0].y=189;
+    g.pickups[0].kind=QS_PICKUP_RED;
+    in.fire=1;
+    qs_step(&g,in);
+    if (g.mode!=QS_STAGE || g.hero.hearts!=3 ||
+        g.hero.hurt_frames!=89 || g.hero.x!=40 ||
+        g.hero.facing!=1 || g.reference_jump_steps!=0 ||
+        !g.pickups[0].active || g.red_unlocked ||
+        !g.pending_reference_shot ||
+        !retry_spawn_pixel(renderer,&g,&item_before) ||
+        !read_immunity_heart_pixel(renderer,&g,&heart) ||
+        item_before!=UINT32_C(0xfff44f50) ||
+        heart!=UINT32_C(0xffef606c)) {
+        fprintf(stderr,"HERO_STATUS_SDL_FAIL: retry item=%08x heart=%08x\n",
+                (unsigned)item_before,(unsigned)heart);
+        return 0;
+    }
+    memset(&in,0,sizeof(in));
+    qs_step(&g,in);
+    if (g.pickups[0].active || !g.red_unlocked ||
+        g.hero.hearts!=3 || g.hero.hurt_frames!=88 ||
+        !g.shots[0].active || g.shots[0].vx!=5.5f ||
+        !read_multishot_pixel(renderer,&g,41,191,&heart) ||
+        !retry_spawn_pixel(renderer,&g,&item_after) ||
+        item_before==item_after) {
+        fprintf(stderr,"HERO_STATUS_SDL_FAIL: reentry item=%08x shot=%d\n",
+                (unsigned)item_after,g.shots[0].active);
+        return 0;
+    }
+    printf("HERO_STATUS_SDL_PASS: delayed item=%08x next=%08x shot_vx=%.1f\n",
+           (unsigned)item_before,(unsigned)item_after,(double)g.shots[0].vx);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1322,6 +1377,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_pickup_numeric_sdl_smoke(renderer)) return 1;
     if (!run_frame_arbitration_sdl_smoke(renderer)) return 1;
     if (!run_timer_boundary_sdl_smoke(renderer)) return 1;
+    if (!run_hero_status_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
