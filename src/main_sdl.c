@@ -241,6 +241,18 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                       4, 4, color(255, 242, 190));
         }
     }
+    /* Stage 72: a small original-free barricade can be shot away,
+     * or bypassed by jumping. It is only present in CITY TEST. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0 && game->city_crate_active == 1) {
+        int x=(int)QS_CITY_CRATE_X-cam;
+        rectangle(renderer,x,(int)QS_CITY_CRATE_Y,16,16,
+                  color(182,96,89));
+        rectangle(renderer,x+3,(int)QS_CITY_CRATE_Y+3,10,10,
+                  color(230,157,104));
+        rectangle(renderer,x+7,(int)QS_CITY_CRATE_Y+3,2,10,
+                  color(182,96,89));
+    }
     for (i = 0; i < QS_MAX_ENEMIES; ++i) {
         const QsEnemy *e = &game->enemies[i];
         if (e->active)
