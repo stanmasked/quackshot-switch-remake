@@ -224,153 +224,115 @@ static int city_first_wall_face(const QsGame *g, const QsShot *s,
  * No candidate -> large key; ties use immutable geometric shot fields,
  * with array index as a last resort for physically identical shots.
  */
-static float city_shot_arrival_key(const QsGame *g, const QsShot *s) {
-    float closest = 1000000.0f;
-    float speed = absolute(s->vx);
-    int j;
-    if (!s->active || s->attached || s->frames <= 1) return closest;
-    for (j = 0; j < QS_MAX_ENEMIES; ++j) {
-        const QsEnemy *e = &g->enemies[j];
-        float distance, time;
-        if (!e->active || s->y + 4 <= e->y || s->y >= e->y + 16)
-            continue;
-        if (s->vx >= 0) {
-            if (s->x >= e->x + 14) continue;
-            distance = e->x - (s->x + 7);
-        } else {
-            if (s->x + 7 <= e->x) continue;
-            distance = s->x - (e->x + 14);
-        }
-        if (distance < 0) distance = 0;
-        if (speed <= 0.000001f && distance > 0) continue;
-        time = speed > 0.000001f ? distance / speed : 0;
-        if (time < closest) closest = time;
-    }
-    return closest;
-}
-
+/*
+ * CITY TEST: use a common fractional-frame timeline for ALL
+ * projectile substeps. Sorting whole projectiles by their first
+ * anticipated enemy (old approach) is insufficient when a projectile
+ * passes through an already-hit actor and then meets another actor
+ * LATER than a different shot. Every collision must observe earlier
+ * contacts, regardless of array-slot assignment.
+ *
+ * The old one-pixel-per-substep sweep, wall/face arbitration and
+ * lifetime semantics are retained. Tied substeps use the original
+ * array index only to pick evaluation order; hit_at_time admits all
+ * impacts at the same fractional instant, including opposing shots.
+ */
 static void update_shots_reference_city(QsGame *g) {
-    int i, j, k;
-    int order[QS_MAX_SHOTS], used[QS_MAX_SHOTS] = {0};
+    int i, j;
+    int slices[QS_MAX_SHOTS] = {0};
+    int progressed[QS_MAX_SHOTS] = {0};
+    float delta[QS_MAX_SHOTS] = {0};
     float hit_at_time[QS_MAX_ENEMIES];
-    /*
-     * Simultaneous arrivals must remain simultaneous even if the two
-     * shots occupy different array slots. Track the first substep
-     * collision instant in [0,1], not just "ever hit this tick".
-     * A strictly later shot may pass through the already-hit actor;
-     * an arrival at the SAME instant is consumed as an independent
-     * impact. Tolerance compensates float division representation.
-     */
     for (j=0; j<QS_MAX_ENEMIES; ++j) hit_at_time[j] = -1.0f;
-    /* Build an order independent of array-slot assignment. */
-    for (i = 0; i < QS_MAX_SHOTS; ++i) {
-        int best = -1;
-        float best_key = 0;
-        for (j = 0; j < QS_MAX_SHOTS; ++j) {
-            const QsShot *s = &g->shots[j];
-            float key;
-            if (used[j]) continue;
-            key = city_shot_arrival_key(g, s);
-            if (best < 0 || key < best_key ||
-                (key == best_key &&
-                 (s->x < g->shots[best].x ||
-                  (s->x == g->shots[best].x &&
-                   (s->y < g->shots[best].y ||
-                    (s->y == g->shots[best].y &&
-                     (s->vx < g->shots[best].vx ||
-                      (s->vx == g->shots[best].vx &&
-                       (s->red < g->shots[best].red ||
-                        (s->red == g->shots[best].red && j < best)))))))))) {
-                best = j;
-                best_key = key;
+    for (i=0; i<QS_MAX_SHOTS; ++i) {
+        QsShot *s=&g->shots[i];
+        if (!s->active) continue;
+        if (--s->frames <= 0) { s->active=0; continue; }
+        if (s->attached) continue;
+        slices[i]=(int)ceilf(absolute(s->vx));
+        if (slices[i] < 1) slices[i]=1;
+        delta[i]=s->vx/slices[i];
+    }
+    for (;;) {
+        int selected=-1;
+        float next_time=0;
+        QsShot *s;
+        float step, arrival;
+        int target=-1, face_col=0, wall_hit;
+        float enemy_face=0, wall_face=0;
+        /*
+         * Advance exactly one substep of the chronologically next
+         * projectile. Completed, attached and expired projectiles
+         * never reserve the timeline.
+         */
+        for (i=0; i<QS_MAX_SHOTS; ++i) {
+            float t;
+            if (!g->shots[i].active || g->shots[i].attached ||
+                !slices[i] || progressed[i] >= slices[i])
+                continue;
+            t=(float)(progressed[i]+1)/(float)slices[i];
+            if (selected < 0 || t < next_time) {
+                selected=i;
+                next_time=t;
             }
         }
-        order[i] = best;
-        used[best] = 1;
-    }
-    for (i = 0; i < QS_MAX_SHOTS; ++i) {
-        QsShot *s = &g->shots[order[i]];
-        float step;
-        int slices;
-        if (!s->active) continue;
-        if (--s->frames <= 0) { s->active = 0; continue; }
-        if (s->attached) continue;
-        slices = (int)ceilf(absolute(s->vx));
-        if (slices < 1) slices = 1;
-        step = s->vx / slices;
-        for (k = 0; k < slices; ++k) {
-            int target = -1, face_col = 0, wall_hit;
-            float enemy_face = 0, wall_face = 0;
-            float arrival = (float)(k + 1) / (float)slices;
-            s->x += step;
-            /* Discard an entire projectile when any part leaves the
-             * synthetic world. qs_solid() correctly treats out-of-range
-             * columns as walls for hero physics, but those INVISIBLE
-             * sentinels must never create red anchor platforms. */
-            if (s->x < 0 || s->x + 7.0f > QS_COLUMNS * QS_TILE) {
-                s->active = 0;
-                break;
+        if (selected < 0) break;
+        s=&g->shots[selected];
+        step=delta[selected];
+        ++progressed[selected];
+        arrival=(float)progressed[selected]/(float)slices[selected];
+        s->x += step;
+        if (s->x < 0 || s->x + 7.0f > QS_COLUMNS * QS_TILE) {
+            s->active=0;
+            continue;
+        }
+        wall_hit=city_first_wall_face(g,s,step,&wall_face,&face_col);
+        for (j=0; j<QS_MAX_ENEMIES; ++j) {
+            const QsEnemy *e=&g->enemies[j];
+            float candidate;
+            if (!e->active ||
+                (hit_at_time[j] >= 0.0f &&
+                 arrival > hit_at_time[j]+0.00001f) ||
+                !overlaps(s->x,s->y,7,4,e->x,e->y,14,16))
+                continue;
+            candidate=step >= 0 ? e->x : e->x+14;
+            if (target < 0 || (step >= 0 ? candidate < enemy_face :
+                                           candidate > enemy_face)) {
+                target=j;
+                enemy_face=candidate;
             }
-            wall_hit = city_first_wall_face(g, s, step, &wall_face, &face_col);
-            for (j = 0; j < QS_MAX_ENEMIES; ++j) {
-                const QsEnemy *e = &g->enemies[j];
-                float candidate;
+        }
+        /* Original geometry semantics: the near face wins, and walls
+         * win exact face ties. A red shot anchors on a real wall only. */
+        if (wall_hit && (target < 0 ||
+            (step >= 0 ? wall_face <= enemy_face :
+                         wall_face >= enemy_face))) {
+            if (s->red) {
+                s->x=step >= 0 ? wall_face-8.0f : wall_face;
+                s->attached=1;
+                s->frames=230;
+            } else {
+                s->active=0;
+            }
+            continue;
+        }
+        if (target >= 0) {
+            for (j=0; j<QS_MAX_ENEMIES; ++j) {
+                QsEnemy *e=&g->enemies[j];
+                float face;
                 if (!e->active ||
                     (hit_at_time[j] >= 0.0f &&
-                     arrival > hit_at_time[j] + 0.00001f) ||
-                    !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
+                     arrival > hit_at_time[j]+0.00001f) ||
+                    !overlaps(s->x,s->y,7,4,e->x,e->y,14,16))
                     continue;
-                candidate = step >= 0 ? e->x : e->x + 14;
-                if (target < 0 || (step >= 0 ? candidate < enemy_face :
-                                               candidate > enemy_face)) {
-                    target = j;
-                    enemy_face = candidate;
+                face=step >= 0 ? e->x : e->x+14;
+                if (absolute(face-enemy_face) <= 0.0001f) {
+                    e->stunned_frames=180;
+                    if (hit_at_time[j] < 0.0f || arrival < hit_at_time[j])
+                        hit_at_time[j]=arrival;
                 }
             }
-            /* The physically nearer leading face takes precedence.
-             * Solid walls win an exactly co-planar tie, preventing
-             * shots from reaching actors embedded at the wall face. */
-            if (wall_hit && (target < 0 ||
-                (step >= 0 ? wall_face <= enemy_face :
-                             wall_face >= enemy_face))) {
-                if (s->red) {
-                    s->x = step >= 0 ? wall_face - 8.0f : wall_face;
-                    s->attached = 1;
-                    s->frames = 230;
-                } else {
-                    s->active = 0;
-                }
-                break;
-            }
-            if (target >= 0) {
-                /*
-                 * Several synthetic enemy hitboxes may share the
-                 * SAME nearest leading face (including partial vertical
-                 * overlaps). Stun every actor on that co-planar face,
-                 * rather than just the first array slot. Strictly
-                 * farther faces must remain untouched; the earlier
-                 * wall arbitration still wins exact wall/enemy ties.
-                 * Limit tolerance to sub-pixel float representation.
-                 */
-                for (j = 0; j < QS_MAX_ENEMIES; ++j) {
-                    QsEnemy *e = &g->enemies[j];
-                    float face;
-                    if (!e->active ||
-                        (hit_at_time[j] >= 0.0f &&
-                         arrival > hit_at_time[j] + 0.00001f) ||
-                        !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
-                        continue;
-                    face = step >= 0 ? e->x : e->x + 14;
-                    if (absolute(face - enemy_face) <= 0.0001f) {
-                        e->stunned_frames = 180;
-                        if (hit_at_time[j] < 0.0f ||
-                            arrival < hit_at_time[j])
-                            hit_at_time[j] = arrival;
-                    }
-                }
-                s->active = 0;
-                break;
-            }
+            s->active=0;
         }
     }
 }

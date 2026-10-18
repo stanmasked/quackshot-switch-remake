@@ -52,6 +52,15 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 43 advances ALL opt-in CITY TEST projectiles on one
+fractional-frame timeline instead of sorting WHOLE projectiles by
+their first predicted contact. This prevents a shot from consuming
+a far enemy at a later time before another shot can hit that enemy
+earlier, including when the first shot passed through a different
+already-hit enemy. Real walls still stop both directions and
+simultaneous enemy ties still consume both projectiles. New native
+regressions and SDL2 pixel comparison verify the corrected event
+order. See [global collision timeline](docs/REFERENCE_CITY_GLOBAL_TIMELINE_RU.md).
 Stage 42 distinguishes exact same-time projectile arrivals at a shared
 enemy from strictly later projectiles in the opt-in CITY TEST. Opposing
 shots arriving at the same fractional simulation instant are both

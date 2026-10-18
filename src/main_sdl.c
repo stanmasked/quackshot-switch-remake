@@ -874,6 +874,56 @@ static int run_opposing_ties_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Three shots: one hits the far-side foe early, a returning shot
+ * passes through that foe and reaches the near-side foe LATE, while
+ * a third shot reaches the near-side foe EARLIER. Both foes must be
+ * blue in the actual SDL frame and the late returning shot must remain
+ * active beyond the early-hit foe. This distinguishes global temporal
+ * ordering from the old first-contact whole-shot ordering.
+ */
+static int run_global_timeline_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t first=0, second=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=40;g.hero.y=188;
+    g.enemies[0].active=g.enemies[1].active=1;
+    g.enemies[0].x=135;g.enemies[0].y=184;
+    g.enemies[1].x=180;g.enemies[1].y=184;
+    for(int i=0;i<2;i++) {
+        g.enemies[i].min_x=g.enemies[i].max_x=g.enemies[i].x;
+        g.enemies[i].dir=1;
+    }
+    g.shots[0].active=1;g.shots[0].frames=65;
+    g.shots[0].x=196;g.shots[0].y=194;g.shots[0].vx=-40;
+    g.shots[1].active=1;g.shots[1].frames=65;
+    g.shots[1].x=209;g.shots[1].y=194;g.shots[1].vx=-100;
+    g.shots[2].active=1;g.shots[2].frames=65;
+    g.shots[2].x=110;g.shots[2].y=194;g.shots[2].vx=70;
+    qs_step(&g,idle);
+    if (g.enemies[0].stunned_frames!=179 ||
+        g.enemies[1].stunned_frames!=179 ||
+        g.shots[0].active || g.shots[2].active ||
+        !g.shots[1].active || g.shots[1].x!=109 ||
+        !read_multishot_pixel(renderer,&g,138,186,&first) ||
+        !read_multishot_pixel(renderer,&g,183,186,&second) ||
+        first!=UINT32_C(0xff70a7dd) ||
+        second!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"GLOBAL_TIMELINE_SDL_FAIL near=%08x far=%08x pass=%d x=%.2f\n",
+                (unsigned)first,(unsigned)second,
+                g.shots[1].active,(double)g.shots[1].x);
+        return 0;
+    }
+    printf("GLOBAL_TIMELINE_SDL_PASS: near=%08x far=%08x late-shot=%.0f\n",
+           (unsigned)first,(unsigned)second,(double)g.shots[1].x);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -929,6 +979,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_coplanar_impacts_sdl_smoke(renderer)) return 1;
     if (!run_multishot_priority_sdl_smoke(renderer)) return 1;
     if (!run_opposing_ties_sdl_smoke(renderer)) return 1;
+    if (!run_global_timeline_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

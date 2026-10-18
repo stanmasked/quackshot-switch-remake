@@ -48,6 +48,7 @@ jobs:
           grep -q '^COPLANAR_IMPACTS_SDL_PASS:' smoke.log
           grep -q '^MULTISHOT_PRIORITY_SDL_PASS:' smoke.log
           grep -q '^OPPOSING_TIES_SDL_PASS:' smoke.log
+          grep -q '^GLOBAL_TIMELINE_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
