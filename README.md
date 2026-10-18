@@ -68,6 +68,13 @@ begins. A later weaker attempt cannot lower the record. Exact SDL2
 digit-raster tests check both counters and normal prototype isolation.
 See [session personal best](docs/REFERENCE_CITY_PERSONAL_BEST_RU.md).
 
+Stages 64–65 also show that record directly on the CITY TEST map
+row. It remains visible after visiting normal RUINS/ROOFTOP stages,
+even when they switch the active physics profile back to the base
+prototype. A dedicated CTest and SDL route regression cover the
+cross-stage transition. See
+[map record visibility](docs/REFERENCE_CITY_CROSS_STAGE_BEST_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
