@@ -27,6 +27,26 @@ const char *qs_stage_name(int stage) {
     return (stage >= 0 && stage < QS_STAGE_COUNT) ? names[stage] : "UNKNOWN";
 }
 
+/*
+ * Stage 62: the optional HUD displays the arithmetic value of the
+ * two earned tokens (0000 / 0500 / 1000) rather than requiring players
+ * to interpret gold stamps. Compute from the authoritative mask so
+ * retries and rendering cannot award or duplicate points. Invalid
+ * imported state, a map screen or the ordinary prototype gives zero.
+ */
+int qs_city_bonus_score(const QsGame *g) {
+    int mask;
+    if (!g || g->mode != QS_STAGE ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0)
+        return 0;
+    mask = g->city_bonus_mask;
+    if (mask < 0 || mask > 3)
+        return 0;
+    return ((mask & 1) ? QS_CITY_BONUS_VALUE : 0) +
+           ((mask & 2) ? QS_CITY_BONUS_VALUE : 0);
+}
+
 int qs_solid(const QsGame *g, int col, int row) {
     if (col < 0 || col >= QS_COLUMNS || row < 0) return 1;
     if (row >= QS_ROWS) return 0; /* Pits have no invisible floor. */
