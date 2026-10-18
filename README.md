@@ -153,6 +153,14 @@ checkpoint-split PBs. Abandoning, quick retries, and legacy stages
 cannot fabricate sector records. See
 [second-sector timing](docs/REFERENCE_CITY_SECOND_SECTOR_RU.md).
 
+Stage 79 adds a compact **sector personal-best frame budget bar**.
+After a real completed second-sector record exists, green indicates
+frames still remaining, cyan indicates a tie, and coral indicates
+the elapsed second sector has surpassed that record. The budget
+is calculated without extra mutable state; pause freezes it and
+retries clear the live indicator. See
+[second-sector budget feedback](docs/REFERENCE_CITY_SECTOR_BUDGET_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
