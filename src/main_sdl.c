@@ -169,6 +169,25 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
             score/=10;
         }
     }
+    /*
+     * Stage 79: independent second-sector budget strip under the
+     * lavender 4-digit counter. It starts full green at checkpoint,
+     * shrinks as elapsed sector ticks consume the completed PB,
+     * turns cyan exactly on tie, and coral once slower than PB.
+     * No earned completed-sector PB -> no displayed comparison.
+     */
+    if (qs_city_sector_budget_valid(game)) {
+        int remaining=qs_city_sector_budget_frames(game);
+        int best=qs_city_best_sector_time(game);
+        if (remaining > 0) {
+            int fill=1+(28*remaining)/best;
+            rectangle(renderer,48,12,fill,2,color(94,221,138));
+        } else if (remaining == 0) {
+            rectangle(renderer,48,12,29,2,color(112,202,221));
+        } else {
+            rectangle(renderer,48,12,29,2,color(239,96,108));
+        }
+    }
     /* Stage 70: show signed comparison with the PREVIOUS split PB.
      * Amber is the actual split, green is quicker, coral is slower,
      * cyan is a tie. No number on the session's first-ever split. */
