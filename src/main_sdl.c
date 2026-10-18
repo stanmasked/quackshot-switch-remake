@@ -2098,8 +2098,9 @@ static int run_bonus_set_heal_sdl_smoke(SDL_Renderer *renderer) {
  * This detects wrong digits, misplaced segments, overdraw and gaps.
  * The normal prototype must leave this entire HUD region untouched.
  */
-static int verify_bonus_score_pixels(SDL_Renderer *renderer,
-                                      const QsGame *g,const char *digits) {
+static int verify_city_digits_pixels(SDL_Renderer *renderer,
+                                     const QsGame *g,const char *digits,
+                                     int origin,uint32_t ink) {
     static const char *zero[7]={
         ".###.","#...#","#...#",".....",
         "#...#","#...#",".###."
@@ -2113,7 +2114,7 @@ static int verify_bonus_score_pixels(SDL_Renderer *renderer,
         "....#","....#",".###."
     };
     uint32_t pixels[7][29];
-    SDL_Rect area={245,4,29,7};
+    SDL_Rect area={origin,4,29,7};
     int row,col;
     if(SDL_SetRenderDrawColor(renderer,0,0,0,255)!=0 ||
        SDL_RenderClear(renderer)!=0) return 0;
@@ -2131,7 +2132,7 @@ static int verify_bonus_score_pixels(SDL_Renderer *renderer,
             light=shape[local]=='#';
         }
         {
-            uint32_t expected=light ? UINT32_C(0xffffe16c) :
+            uint32_t expected=light ? ink :
                                       UINT32_C(0xff1c2636);
             if(pixels[row][col]!=expected) {
                 fprintf(stderr,"BONUS_SCORE_SDL_FAIL: row=%d col=%d digit=%d expected=%08x actual=%08x\n",
@@ -2142,6 +2143,12 @@ static int verify_bonus_score_pixels(SDL_Renderer *renderer,
         }
     }
     return 1;
+}
+
+static int verify_bonus_score_pixels(SDL_Renderer *renderer,
+                                     const QsGame *g,const char *digits) {
+    return verify_city_digits_pixels(renderer,g,digits,245,
+                                     UINT32_C(0xffffe16c));
 }
 
 static int run_bonus_score_sdl_smoke(SDL_Renderer *renderer) {
