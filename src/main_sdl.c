@@ -164,7 +164,7 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
     if (qs_city_checkpoint_split_time(game)>0) {
         score=qs_city_sector_time(game);
         for(place=3;place>=0;--place) {
-            render_bonus_score_digit(renderer,42+8*place,4,score%10,
+            render_bonus_score_digit(renderer,48+8*place,4,score%10,
                                      color(183,160,255));
             score/=10;
         }
@@ -3412,8 +3412,8 @@ static int run_city_sector_time_sdl_smoke(SDL_Renderer *renderer) {
     g.hero.x=100;g.hero.y=188;
     g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
     if(qs_city_sector_time(&g)!=0 || qs_city_best_sector_time(&g)!=0 ||
-       !verify_city_digits_pixels(renderer,&g,NULL,42,violet) ||
-       !read_multishot_pixel(renderer,&g,43,4,&dark) ||
+       !verify_city_digits_pixels(renderer,&g,NULL,48,violet) ||
+       !read_multishot_pixel(renderer,&g,49,4,&dark) ||
        dark!=UINT32_C(0xff1c2636))
         return 0;
     g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
@@ -3421,12 +3421,12 @@ static int run_city_sector_time_sdl_smoke(SDL_Renderer *renderer) {
     qs_step(&g,in);
     if(g.city_checkpoint_split_frames!=1 ||
        qs_city_sector_time(&g)!=0 ||
-       !verify_city_digits_pixels(renderer,&g,"0000",42,violet))
+       !verify_city_digits_pixels(renderer,&g,"0000",48,violet))
         return 0;
     for(int t=0;t<5;t++)qs_step(&g,in);
     if(qs_city_sector_time(&g)!=5 ||
-       !verify_city_digits_pixels(renderer,&g,"0005",42,violet) ||
-       !read_multishot_pixel(renderer,&g,43,4,&live) || live!=violet)
+       !verify_city_digits_pixels(renderer,&g,"0005",48,violet) ||
+       !read_multishot_pixel(renderer,&g,49,4,&live) || live!=violet)
         return 0;
     g.hero.x=(QS_COLUMNS-4)*QS_TILE+1;g.hero.y=188;
     qs_step(&g,in);
@@ -3473,7 +3473,7 @@ static int run_city_sector_time_sdl_smoke(SDL_Renderer *renderer) {
     legacy.city_best_sector_frames=1;
     if(qs_city_sector_time(&legacy)!=0 ||
        qs_city_best_sector_time(&legacy)!=0 ||
-       !verify_city_digits_pixels(renderer,&legacy,NULL,42,violet))
+       !verify_city_digits_pixels(renderer,&legacy,NULL,48,violet))
         return 0;
     printf("CITY_SECTOR_SDL_PASS: first=%016llx no-record=%016llx improved=%016llx live=%08x\n",
            (unsigned long long)with_pb,(unsigned long long)without_pb,
