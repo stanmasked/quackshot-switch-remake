@@ -136,6 +136,19 @@ static void clear_city_transients(QsGame *g) {
     g->reference_jump_steps = 0;
 }
 
+/* Both manual and automatic CITY TEST exits must leave a consistent
+ * MAP state. Camera values otherwise stay on the previous stage even
+ * though the rendered map no longer uses them. Progress and unlocks
+ * belong to the game session and are intentionally left untouched. */
+static void city_leave_to_map(QsGame *g) {
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+        clear_city_transients(g);
+        g->camera_x = 0;
+        g->render_camera_x = 0;
+    }
+    g->mode = QS_MAP;
+}
+
 static void respawn(QsGame *g) {
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -530,8 +543,7 @@ void qs_step(QsGame *g, QsInput input) {
         }
     } else {
         if (edge(input.back, g->previous.back)) {
-            clear_city_transients(g);
-            g->mode = QS_MAP;
+            city_leave_to_map(g);
         } else {
             if (edge(input.change, g->previous.change) && g->red_unlocked)
                 g->weapon = g->weapon == QS_YELLOW ? QS_RED : QS_YELLOW;
@@ -591,7 +603,7 @@ void qs_step(QsGame *g, QsInput input) {
             }
             if (g->hero.x >= (QS_COLUMNS - 4) * QS_TILE) {
                 g->cleared[g->stage] = 1;
-                g->mode = QS_MAP;
+                city_leave_to_map(g);
             }
         }
     }

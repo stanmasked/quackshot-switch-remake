@@ -276,6 +276,74 @@ cleanup:
 }
 #endif
 
+/*
+ * Pixels, not merely simulation fields: completing CITY TEST must
+ * display a newly marked map, then re-enter at the same raster as a
+ * fresh first-city stage with equivalent persistent unlocks.
+ * Entirely synthetic shapes; no original game assets.
+ */
+static int run_progress_map_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame game, fresh, expected;
+    QsInput select = {0}, none = {0};
+    uint64_t map_before, map_after, expected_map, stage_reentry, fresh_stage;
+    qs_init(&game);
+    game.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    game.red_unlocked = 1;
+    game.weapon = QS_RED;
+    qs_begin_stage(&game, 0);
+    expected = game;
+    expected.mode = QS_MAP;
+    if (!capture_frame(renderer, &expected, &map_before)) return 0;
+
+    game.camera_x = 820;
+    game.render_camera_x = 806;
+    game.hero.x = (QS_COLUMNS - 4) * QS_TILE + 0.5f;
+    game.hero.y = 188;
+    game.shots[0].active = game.shots[0].attached = 1;
+    game.shots[0].red = 1;
+    game.shots[0].frames = 230;
+    game.shots[0].x = 500;
+    game.shots[0].y = 160;
+    game.pending_reference_shot = game.pending_reference_red = 1;
+    qs_step(&game, none);
+    if (game.mode != QS_MAP || !game.cleared[0] ||
+        game.shots[0].active || game.pending_reference_shot ||
+        game.camera_x != 0 || game.render_camera_x != 0) {
+        fprintf(stderr, "PROGRESS_MAP_SDL_FAIL: completed stage leaked transient data\n");
+        return 0;
+    }
+    expected.cleared[0] = 1;
+    if (!capture_frame(renderer, &game, &map_after) ||
+        !capture_frame(renderer, &expected, &expected_map) ||
+        map_before == map_after || map_after != expected_map) {
+        fprintf(stderr, "PROGRESS_MAP_SDL_FAIL: completed map raster disagrees\n");
+        return 0;
+    }
+    select.select = 1;
+    select.dash = 1;
+    qs_step(&game, select);
+    qs_init(&fresh);
+    fresh.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    fresh.red_unlocked = 1;
+    fresh.weapon = QS_RED;
+    fresh.cleared[0] = 1;
+    qs_begin_stage(&fresh, 0);
+    if (game.mode != QS_STAGE || game.stage != 0 ||
+        game.camera_x != 0 || game.render_camera_x != 0 ||
+        game.pending_reference_shot ||
+        !capture_frame(renderer, &game, &stage_reentry) ||
+        !capture_frame(renderer, &fresh, &fresh_stage) ||
+        stage_reentry != fresh_stage) {
+        fprintf(stderr, "PROGRESS_MAP_SDL_FAIL: reentry raster differs from fresh stage\n");
+        return 0;
+    }
+    printf("PROGRESS_MAP_SDL_PASS before=%016llx completed=%016llx stage=%016llx\n",
+           (unsigned long long)map_before,
+           (unsigned long long)map_after,
+           (unsigned long long)stage_reentry);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -321,6 +389,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
             }
         }
     }
+    if (!run_progress_map_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

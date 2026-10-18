@@ -52,6 +52,11 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 33 unifies manual and completed CITY TEST exits: cleared
+milestones and unlocked ammo persist, while transient shots and camera
+history are cleared before returning to the map. A new pixel-level SDL
+smoke compares the drawn completed-stage marker and verifies fresh stage
+presentation after re-entry. See [stage progress and raster regression](docs/REFERENCE_CITY_PROGRESS_MAP_RU.md).
 Stage 32 isolates CITY TEST retries from previous lives: pit and
 combat respawns clear active plungers, attached red platforms, queued
 one-tick shots and camera history without removing unlocks or stage
