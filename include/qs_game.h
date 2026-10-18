@@ -65,6 +65,7 @@ void qs_begin_stage(QsGame *game, int stage);
 void qs_step(QsGame *game, QsInput input);
 int qs_solid(const QsGame *game, int col, int row);
 const char *qs_stage_name(int stage);
+int qs_city_bonus_score(const QsGame *game); /* optional practice score, max 1000 */
 
 #ifdef __cplusplus
 }
