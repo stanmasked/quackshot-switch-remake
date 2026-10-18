@@ -1697,7 +1697,10 @@ static int run_scene_recovery_sdl_smoke(SDL_Renderer *renderer) {
     in.select=in.dash=1;
     qs_step(&g,in);
     qs_init(&reference);
+    reference.physics_profile=QS_PHYSICS_REFERENCE_CITY;
     reference.cleared[0]=1;
+    /* Corruption recovers to the opt-in city map, not the ordinary
+     * prototype selector; preserve the identical zero-valued HUD. */
     if(g.mode!=QS_MAP || g.stage!=0 || g.selected_stage!=0 ||
        g.cleared[0]!=1 || g.cleared[1] || g.cleared[2] ||
        g.camera_x!=0 || g.render_camera_x!=0 ||
