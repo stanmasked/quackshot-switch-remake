@@ -12,11 +12,29 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Portable C99 simulation (60 fixed steps/second, deterministic for equal inputs).
 - Test collision, jumps, pits, camera, basic enemy behavior, yellow and red plungers.
 - SDL2 window/gamepad demonstration using **only geometry**.
-- 30 executable CTest groups, checked with GCC and Clang in Debug and Release, including exact CITY TEST timing and numeric-safety regressions.
+- CTest suites checked with GCC and Clang in Debug and Release, including exact CITY TEST timing and numeric-safety regressions.
 - **Optional city-reference physics envelope**, fitted to numeric observations from privately emulated original Mega Drive gameplay. Default prototype movement is unchanged.
 - Nintendo Switch homebrew Makefile; NRO0/ASET/NACP cross-build and artifact verified in CI (not runtime-tested on a console).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
 - Independent original-ROM metadata inspector lives in PR #1.
+
+## Recent CITY TEST safeguards (stages 50–55)
+
+The opt-in research stage now checks the order of damage, item awards and
+respawns, limits damaged immunity/stun timers and player state, retires bad
+red anchors before movement, verifies one-tick projectile color latching,
+and recovers invalid map selections/completion flags before navigation.
+
+These remain **synthetic mechanics**, not recovered original game code.
+See the individual validation notes:
+[frame order](docs/REFERENCE_CITY_FRAME_ARBITRATION_RU.md),
+[immunity/stun](docs/REFERENCE_CITY_IMMUNITY_TIMER_BOUNDS_RU.md),
+[hero status](docs/REFERENCE_CITY_HERO_STATUS_INTEGRITY_RU.md),
+[pre-move shot guards](docs/REFERENCE_CITY_PRE_MOVE_SHOT_GUARD_RU.md),
+[weapon queue](docs/REFERENCE_CITY_WEAPON_QUEUE_INTEGRITY_RU.md), and
+[map integrity](docs/REFERENCE_CITY_MAP_INTEGRITY_RU.md).
+Do not treat uncompleted GitHub Actions as verified; the status of a
+given revision is defined by its commit-specific workflow checks.
 
 ## Portable tests
 
