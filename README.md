@@ -52,6 +52,12 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 38 prevents CITY TEST pickups from triggering in the SAME tick
+as a remote lethal hit or a pit retry. Spawn pickups work on the next
+simulation tick; hurt-frame timing, finishing and persistent progress
+remain unchanged. The original prototype keeps the older event order.
+New CTests and an SDL pixel sample verify the retry boundary. See
+[retry pickup boundary](docs/REFERENCE_CITY_RETRY_PICKUP_BOUNDARY_RU.md).
 Stage 37 resolves the finish boundary crossed DURING a CITY TEST
 simulation tick: overlapping exit pickups are applied before finishing,
 while enemy contact after crossing no longer causes a fatal respawn

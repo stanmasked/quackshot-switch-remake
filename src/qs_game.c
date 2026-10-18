@@ -306,7 +306,7 @@ static void update_shots(QsGame *g) {
     }
 }
 
-static void update_enemies(QsGame *g) {
+static int update_enemies(QsGame *g) {
     int i;
     for (i = 0; i < QS_MAX_ENEMIES; i++) {
         QsEnemy *e = &g->enemies[i];
@@ -342,8 +342,15 @@ static void update_enemies(QsGame *g) {
             e->x += e->dir * 0.55f;
             if (e->x > e->max_x || e->x < e->min_x) e->dir = -e->dir;
         }
-        if (overlaps(g->hero.x, g->hero.y, 12, 20, e->x, e->y, 14, 16)) hurt(g);
+        if (overlaps(g->hero.x, g->hero.y, 12, 20, e->x, e->y, 14, 16)) {
+            int fatal_city = g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                             g->stage == 0 && g->hero.hurt_frames == 0 &&
+                             g->hero.hearts <= 1;
+            hurt(g);
+            if (fatal_city) return 1;
+        }
     }
+    return 0;
 }
 
 static void update_pickups(QsGame *g) {
@@ -424,7 +431,8 @@ static void retire_city_expiring_anchors(QsGame *g) {
     }
 }
 
-static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
+/* Returns 1 if a CITY TEST pit forces a new life this tick. */
+static int move_hero(QsGame *g, QsInput in, int jump_pressed) {
     QsPlayer *h = &g->hero;
     float dx = 0, dy, segment, trial;
     int i, slices;
@@ -522,7 +530,13 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     }
     if (h->grounded && g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
         g->reference_jump_steps = 0;
-    if (h->y > QS_VIEW_H + 22) respawn(g);
+    if (h->y > QS_VIEW_H + 22) {
+        int city_retry = g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                         g->stage == 0;
+        respawn(g);
+        return city_retry;
+    }
+    return 0;
 }
 
 void qs_step(QsGame *g, QsInput input) {
@@ -598,7 +612,13 @@ void qs_step(QsGame *g, QsInput input) {
                 if (fire_due) shoot_as(g, fire_due_red);
             }
             retire_city_expiring_anchors(g);
-            move_hero(g, input, edge(input.jump, g->previous.jump));
+            int pit_retry = move_hero(g, input,
+                                      edge(input.jump, g->previous.jump));
+            if (pit_retry) {
+                /* Retain 90 -> 89 retry immunity, but do not advance
+                 * old-life enemies or collect new-spawn pickups yet. */
+                if (g->hero.hurt_frames) --g->hero.hurt_frames;
+            } else {
             /*
              * CITY TEST: reaching the exit during movement is a
              * committed finish. Process reachable pickups once (so a
@@ -617,9 +637,13 @@ void qs_step(QsGame *g, QsInput input) {
                 g->cleared[g->stage] = 1;
                 city_leave_to_map(g);
             } else {
+                int lethal_retry;
                 update_shots(g);
-                update_enemies(g);
-                update_pickups(g);
+                lethal_retry = update_enemies(g);
+                /* The death location and new spawn are different
+                 * simulation phases. Do not pick up a spawn item
+                 * on the fatal contact's old-life tick. */
+                if (!lethal_retry) update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
              * the VDP HScroll buffer can trail the gameplay RAM position.
@@ -655,6 +679,7 @@ void qs_step(QsGame *g, QsInput input) {
                 city_leave_to_map(g);
             }
             } /* non-finish path (CITY TEST and standard prototype) */
+            } /* no pit retry at movement time */
         }
     }
     g->frames++;

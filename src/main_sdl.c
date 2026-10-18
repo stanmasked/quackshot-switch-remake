@@ -630,6 +630,49 @@ static int run_exit_interaction_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Read the red spawn item at pixel 37,192: intentionally outside
+ * the hero's 12x20 rectangle despite overlapping its hitbox. */
+static int retry_spawn_pixel(SDL_Renderer *r,const QsGame *g,uint32_t *p) {
+    SDL_Rect at = {37,192,1,1};
+    if(SDL_SetRenderDrawColor(r,0,0,0,255)!=0 || SDL_RenderClear(r)!=0)
+        return 0;
+    render_stage(r,g);
+    return SDL_RenderReadPixels(r,&at,SDL_PIXELFORMAT_ARGB8888,
+                                p,(int)sizeof(*p))==0;
+}
+static int run_retry_pickup_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in = {0};
+    uint32_t first=0,next=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    g.hero.x=100;g.hero.y=188;g.hero.hearts=1;g.hero.hurt_frames=0;
+    g.enemies[0].active=1;
+    g.enemies[0].x=100;g.enemies[0].y=188;
+    g.enemies[0].min_x=g.enemies[0].max_x=100;
+    g.pickups[0].active=1;g.pickups[0].kind=QS_PICKUP_RED;
+    g.pickups[0].x=36;g.pickups[0].y=189;
+    qs_step(&g,in);
+    if(g.hero.x!=40 || g.hero.hurt_frames!=89 ||
+       !g.pickups[0].active || g.red_unlocked ||
+       !retry_spawn_pixel(renderer,&g,&first) ||
+       first!=UINT32_C(0xfff44f50)) {
+        fprintf(stderr,"RETRY_PICKUP_SDL_FAIL: item vanished on death\n");
+        return 0;
+    }
+    qs_step(&g,in);
+    if(g.hero.hurt_frames!=88 || g.pickups[0].active ||
+       !g.red_unlocked || g.weapon!=QS_RED ||
+       !retry_spawn_pixel(renderer,&g,&next) || first==next) {
+        fprintf(stderr,"RETRY_PICKUP_SDL_FAIL: legal next-tick pickup missing\n");
+        return 0;
+    }
+    printf("RETRY_PICKUP_SDL_PASS: death=%08x next=%08x\n",
+           (unsigned)first,(unsigned)next);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -680,6 +723,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_map_chord_sdl_smoke(renderer)) return 1;
     if (!run_finish_chord_sdl_smoke(renderer)) return 1;
     if (!run_exit_interaction_sdl_smoke(renderer)) return 1;
+    if (!run_retry_pickup_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
