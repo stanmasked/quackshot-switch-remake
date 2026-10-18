@@ -197,12 +197,12 @@ static void update_shots_reference_city(QsGame *g) {
 }
 
 
+static void update_shots(QsGame *g) {
+    int i, j;
     if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
         update_shots_reference_city(g);
         return;
     }
-    int i, j;static void update_shots(QsGame *g) {
-    int i, j;
     for (i = 0; i < QS_MAX_SHOTS; i++) {
         QsShot *s = &g->shots[i];
         if (!s->active) continue;
