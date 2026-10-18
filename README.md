@@ -52,6 +52,14 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 42 distinguishes exact same-time projectile arrivals at a shared
+enemy from strictly later projectiles in the opt-in CITY TEST. Opposing
+shots arriving at the same fractional simulation instant are both
+consumed; later shots can still pass a foe hit earlier that tick.
+Wall precedence, co-planar enemy hits, prior-tick stuns, and legacy
+prototype behavior remain unchanged. Native tests plus SDL pixel
+readback verify the outcome. See
+[opposing projectile ties](docs/REFERENCE_CITY_OPPOSING_TIES_RU.md).
 Stage 41 resolves simultaneous projectiles by estimated time to their
 nearest overlapping enemy, independent of shot slots. A foe stunned
 earlier within the SAME tick is transparent to a later plunger, which

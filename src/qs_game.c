@@ -252,7 +252,16 @@ static float city_shot_arrival_key(const QsGame *g, const QsShot *s) {
 static void update_shots_reference_city(QsGame *g) {
     int i, j, k;
     int order[QS_MAX_SHOTS], used[QS_MAX_SHOTS] = {0};
-    unsigned char hit_this_tick[QS_MAX_ENEMIES] = {0};
+    float hit_at_time[QS_MAX_ENEMIES];
+    /*
+     * Simultaneous arrivals must remain simultaneous even if the two
+     * shots occupy different array slots. Track the first substep
+     * collision instant in [0,1], not just "ever hit this tick".
+     * A strictly later shot may pass through the already-hit actor;
+     * an arrival at the SAME instant is consumed as an independent
+     * impact. Tolerance compensates float division representation.
+     */
+    for (j=0; j<QS_MAX_ENEMIES; ++j) hit_at_time[j] = -1.0f;
     /* Build an order independent of array-slot assignment. */
     for (i = 0; i < QS_MAX_SHOTS; ++i) {
         int best = -1;
@@ -292,6 +301,7 @@ static void update_shots_reference_city(QsGame *g) {
         for (k = 0; k < slices; ++k) {
             int target = -1, face_col = 0, wall_hit;
             float enemy_face = 0, wall_face = 0;
+            float arrival = (float)(k + 1) / (float)slices;
             s->x += step;
             /* Discard an entire projectile when any part leaves the
              * synthetic world. qs_solid() correctly treats out-of-range
@@ -305,7 +315,9 @@ static void update_shots_reference_city(QsGame *g) {
             for (j = 0; j < QS_MAX_ENEMIES; ++j) {
                 const QsEnemy *e = &g->enemies[j];
                 float candidate;
-                if (!e->active || hit_this_tick[j] ||
+                if (!e->active ||
+                    (hit_at_time[j] >= 0.0f &&
+                     arrival > hit_at_time[j] + 0.00001f) ||
                     !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
                     continue;
                 candidate = step >= 0 ? e->x : e->x + 14;
@@ -343,13 +355,17 @@ static void update_shots_reference_city(QsGame *g) {
                 for (j = 0; j < QS_MAX_ENEMIES; ++j) {
                     QsEnemy *e = &g->enemies[j];
                     float face;
-                    if (!e->active || hit_this_tick[j] ||
+                    if (!e->active ||
+                        (hit_at_time[j] >= 0.0f &&
+                         arrival > hit_at_time[j] + 0.00001f) ||
                         !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
                         continue;
                     face = step >= 0 ? e->x : e->x + 14;
                     if (absolute(face - enemy_face) <= 0.0001f) {
                         e->stunned_frames = 180;
-                        hit_this_tick[j] = 1;
+                        if (hit_at_time[j] < 0.0f ||
+                            arrival < hit_at_time[j])
+                            hit_at_time[j] = arrival;
                     }
                 }
                 s->active = 0;

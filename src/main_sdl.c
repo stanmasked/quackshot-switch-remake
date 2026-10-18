@@ -835,6 +835,45 @@ static int run_multishot_priority_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Two opposing shots reach the same synthetic enemy at exactly 9/10
+ * of a tick. Both must be consumed, regardless of their array slots.
+ * Read an actual stun-color pixel from the rendered enemy.
+ */
+static int run_opposing_ties_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t enemy_pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=40;g.hero.y=188;
+    g.enemies[0].active=1;
+    g.enemies[0].x=135;g.enemies[0].y=184;
+    g.enemies[0].min_x=g.enemies[0].max_x=135;
+    g.enemies[0].dir=1;
+    g.shots[0].active=1;g.shots[0].frames=65;
+    g.shots[0].x=120;g.shots[0].y=194;g.shots[0].vx=10;
+    g.shots[0].red=0;
+    g.shots[1].active=1;g.shots[1].frames=65;
+    g.shots[1].x=157;g.shots[1].y=194;g.shots[1].vx=-10;
+    g.shots[1].red=1;
+    qs_step(&g,idle);
+    if(g.enemies[0].stunned_frames!=179 ||
+       g.shots[0].active || g.shots[1].active ||
+       !read_multishot_pixel(renderer,&g,138,186,&enemy_pixel) ||
+       enemy_pixel!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"OPPOSING_TIES_SDL_FAIL enemy=%08x shot0=%d shot1=%d\n",
+                (unsigned)enemy_pixel,g.shots[0].active,g.shots[1].active);
+        return 0;
+    }
+    printf("OPPOSING_TIES_SDL_PASS: enemy=%08x both projectiles consumed\n",
+           (unsigned)enemy_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -889,6 +928,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_multi_enemy_immunity_sdl_smoke(renderer)) return 1;
     if (!run_coplanar_impacts_sdl_smoke(renderer)) return 1;
     if (!run_multishot_priority_sdl_smoke(renderer)) return 1;
+    if (!run_opposing_ties_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
