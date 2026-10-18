@@ -187,8 +187,13 @@ static void saturated_clock_never_overflows_signed_budget(void){
 }
 static void deterministic_480_tick_budget_trace(void){
     QsGame a=city(),b;
+    int starting_frames;
     seed_pb(&a,6);
     b=a;
+    /* The prerequisite legitimate PB requires gameplay frames of its
+     * own. Assert 480 replay steps RELATIVE to that existing timeline,
+     * not relative to a freshly initialized (zero-frame) session. */
+    starting_frames=a.frames;
     for(int t=0;t<480;t++){
         int phase=t%80;
         QsInput in=idle();
@@ -209,7 +214,8 @@ static void deterministic_480_tick_budget_trace(void){
         CHECK(qs_city_sector_budget_frames(&a)==qs_city_sector_budget_frames(&b));
         CHECK(a.hero.x==b.hero.x && a.hero.y==b.hero.y);
     }
-    CHECK(a.frames==480);
+    CHECK(a.frames==starting_frames+480);
+    CHECK(b.frames==starting_frames+480);
 }
 int main(void){
     no_record_is_not_a_zero_budget();
