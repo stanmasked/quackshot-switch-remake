@@ -45,7 +45,8 @@ static void corrupted_position_with_back_cannot_grant_finish(void) {
     g.hero.y=NAN;
     g.camera_x=NAN;
     g.render_camera_x=INFINITY;
-    in.back=in.select=in.dash=in.fire=in.change=in.right=1;
+    in.back=in.select=in.fire=in.change=in.right=1;
+    /* Back without R still aborts; R+Start is a deliberate retry. */
     qs_step(&g,in);
     map_clean(&g);
     CHECK(!g.cleared[0] && g.cleared[2] && g.red_unlocked);
@@ -83,7 +84,7 @@ static void held_select_after_corrupt_exit_requires_new_edge(void) {
     QsGame g=city();
     QsInput in=idle();
     g.hero.x=INFINITY;
-    in.back=in.select=in.dash=1;
+    in.back=in.select=1;
     qs_step(&g,in);
     map_clean(&g);
     /* Back takes us to MAP; held Select must not relaunch CITY TEST. */
@@ -170,7 +171,7 @@ static void deterministic_600_tick_numeric_map_replay(void) {
         if(phase==0 && a.mode==QS_STAGE) {
             a.hero.x=b.hero.x=NAN;
             a.camera_x=b.camera_x=INFINITY;
-            in.back=in.select=in.dash=in.fire=1;
+            in.back=in.select=in.fire=1; /* plain Back abort */
         } else if((phase==4 || phase==27 || phase==43) && a.mode==QS_MAP) {
             in.select=in.dash=1;
         } else if(phase==15 && a.mode==QS_STAGE) {
