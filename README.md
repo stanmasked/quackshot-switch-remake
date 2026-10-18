@@ -48,6 +48,12 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 29 adds first-contact arbitration when a moving city projectile
+intersects an enemy and a wall in the same one-pixel step. The nearest
+leading contact wins and solid walls win exact geometric ties.
+City tests also check simultaneous hero/enemy/shot collisions, while
+the legacy prototype keeps its original processing. See
+[contact ordering and concurrent impacts](docs/REFERENCE_CITY_CONTACT_ORDER_RU.md).
 Stage 28 chooses the nearest physical enemy hitbox when a CITY TEST projectile overlaps multiple targets, independently of enemy slot ordering. ROM-free regressions cover stun timers, both shot colors, re-hit, wall occlusion, and original prototype isolation. See [enemy-impact checks](docs/REFERENCE_CITY_ENEMY_IMPACTS_RU.md).
 Stage 27 adds simultaneous tile/anchor height arbitration plus
 long original-free city physics replay: controlled jump/fire/reverse traces,

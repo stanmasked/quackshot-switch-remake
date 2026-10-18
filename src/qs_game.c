@@ -144,12 +144,45 @@ static void hurt(QsGame *g) {
  * These are deliberate safety/gameplay rules for original-free geometry,
  * NOT decoded QuackShot collision routines or measured anchor distances.
  */
+/*
+ * Resolve simultaneous projectile hits by the leading collision face
+ * rather than by the order of the wall/enemy checks. The substep is
+ * at most one pixel wide, but fractional target boundaries may still
+ * make a wall and an enemy appear during that very same substep.
+ *
+ * Returns the nearest solid tile face along this horizontal trajectory.
+ * No Mega Drive collision code or original tiles are involved.
+ */
+static int city_first_wall_face(const QsGame *g, const QsShot *s,
+                                float step, float *face, int *column) {
+    int x0 = (int)floorf(s->x / QS_TILE);
+    int x1 = (int)floorf((s->x + 7.0f - 0.01f) / QS_TILE);
+    int y0 = (int)floorf(s->y / QS_TILE);
+    int y1 = (int)floorf((s->y + 4.0f - 0.01f) / QS_TILE);
+    int x, y, found = 0;
+    for (y = y0; y <= y1; ++y) {
+        for (x = x0; x <= x1; ++x) {
+            float candidate;
+            if (!qs_solid(g, x, y)) continue;
+            candidate = step >= 0 ? (float)(x * QS_TILE)
+                                  : (float)((x + 1) * QS_TILE);
+            if (!found || (step >= 0 ? candidate < *face :
+                                       candidate > *face)) {
+                *face = candidate;
+                *column = x;
+                found = 1;
+            }
+        }
+    }
+    return found;
+}
+
 static void update_shots_reference_city(QsGame *g) {
     int i, j, k;
     for (i = 0; i < QS_MAX_SHOTS; ++i) {
         QsShot *s = &g->shots[i];
         float step;
-        int slices, stopped = 0;
+        int slices;
         if (!s->active) continue;
         if (--s->frames <= 0) { s->active = 0; continue; }
         if (s->attached) continue;
@@ -157,59 +190,50 @@ static void update_shots_reference_city(QsGame *g) {
         if (slices < 1) slices = 1;
         step = s->vx / slices;
         for (k = 0; k < slices; ++k) {
-            int face_col;
+            int target = -1, face_col = 0, wall_hit;
+            float enemy_face = 0, wall_face = 0;
             s->x += step;
             if (s->x < 0 || s->x >= QS_COLUMNS * QS_TILE) {
                 s->active = 0;
-                stopped = 1;
                 break;
             }
-            if (hits_tiles(g, s->x, s->y, 7, 4)) {
+            wall_hit = city_first_wall_face(g, s, step, &wall_face, &face_col);
+            for (j = 0; j < QS_MAX_ENEMIES; ++j) {
+                const QsEnemy *e = &g->enemies[j];
+                float candidate;
+                if (!e->active ||
+                    !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
+                    continue;
+                candidate = step >= 0 ? e->x : e->x + 14;
+                if (target < 0 || (step >= 0 ? candidate < enemy_face :
+                                               candidate > enemy_face)) {
+                    target = j;
+                    enemy_face = candidate;
+                }
+            }
+            /* The physically nearer leading face takes precedence.
+             * Solid walls win an exactly co-planar tie, preventing
+             * shots from reaching actors embedded at the wall face. */
+            if (wall_hit && (target < 0 ||
+                (step >= 0 ? wall_face <= enemy_face :
+                             wall_face >= enemy_face))) {
                 if (s->red) {
-                    /* Identify the tile crossed by the *leading* edge.
-                     * A red anchor straddles an impact face when fired
-                     * right, and begins at the right face when fired left. */
-                    face_col = (int)floorf((s->x + (step > 0 ? 6.99f : 0.0f))
-                                           / QS_TILE);
-                    s->x = step > 0 ? face_col * QS_TILE - 8.0f
-                                     : (face_col + 1) * QS_TILE;
+                    s->x = step >= 0 ? wall_face - 8.0f : wall_face;
                     s->attached = 1;
                     s->frames = 230;
                 } else {
                     s->active = 0;
                 }
-                stopped = 1;
                 break;
             }
-            /* Choose the first physical impact face, not actor slot.
-             * A single 1px slice may intersect overlapping enemies. */
-            {
-                int target = -1;
-                float first_face = 0;
-                for (j = 0; j < QS_MAX_ENEMIES; ++j) {
-                    QsEnemy *e = &g->enemies[j];
-                    float face;
-                    if (!e->active ||
-                        !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
-                        continue;
-                    face = step >= 0 ? e->x : e->x + 14;
-                    if (target < 0 ||
-                        (step >= 0 ? face < first_face : face > first_face)) {
-                        target = j;
-                        first_face = face;
-                    }
-                }
-                if (target >= 0) {
-                    g->enemies[target].stunned_frames = 180;
-                    s->active = 0;
-                    stopped = 1;
-                }
+            if (target >= 0) {
+                g->enemies[target].stunned_frames = 180;
+                s->active = 0;
+                break;
             }
-            if (stopped) break;
         }
     }
 }
-
 
 static void update_shots(QsGame *g) {
     int i, j;
