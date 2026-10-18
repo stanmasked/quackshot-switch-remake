@@ -102,6 +102,23 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                   game->city_checkpoint_active
                     ? color(255, 208, 109) : color(112, 167, 221));
     }
+    /* Stage 60: two optional gold beacons after the mid-city flag.
+     * They disappear when collected. No original game assets used. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        if (!(game->city_bonus_mask & 1)) {
+            rectangle(renderer, (int)QS_CITY_BONUS_A_X-cam, 186,
+                      10, 10, color(255, 225, 108));
+            rectangle(renderer, (int)QS_CITY_BONUS_A_X-cam+3, 189,
+                      4, 4, color(255, 242, 190));
+        }
+        if (!(game->city_bonus_mask & 2)) {
+            rectangle(renderer, (int)QS_CITY_BONUS_B_X-cam, 186,
+                      10, 10, color(255, 225, 108));
+            rectangle(renderer, (int)QS_CITY_BONUS_B_X-cam+3, 189,
+                      4, 4, color(255, 242, 190));
+        }
+    }
     for (i = 0; i < QS_MAX_ENEMIES; ++i) {
         const QsEnemy *e = &game->enemies[i];
         if (e->active)
@@ -139,6 +156,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
         rectangle(renderer, 331, 4, 14, 8,
                   game->city_checkpoint_active == 1
                     ? color(255, 208, 109) : color(112, 167, 221));
+    }
+    /* Stage 60: two HUD stamps represent 0/500/1000 optional points.
+     * They are persistent across a retry and cleared on map reentry. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        rectangle(renderer, 299, 4, 10, 8,
+                  (game->city_bonus_mask & 1)
+                     ? color(255, 225, 108) : color(90, 88, 107));
+        rectangle(renderer, 315, 4, 10, 8,
+                  (game->city_bonus_mask & 2)
+                     ? color(255, 225, 108) : color(90, 88, 107));
     }
 }
 
