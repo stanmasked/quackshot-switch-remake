@@ -208,6 +208,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_crate_active =
         stage == 0 && g->physics_profile == QS_PHYSICS_REFERENCE_CITY;
     g->city_crate_fx_frames = 0; /* new attempt has no old debris */
+    g->city_paused = 0;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
     g->city_checkpoint_gap_frames = 0;
@@ -292,6 +293,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
         g->city_crate_active = 0; /* next stage entry recreates the obstacle */
         g->city_crate_fx_frames = 0; /* no debris carried onto the map */
+        g->city_paused = 0; /* no pause state carried onto the map */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
         g->city_checkpoint_gap_frames = 0;
@@ -1173,6 +1175,36 @@ void qs_step(QsGame *g, QsInput input) {
         ++g->frames;
         g->previous = input;
         return;
+    }
+    /*
+     * Stage 76: X + Start toggles a training pause in the opt-in
+     * city experiment. Only real Start edges can control the pause;
+     * holding the chord cannot toggle repeatedly. Freeze all gameplay
+     * state, including the 9999-tick clock, debris, projectiles and
+     * camera; global input/frame bookkeeping continues.
+     *
+     * R + Start while paused retries immediately; Start alone exits
+     * to the map. A pending completed exit still wins over a new pause.
+     * The ordinary prototype and other stages never enter this path.
+     */
+    if (g->mode == QS_STAGE && g->stage == 0 &&
+        g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+        int back_edge=edge(input.back,g->previous.back);
+        int pause_chord=back_edge && input.change && !input.dash;
+        if (g->city_paused != 1) g->city_paused=0;
+        if (g->city_paused ||
+            (pause_chord && g->hero.x < (QS_COLUMNS-4)*QS_TILE)) {
+            if (pause_chord) {
+                g->city_paused=!g->city_paused;
+            } else if (back_edge && input.dash) {
+                qs_begin_stage(g,0);
+            } else if (back_edge && !input.change) {
+                city_leave_to_map(g);
+            }
+            ++g->frames;
+            g->previous=input;
+            return;
+        }
     }
     if (g->mode == QS_MAP) {
         sanitize_city_map_progress(g);
