@@ -3,7 +3,9 @@ import pathlib
 import sys
 import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
-from genesis_camera_phase_model import evaluate_camera_phase, WINDOWS
+from genesis_camera_phase_model import (evaluate_camera_phase, WINDOWS,
+                                        verify_known_reference_anchors,
+                                        KNOWN_CAMERA_VDP_ANCHORS)
 
 
 def synthetic(lag):
@@ -67,6 +69,65 @@ class Tests(unittest.TestCase):
         row=evaluate_camera_phase(data)["windows"]["right_tracking"]
         self.assertFalse(row["strict_one_tick_lag_matches_all"])
         self.assertGreater(row["scores"][1]["sum_absolute_error_px"],0)
+
+    def test_false_lag_due_to_constant_pixel_offset_is_ambiguous(self):
+        # Pixel shift of 2 at constant 2px/tick looks exactly like lag=1
+        # in steady motion. A responsible temporal classifier must abstain.
+        data = synthetic(0)
+        for scenario in ("right", "jump"):
+            for frame, row in data[scenario].items():
+                row["render_buffer_RAM_0x852c"] = max(
+                    0, row["software_camera_RAM_candidate"] - 2)
+        row = evaluate_camera_phase(data)["windows"]["right_tracking"]
+        self.assertEqual(row["best_lags_tied_included"], [1])
+        self.assertGreater(len(row["motion_signature_best_lags_including_ties"]), 1)
+        self.assertEqual(row["zero_lag_with_fitted_offset_error_px"], 0)
+        self.assertFalse(row["identifiable_by_motion_and_offset_controls"])
+        self.assertEqual(row["lag_inference_status"],
+                         "ambiguous_spatial_offset_or_motion_signature")
+
+    def test_irregular_movement_separates_lag_from_spatial_offset(self):
+        # 1,2,3,1,... pixels per tick, independently designed synthetic
+        # camera path. A genuine 2-tick history can be differentiated.
+        steps = (0, 1, 3, 6)
+        def distance(t):
+            n = max(0, t-2123)
+            return (n//4)*7 + steps[n%4]
+        def cam(scenario, t):
+            return (max(0, 358-distance(t-2374+2123))
+                    if scenario == "reverse" else distance(t))
+        data = synthetic(2)
+        for scenario, frames in data.items():
+            for frame, row in frames.items():
+                row["software_camera_RAM_candidate"] = cam(scenario, frame)
+                row["render_buffer_RAM_0x852c"] = cam(scenario, frame-2)
+        result = evaluate_camera_phase(data)
+        for row in result["windows"].values():
+            self.assertEqual(row["best_lags_tied_included"], [2])
+            self.assertEqual(row["motion_signature_best_lags_including_ties"], [2])
+            self.assertGreater(row["zero_lag_with_fitted_offset_error_px"], 0)
+            self.assertTrue(row["identifiable_by_motion_and_offset_controls"])
+
+    def test_fixed_published_reference_camera_vdp_anchors(self):
+        data = synthetic(1)
+        for scenario, landmarks in KNOWN_CAMERA_VDP_ANCHORS.items():
+            for frame, (camera, render) in landmarks.items():
+                data[scenario][frame] = {
+                    "software_camera_RAM_candidate": camera,
+                    "render_buffer_RAM_0x852c": render,
+                }
+        proof = verify_known_reference_anchors(data)
+        self.assertEqual(proof["published_numeric_camera_vdp_anchors_verified"], 9)
+        self.assertFalse(proof["original_ram_or_rom_exported"])
+        data["right"][2180]["render_buffer_RAM_0x852c"] += 1
+        with self.assertRaisesRegex(ValueError, "anchor: camera/VDP mismatch"):
+            verify_known_reference_anchors(data)
+
+    def test_missing_published_anchor_is_rejected(self):
+        data = synthetic(1)
+        del data["reverse"][2375]
+        with self.assertRaisesRegex(ValueError, "anchor: missing checkpoint"):
+            verify_known_reference_anchors(data)
 
     def test_report_is_only_numeric_aggregates(self):
         report=evaluate_camera_phase(synthetic(2))
