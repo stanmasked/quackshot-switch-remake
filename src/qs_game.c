@@ -787,6 +787,38 @@ static void sanitize_city_pickups(QsGame *g) {
     }
 }
 
+/*
+ * Stage 53: shot validation must occur BEFORE move_hero(), not just
+ * inside update_shots_reference_city(). A damaged attached red anchor
+ * would otherwise reach city_anchor_surface() during vertical stepping
+ * and might assign NaN to the player's position before rendering.
+ *
+ * Preserve active valid shots and original reference-city lifetimes;
+ * do not canonicalize inactive frame counters because older replay
+ * tests retain raw expiration metadata after deactivation.
+ */
+static void sanitize_city_shots(QsGame *g) {
+    int i;
+    const float world_w=(float)(QS_COLUMNS * QS_TILE);
+    const float world_h=(float)(QS_ROWS * QS_TILE);
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    for (i=0;i<QS_MAX_SHOTS;i++) {
+        QsShot *s=&g->shots[i];
+        if (!s->active) continue;
+        if (!isfinite(s->x) || !isfinite(s->y) || !isfinite(s->vx) ||
+            s->x < 0.0f || s->x + 7.0f > world_w ||
+            s->y < -4.0f || s->y > world_h ||
+            absolute(s->vx) > world_w ||
+            s->frames <= 1 ||
+            (s->attached != 0 && s->attached != 1) ||
+            (s->red != 0 && s->red != 1)) {
+            s->active=0;
+            s->attached=0;
+        }
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
         int held_back = input.left || input.up;
@@ -828,6 +860,7 @@ void qs_step(QsGame *g, QsInput input) {
         int numeric_retry = sanitize_city_hero_camera(g);
         sanitize_city_enemies(g);
         sanitize_city_pickups(g);
+        sanitize_city_shots(g);
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the
