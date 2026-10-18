@@ -181,14 +181,28 @@ static void update_shots_reference_city(QsGame *g) {
                 stopped = 1;
                 break;
             }
-            for (j = 0; j < QS_MAX_ENEMIES; ++j) {
-                QsEnemy *e = &g->enemies[j];
-                if (e->active &&
-                    overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16)) {
-                    e->stunned_frames = 180;
+            /* Choose the first physical impact face, not actor slot.
+             * A single 1px slice may intersect overlapping enemies. */
+            {
+                int target = -1;
+                float first_face = 0;
+                for (j = 0; j < QS_MAX_ENEMIES; ++j) {
+                    QsEnemy *e = &g->enemies[j];
+                    float face;
+                    if (!e->active ||
+                        !overlaps(s->x, s->y, 7, 4, e->x, e->y, 14, 16))
+                        continue;
+                    face = step >= 0 ? e->x : e->x + 14;
+                    if (target < 0 ||
+                        (step >= 0 ? face < first_face : face > first_face)) {
+                        target = j;
+                        first_face = face;
+                    }
+                }
+                if (target >= 0) {
+                    g->enemies[target].stunned_frames = 180;
                     s->active = 0;
                     stopped = 1;
-                    break;
                 }
             }
             if (stopped) break;
