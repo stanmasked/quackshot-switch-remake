@@ -14,6 +14,11 @@
 /* Original-free checkpoint authored for opt-in CITY TEST only. */
 #define QS_CITY_CHECKPOINT_X 640.0f
 #define QS_CITY_CHECKPOINT_Y 188.0f
+/* Two synthetic optional collectibles on safe city floor segments. */
+#define QS_CITY_BONUS_A_X 900.0f
+#define QS_CITY_BONUS_B_X 1040.0f
+#define QS_CITY_BONUS_Y 188.0f
+#define QS_CITY_BONUS_VALUE 500
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +45,7 @@ typedef struct {
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
+    int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
