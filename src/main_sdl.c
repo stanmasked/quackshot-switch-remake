@@ -129,6 +129,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                   i < game->hero.hearts ? color(239, 96, 108) : color(90, 88, 107));
     rectangle(renderer, 355, 4, 30, 8, game->weapon == QS_RED
               ? color(224, 73, 70) : color(233, 207, 110));
+    /*
+     * Stage 59: checkpoint status is visible even when the landmark
+     * itself has scrolled off screen. This original-free cyan/gold
+     * HUD tile belongs ONLY to the opt-in research CITY TEST.
+     */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        rectangle(renderer, 331, 4, 14, 8,
+                  game->city_checkpoint_active == 1
+                    ? color(255, 208, 109) : color(112, 167, 221));
+    }
 }
 
 static int pressed(const Uint8 *keys, SDL_Scancode key) { return keys[key] != 0; }
