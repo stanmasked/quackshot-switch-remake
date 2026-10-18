@@ -75,6 +75,14 @@ prototype. A dedicated CTest and SDL route regression cover the
 cross-stage transition. See
 [map record visibility](docs/REFERENCE_CITY_CROSS_STAGE_BEST_RU.md).
 
+Stage 67 introduces an optional **CITY TEST time trial**. A green
+four-digit HUD timer counts simulated frames only while the research
+level is active; retries remain part of the same attempt. Completing
+the level records the fastest clear of the session, visible on the
+CITY map row. Back without a clear never awards a time, and ordinary
+prototype stages remain unchanged. See
+[time-trial gameplay and tests](docs/REFERENCE_CITY_TIME_TRIAL_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
