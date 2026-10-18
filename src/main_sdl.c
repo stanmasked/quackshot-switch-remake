@@ -2081,6 +2081,116 @@ static int run_bonus_set_heal_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 62: read the FULL 29x7 scoreboard raster against an independent
+ * hand-written glyph oracle, not against the drawing function's masks.
+ * This detects wrong digits, misplaced segments, overdraw and gaps.
+ * The normal prototype must leave this entire HUD region untouched.
+ */
+static int verify_bonus_score_pixels(SDL_Renderer *renderer,
+                                      const QsGame *g,const char *digits) {
+    static const char *zero[7]={
+        ".###.","#...#","#...#",".....",
+        "#...#","#...#",".###."
+    };
+    static const char *one[7]={
+        ".....","....#","....#",".....",
+        "....#","....#","....."
+    };
+    static const char *five[7]={
+        ".###.","#....","#....",".###.",
+        "....#","....#",".###."
+    };
+    uint32_t pixels[7][29];
+    SDL_Rect area={245,4,29,7};
+    int row,col;
+    if(SDL_SetRenderDrawColor(renderer,0,0,0,255)!=0 ||
+       SDL_RenderClear(renderer)!=0) return 0;
+    render_stage(renderer,g);
+    if(SDL_RenderReadPixels(renderer,&area,SDL_PIXELFORMAT_ARGB8888,
+                            pixels,29*(int)sizeof(uint32_t))!=0) return 0;
+    for(row=0;row<7;row++)for(col=0;col<29;col++) {
+        int which=col/8,local=col%8,light=0;
+        if(digits && which<4 && local<5) {
+            char d=digits[which];
+            const char *shape=d=='0'?zero[row]:
+                              d=='1'?one[row]:
+                              d=='5'?five[row]:NULL;
+            if(!shape) return 0;
+            light=shape[local]=='#';
+        }
+        {
+            uint32_t expected=light ? UINT32_C(0xffffe16c) :
+                                      UINT32_C(0xff1c2636);
+            if(pixels[row][col]!=expected) {
+                fprintf(stderr,"BONUS_SCORE_SDL_FAIL: row=%d col=%d digit=%d expected=%08x actual=%08x\n",
+                        row,col,which,(unsigned)expected,
+                        (unsigned)pixels[row][col]);
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static int run_bonus_score_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,prototype;
+    QsInput in={0};
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    if(qs_city_bonus_score(&g)!=0 ||
+       !verify_bonus_score_pixels(renderer,&g,"0000"))
+        return 0;
+    /* Reverse collection order also gives 0500 before 1000. */
+    g.hero.x=QS_CITY_BONUS_B_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_bonus_mask!=2 || qs_city_bonus_score(&g)!=500 ||
+       !verify_bonus_score_pixels(renderer,&g,"0500"))
+        return 0;
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_bonus_mask!=3 || qs_city_bonus_score(&g)!=1000 ||
+       !verify_bonus_score_pixels(renderer,&g,"1000"))
+        return 0;
+    /* A lethal retry preserves the two-token score without replaying
+     * the collection event. The UI is checked after the actual respawn. */
+    g.hero.hearts=1;g.hero.hurt_frames=0;
+    g.enemies[0].active=1;
+    g.enemies[0].x=g.enemies[0].min_x=g.enemies[0].max_x=g.hero.x;
+    g.enemies[0].y=188;g.enemies[0].dir=1;
+    qs_step(&g,in);
+    if(g.hero.x!=40 || g.hero.hearts!=3 ||
+       qs_city_bonus_score(&g)!=1000 ||
+       !verify_bonus_score_pixels(renderer,&g,"1000"))
+        return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_bonus_score(&g)!=0) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_bonus_mask!=0 ||
+       !verify_bonus_score_pixels(renderer,&g,"0000"))
+        return 0;
+    g.city_bonus_mask=INT_MAX; /* Fail-closed read before simulation. */
+    if(qs_city_bonus_score(&g)!=0 ||
+       !verify_bonus_score_pixels(renderer,&g,"0000"))
+        return 0;
+    qs_init(&prototype);qs_begin_stage(&prototype,0);
+    prototype.city_bonus_mask=3;
+    if(qs_city_bonus_score(&prototype)!=0 ||
+       !verify_bonus_score_pixels(renderer,&prototype,NULL))
+        return 0;
+    puts("BONUS_SCORE_SDL_PASS: exact seven-segment 0000/0500/1000, fatal retry, fresh attempt and prototype isolation");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2154,6 +2264,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_checkpoint_hud_sdl_smoke(renderer)) return 1;
     if (!run_bonus_beacons_sdl_smoke(renderer)) return 1;
     if (!run_bonus_set_heal_sdl_smoke(renderer)) return 1;
+    if (!run_bonus_score_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
