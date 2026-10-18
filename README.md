@@ -98,6 +98,14 @@ opt-in CITY TEST HUD uses self-drawn digits and the regular prototype
 is unchanged. See
 [checkpoint pace verification](docs/REFERENCE_CITY_CHECKPOINT_PACE_RU.md).
 
+Stage 71 adds an **instant CITY TEST practice retry**: on Switch,
+press **R + Start** (desktop: Left Shift + Escape) to restart at the
+beginning without leaving the level. Attempt-local checkpoints,
+bonuses, split deltas and time reset; earned session bests,
+unlocked ammo and clears remain intact. Ordinary Start still
+returns to the stage map, and legacy gameplay is untouched.
+See [quick retry behavior](docs/REFERENCE_CITY_QUICK_RETRY_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
