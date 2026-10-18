@@ -184,7 +184,9 @@ static void deterministic_600_ticks_with_corrupt_timers(void) {
         for(int j=0;j<3;j++) {
             CHECK(a.enemies[j].stunned_frames==b.enemies[j].stunned_frames);
             CHECK(a.enemies[j].stunned_frames>=0);
-            CHECK(a.enemies[j].stunned_frames<=179);
+            /* A fatal contact may stop updates after validation: a later
+             * enemy can legitimately retain the capped 180 until next tick. */
+            CHECK(a.enemies[j].stunned_frames<=180);
         }
     }
     CHECK(a.frames==600 && b.frames==600);
