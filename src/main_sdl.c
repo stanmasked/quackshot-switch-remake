@@ -1144,6 +1144,67 @@ static int run_pickup_numeric_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Stage 50: numeric retry must leave a real spawn collectible visible
+ * for one frame, just like fatal/pit retries. The next simulation tick
+ * may collect it. Also verify the HUD after same-frame nonfatal damage
+ * and a legal heart pickup. All objects are synthetic placeholders. */
+static int run_frame_arbitration_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g, n;
+    QsInput in={0};
+    uint32_t old_red=0, next_red=0, healed_heart=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.enemies,0,sizeof(g.enemies));
+    g.hero.x=NAN;
+    g.pickups[0].active=1;
+    g.pickups[0].x=36;g.pickups[0].y=189;
+    g.pickups[0].kind=QS_PICKUP_RED;
+    qs_step(&g,in);
+    if (g.hero.x!=40 || g.hero.hurt_frames!=89 ||
+        !g.pickups[0].active || g.red_unlocked ||
+        !retry_spawn_pixel(renderer,&g,&old_red) ||
+        old_red!=UINT32_C(0xfff44f50)) {
+        fprintf(stderr,"FRAME_ARBITRATION_SDL_FAIL: numeric spawn red=%08x\n",
+                (unsigned)old_red);
+        return 0;
+    }
+    qs_step(&g,in);
+    if (g.pickups[0].active || !g.red_unlocked ||
+        !retry_spawn_pixel(renderer,&g,&next_red) ||
+        next_red==old_red) {
+        fputs("FRAME_ARBITRATION_SDL_FAIL: next tick did not award red\n",stderr);
+        return 0;
+    }
+
+    qs_init(&n);
+    n.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&n,0);
+    memset(n.enemies,0,sizeof(n.enemies));
+    memset(n.pickups,0,sizeof(n.pickups));
+    n.hero.x=100;n.hero.y=188;n.hero.hearts=2;
+    n.enemies[0].active=1;
+    n.enemies[0].x=100;n.enemies[0].y=188;
+    n.enemies[0].min_x=n.enemies[0].max_x=100;
+    n.enemies[0].dir=1;
+    n.pickups[0].active=1;
+    n.pickups[0].x=100;n.pickups[0].y=189;
+    n.pickups[0].kind=QS_PICKUP_HEART;
+    qs_step(&n,in);
+    if (n.hero.hearts!=2 || n.hero.hurt_frames!=69 ||
+        n.pickups[0].active ||
+        !read_immunity_heart_pixel(renderer,&n,&healed_heart) ||
+        healed_heart!=UINT32_C(0xff5a586b)) {
+        fprintf(stderr,"FRAME_ARBITRATION_SDL_FAIL: heal=%08x hearts=%d\n",
+                (unsigned)healed_heart,n.hero.hearts);
+        return 0;
+    }
+    printf("FRAME_ARBITRATION_SDL_PASS: deferred red=%08x next=%08x heal=%08x\n",
+           (unsigned)old_red,(unsigned)next_red,(unsigned)healed_heart);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1205,6 +1266,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_hero_camera_numeric_sdl_smoke(renderer)) return 1;
     if (!run_numeric_transition_sdl_smoke(renderer)) return 1;
     if (!run_pickup_numeric_sdl_smoke(renderer)) return 1;
+    if (!run_frame_arbitration_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
