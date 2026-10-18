@@ -192,6 +192,15 @@ shootable box, spring, airborne heart, one-way ledge, and stage clear.
 It also checks pause and re-entry. See
 [full city route checks](docs/REFERENCE_CITY_FULL_ROUTE_RU.md).
 
+Stage 88 adds a **separately labelled guest-side route witness**. When
+running on Switch, the NRO itself replays synthetic QsInput values
+through the real shared gameplay engine and writes ordered milestone
+rows to an SD-side CSV. NeXium retrieves and validates that file in
+addition to its existing *live* controller/motion trace. This is a
+**self-test inside the guest**, not a claim that a physical controller
+completed CITY TEST. See
+[NeXium guest route witness](docs/NEXIUM_CITY_ROUTE_GUEST_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

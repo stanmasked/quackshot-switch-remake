@@ -152,6 +152,15 @@ if [ -s "$out/motion-trace-paths.txt" ]; then
     IFS= read -r first < "$out/motion-trace-paths.txt"
     cp "$first" "$out/guest-motion.csv"
 fi
+# A separate CSV is written INSIDE the NRO by a deterministic QsInput
+# self-test. The host must not fabricate or prepopulate this evidence.
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-route.csv' -print > "$out/route-trace-paths.txt"
+if [ -s "$out/route-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/route-trace-paths.txt"
+    cp "$first" "$out/guest-route.csv"
+fi
+python3 tools/verify_guest_route.py "$out/guest-route.csv" "$out/route-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv
