@@ -3039,9 +3039,18 @@ static int run_breakable_crate_sdl_smoke(SDL_Renderer *renderer) {
     prototype.camera_x=prototype.render_camera_x=(float)cam;
     if(prototype.city_crate_active ||
        !read_multishot_pixel(renderer,&prototype,pixel_x,193,&legacy) ||
-       legacy!=after) {
+       legacy==before) {
         fprintf(stderr,"CRATE_SDL_FAIL: legacy=%08x\n",(unsigned)legacy);
         return 0;
+    }
+    /* The old prototype has its own skyline (not the experimental
+     * city sky). Forging a city-only flag must never render the crate. */
+    prototype.city_crate_active=1;
+    {
+        uint32_t with_forged_flag=0;
+        if(!read_multishot_pixel(renderer,&prototype,pixel_x,193,&with_forged_flag) ||
+           with_forged_flag!=legacy)
+            return 0;
     }
     printf("CRATE_SDL_PASS: intact=%08x inner=%08x destroyed=%08x life=%08x retry=%08x legacy=%08x\n",
            (unsigned)before,(unsigned)inner,(unsigned)after,
