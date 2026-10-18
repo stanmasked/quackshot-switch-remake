@@ -135,12 +135,14 @@ static void mixed_wakeup_contacts_only_damage_once(void) {
 }
 static void negative_immunity_can_trigger_one_fatal_respawn(void) {
     QsGame g=city();
-    foe(&g,0,100,0);foe(&g,1,100,0);foe(&g,2,40,0);
+    foe(&g,0,100,0);foe(&g,1,100,INT_MAX);foe(&g,2,40,INT_MIN);
     g.hero.hearts=1;g.hero.hurt_frames=INT_MIN;
     qs_step(&g,idle());
     CHECK(g.hero.x==40 && g.hero.y==188);
     CHECK(g.hero.hearts==3 && g.hero.hurt_frames==89);
     CHECK(g.enemies[1].x==100);
+    CHECK(g.enemies[1].stunned_frames==180);
+    CHECK(g.enemies[2].stunned_frames==0);
     CHECK(g.camera_x==0 && g.render_camera_x==0);
 }
 static void legacy_profile_stays_bytewise_semantic(void) {
