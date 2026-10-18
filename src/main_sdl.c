@@ -26,6 +26,8 @@ static void rectangle(SDL_Renderer *renderer, int x, int y, int w, int h, SDL_Co
     SDL_RenderFillRect(renderer, &rect);
 }
 
+static void render_bonus_score_digit(SDL_Renderer *,int,int,int,SDL_Color);
+
 static void render_map(SDL_Renderer *renderer, const QsGame *game) {
     int i;
     rectangle(renderer, 0, 0, QS_VIEW_W, QS_VIEW_H, color(31, 42, 64));
@@ -41,6 +43,20 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
             rectangle(renderer, 322, y + 12, 16, 16, color(94, 221, 138));
         rectangle(renderer, 70, y + 12, 150 + 30*i, 14,
                   active ? color(239, 227, 177) : color(144, 170, 184));
+    }
+    /*
+     * Stage 64: the blue session-best number is also available on the
+     * city map selector. It survives Back/finish and does not pretend
+     * that this record is an original QuackShot game feature.
+     */
+    if (game->stage == 0 &&
+        game->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+        int value=qs_city_best_bonus_score(game),i;
+        for(i=3;i>=0;--i) {
+            render_bonus_score_digit(renderer,278+8*i,61,value%10,
+                                     color(112,202,221));
+            value/=10;
+        }
     }
     rectangle(renderer, 50, 215, 300, 4, color(130, 146, 167));
 }
