@@ -123,6 +123,7 @@ jobs:
           grep -q '^CRATE_PRIORITY_SDL_PASS:' smoke.log
           grep -q '^CITY_PAUSE_SDL_PASS:' smoke.log
           grep -q '^CITY_SECTOR_SDL_PASS:' smoke.log
+          grep -q '^CITY_SECTOR_BUDGET_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
