@@ -1240,7 +1240,12 @@ static int run_numeric_transition_sdl_smoke(SDL_Renderer *renderer) {
     g.pending_reference_shot=1;g.pending_reference_red=1;
     g.shots[0].active=g.shots[0].attached=1;
     g.shots[0].x=150;g.shots[0].y=166;g.shots[0].frames=230;
-    qs_init(&baseline);baseline.cleared[2]=1;
+    qs_init(&baseline);
+    baseline.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    baseline.cleared[2]=1;
+    /* The recovered CITY TEST map still owns its reference-profile
+     * zero-valued HUD; a normal-prototype map is not an equivalent
+     * pixel reference even when both have identical stage clears. */
     if (!capture_frame(renderer,&baseline,&map_before)) return 0;
     in.back=in.select=in.dash=1;
     qs_step(&g,in);
