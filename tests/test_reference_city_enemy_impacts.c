@@ -10,6 +10,11 @@ static QsGame empty(QsPhysicsProfile profile) {
     QsGame g; int x,y,i; qs_init(&g); g.physics_profile=profile;
     qs_begin_stage(&g,0);
     for(y=0;y<QS_ROWS;y++) for(x=0;x<QS_COLUMNS;x++) g.terrain[y][x]='.';
+    /* This fixture tests projectile/enemy timelines, not pit retries.
+     * Keep the hero on a safe floor so 180 elapsed ticks correspond
+     * to 180 ENEMY updates without intervening death/retry frames. */
+    for(x=0;x<QS_COLUMNS;x++)
+        g.terrain[13][x]=g.terrain[14][x]='#';
     for(i=0;i<QS_MAX_ENEMIES;i++) g.enemies[i].active=0;
     for(i=0;i<QS_MAX_PICKUPS;i++) g.pickups[i].active=0;
     g.hero.x=40; g.hero.y=140; g.hero.vx=g.hero.vy=0;
