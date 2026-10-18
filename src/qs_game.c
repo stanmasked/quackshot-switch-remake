@@ -121,6 +121,26 @@ int qs_city_best_checkpoint_time(const QsGame *g) {
     return g->city_best_checkpoint_frames;
 }
 
+/*
+ * Stage 70: compare this attempt's split against the PREVIOUS session
+ * record, before the record is lowered. A signed negative gap is faster.
+ * First-ever contact has no prior baseline and therefore no delta.
+ */
+int qs_city_checkpoint_gap_valid(const QsGame *g) {
+    return g && g->mode == QS_STAGE && g->stage == 0 &&
+           g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+           g->city_checkpoint_active == 1 &&
+           g->city_checkpoint_split_frames >= 1 &&
+           g->city_checkpoint_split_frames <= QS_CITY_TIMER_MAX &&
+           g->city_checkpoint_gap_valid == 1 &&
+           g->city_checkpoint_gap_frames >= -(QS_CITY_TIMER_MAX-1) &&
+           g->city_checkpoint_gap_frames <= (QS_CITY_TIMER_MAX-1);
+}
+
+int qs_city_checkpoint_gap_time(const QsGame *g) {
+    return qs_city_checkpoint_gap_valid(g) ? g->city_checkpoint_gap_frames : 0;
+}
+
 static void record_city_clear_time(QsGame *g) {
     int elapsed;
     if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
@@ -187,6 +207,8 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_bonus_mask = 0;
     g->city_attempt_frames = 0;
     g->city_checkpoint_split_frames = 0;
+    g->city_checkpoint_gap_frames = 0;
+    g->city_checkpoint_gap_valid = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -260,6 +282,8 @@ static void city_leave_to_map(QsGame *g) {
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
         g->city_attempt_frames = 0;
         g->city_checkpoint_split_frames = 0;
+        g->city_checkpoint_gap_frames = 0;
+        g->city_checkpoint_gap_valid = 0;
     }
     g->mode = QS_MAP;
 }
@@ -606,10 +630,17 @@ static void update_city_checkpoint(QsGame *g) {
         /* No reward on lethal/pit/numeric retry: this routine is
          * already reached only in survived-frame arbitration. */
         if (split >= 1 && split <= QS_CITY_TIMER_MAX) {
+            int prior = g->city_best_checkpoint_frames;
             g->city_checkpoint_split_frames = split;
-            if (g->city_best_checkpoint_frames < 1 ||
-                g->city_best_checkpoint_frames > QS_CITY_TIMER_MAX ||
-                split < g->city_best_checkpoint_frames)
+            /* Do not compare against the just-updated record. */
+            if (prior >= 1 && prior <= QS_CITY_TIMER_MAX) {
+                g->city_checkpoint_gap_frames = split - prior;
+                g->city_checkpoint_gap_valid = 1;
+            } else {
+                g->city_checkpoint_gap_frames = 0;
+                g->city_checkpoint_gap_valid = 0;
+            }
+            if (prior < 1 || prior > QS_CITY_TIMER_MAX || split < prior)
                 g->city_best_checkpoint_frames = split;
         }
     }
@@ -1164,6 +1195,14 @@ void qs_step(QsGame *g, QsInput input) {
                 g->city_checkpoint_split_frames = 0;
             if (g->city_checkpoint_active == 0)
                 g->city_checkpoint_split_frames = 0;
+            if (g->city_checkpoint_active == 0 ||
+                g->city_checkpoint_split_frames == 0 ||
+                g->city_checkpoint_gap_valid != 1 ||
+                g->city_checkpoint_gap_frames < -(QS_CITY_TIMER_MAX-1) ||
+                g->city_checkpoint_gap_frames > (QS_CITY_TIMER_MAX-1)) {
+                g->city_checkpoint_gap_valid = 0;
+                g->city_checkpoint_gap_frames = 0;
+            }
             if (g->city_best_checkpoint_frames < 0 ||
                 g->city_best_checkpoint_frames > QS_CITY_TIMER_MAX)
                 g->city_best_checkpoint_frames = 0;
