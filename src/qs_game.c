@@ -74,6 +74,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     memset(g->enemies, 0, sizeof(g->enemies));
     memset(g->shots, 0, sizeof(g->shots));
     g->pending_reference_shot = 0;
+    g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
@@ -289,13 +290,13 @@ static void update_pickups(QsGame *g) {
     }
 }
 
-static void shoot(QsGame *g) {
+static void shoot_as(QsGame *g, int red) {
     int i;
     for (i = 0; i < QS_MAX_SHOTS; ++i) {
         QsShot *s = &g->shots[i];
         if (s->active) continue;
         s->active = 1; s->attached = 0;
-        s->red = g->red_unlocked && g->weapon == QS_RED;
+        s->red = red;
         s->x = g->hero.x + (g->hero.facing > 0 ? 12 : -8);
         s->y = g->hero.y + 9;
         s->vx = 5.5f * g->hero.facing;
@@ -313,6 +314,10 @@ static void shoot(QsGame *g) {
  * This is independently implemented test geometry, not measured
  * original Mega Drive collision code.
  */
+static void shoot(QsGame *g) {
+    shoot_as(g, g->red_unlocked && g->weapon == QS_RED);
+}
+
 static int city_anchor_surface(const QsGame *g, float hero_x,
                                float old_bottom, float new_bottom,
                                float *surface_y) {
@@ -476,14 +481,22 @@ void qs_step(QsGame *g, QsInput input) {
                 g->weapon = g->weapon == QS_YELLOW ? QS_RED : QS_YELLOW;
             {
                 int fire_due = g->pending_reference_shot;
+                int fire_due_red = g->pending_reference_red;
                 g->pending_reference_shot = 0;
+                g->pending_reference_red = 0;
                 if (edge(input.fire, g->previous.fire)) {
-                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY)
+                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+                        /* The city test queues appearance for one step.
+                         * Capture the selected ammo NOW: a weapon swap
+                         * next tick cannot retroactively recolor it. */
                         g->pending_reference_shot = 1;
-                    else
+                        g->pending_reference_red =
+                            g->red_unlocked && g->weapon == QS_RED;
+                    } else {
                         shoot(g);
+                    }
                 }
-                if (fire_due) shoot(g);
+                if (fire_due) shoot_as(g, fire_due_red);
             }
             retire_city_expiring_anchors(g);
             move_hero(g, input, edge(input.jump, g->previous.jump));

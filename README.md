@@ -48,6 +48,12 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 30 snapshots the CITY TEST projectile's color when the fire
+button is pressed, so one-tick deferred appearance cannot change weapon
+under a same-interval toggle. A new long-running CTest exercises enemy
+stun transitions, the hero's hurt immunity, simultaneous enemy hits and
+respawn while retaining the original-free prototype. See
+[combat transition verification](docs/REFERENCE_CITY_COMBAT_TRANSITIONS_RU.md).
 Stage 29 adds first-contact arbitration when a moving city projectile
 intersects an enemy and a wall in the same one-pixel step. The nearest
 leading contact wins and solid walls win exact geometric ties.
