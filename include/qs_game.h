@@ -11,6 +11,9 @@
 #define QS_MAX_PICKUPS 5
 #define QS_VIEW_W 400
 #define QS_VIEW_H 240
+/* Original-free checkpoint authored for opt-in CITY TEST only. */
+#define QS_CITY_CHECKPOINT_X 640.0f
+#define QS_CITY_CHECKPOINT_Y 188.0f
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +39,7 @@ typedef struct {
     QsPhysicsProfile physics_profile;
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
+    int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
