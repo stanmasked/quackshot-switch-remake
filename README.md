@@ -61,6 +61,13 @@ with original-free procedural geometry. A dedicated SDL2 regression
 checks every pixel of the full 29×7 raster against an independent
 digit oracle. See [decimal bonus score](docs/REFERENCE_CITY_BONUS_SCORE_RU.md).
 
+Stage 63 adds a **cyan four-digit session personal best** beside the
+current attempt's gold score. New attempts reset current points to
+0000 but keep the best 0500 or 1000 until a completely new session
+begins. A later weaker attempt cannot lower the record. Exact SDL2
+digit-raster tests check both counters and normal prototype isolation.
+See [session personal best](docs/REFERENCE_CITY_PERSONAL_BEST_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
