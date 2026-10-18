@@ -48,6 +48,12 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 26 strengthens red-anchor lifecycle and landing: the closest
+world-space anchor surface wins irrespective of shot slot order, expiry
+drops the hero onto a surviving lower anchor, and only attached red
+shots act as platforms in CITY TEST. Debug/Release and Switch builds
+exercise this independently from the original game assets.
+See [anchor lifecycle tests](docs/REFERENCE_CITY_ANCHOR_LIFECYCLE_RU.md).
 Stage 25 adds reference-city-only **swept projectile collision**: the first
 impacted wall face fixes red anchor placement, enemies before walls are
 hit first, and fast shots cannot tunnel across test tiles. The ordinary

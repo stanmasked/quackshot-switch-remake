@@ -266,6 +266,36 @@ static void shoot(QsGame *g) {
     }
 }
 
+/*
+ * City-only descending one-way red anchors.
+ *
+ * When several supports are crossed in the same fractional movement,
+ * choose the uppermost surface (minimum world Y), NOT the first shot
+ * slot. Slots are recycled, so array order has no geometric meaning.
+ * This is independently implemented test geometry, not measured
+ * original Mega Drive collision code.
+ */
+static int city_anchor_surface(const QsGame *g, float hero_x,
+                               float old_bottom, float new_bottom,
+                               float *surface_y) {
+    int i, found = 0;
+    float nearest = 0;
+    for (i = 0; i < QS_MAX_SHOTS; ++i) {
+        const QsShot *shot = &g->shots[i];
+        if (!shot->active || !shot->attached || !shot->red) continue;
+        if (old_bottom > shot->y + 0.01f ||
+            new_bottom < shot->y ||
+            hero_x >= shot->x + 16 ||
+            hero_x + 12 <= shot->x) continue;
+        if (!found || shot->y < nearest) {
+            nearest = shot->y;
+            found = 1;
+        }
+    }
+    if (found) *surface_y = nearest;
+    return found;
+}
+
 static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
     QsPlayer *h = &g->hero;
     float dx = 0, dy, segment, trial;
@@ -323,12 +353,21 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
         int k, on_anchor = 0;
         trial = h->y + segment;
         if (dy > 0) {
-            for (k = 0; k < QS_MAX_SHOTS; ++k) {
-                const QsShot *shot = &g->shots[k];
-                if (!shot->active || !shot->attached) continue;
-                if (old_bottom <= shot->y + 0.01f && trial + 20 >= shot->y &&
-                    h->x < shot->x + 16 && h->x + 12 > shot->x) {
-                    h->y = shot->y - 20; on_anchor = 1; break;
+            if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+                float nearest;
+                if (city_anchor_surface(g, h->x, old_bottom, trial + 20, &nearest)) {
+                    h->y = nearest - 20;
+                    on_anchor = 1;
+                }
+            } else {
+                /* Keep ordinary prototype's original slot-order behavior. */
+                for (k = 0; k < QS_MAX_SHOTS; ++k) {
+                    const QsShot *shot = &g->shots[k];
+                    if (!shot->active || !shot->attached) continue;
+                    if (old_bottom <= shot->y + 0.01f && trial + 20 >= shot->y &&
+                        h->x < shot->x + 16 && h->x + 12 > shot->x) {
+                        h->y = shot->y - 20; on_anchor = 1; break;
+                    }
                 }
             }
         }
