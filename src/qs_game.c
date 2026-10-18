@@ -95,6 +95,32 @@ int qs_city_best_clear_time(const QsGame *g) {
     return g->city_best_clear_frames;
 }
 
+/*
+ * Stage 69: a one-time mid-stage split, distinct from successful
+ * completion. No checkpoint contact -> zero; no finish required to
+ * keep the fastest earned split in the current game session.
+ */
+int qs_city_checkpoint_split_time(const QsGame *g) {
+    if (!g || g->mode != QS_STAGE || g->stage != 0 ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->city_checkpoint_active != 1 ||
+        g->city_checkpoint_split_frames < 1 ||
+        g->city_checkpoint_split_frames > QS_CITY_TIMER_MAX)
+        return 0;
+    return g->city_checkpoint_split_frames;
+}
+
+int qs_city_best_checkpoint_time(const QsGame *g) {
+    if (!g || g->city_best_checkpoint_frames < 1 ||
+        g->city_best_checkpoint_frames > QS_CITY_TIMER_MAX)
+        return 0;
+    if (g->mode != QS_MAP &&
+        (g->mode != QS_STAGE || g->stage != 0 ||
+         g->physics_profile != QS_PHYSICS_REFERENCE_CITY))
+        return 0;
+    return g->city_best_checkpoint_frames;
+}
+
 static void record_city_clear_time(QsGame *g) {
     int elapsed;
     if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
@@ -160,6 +186,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
     g->city_attempt_frames = 0;
+    g->city_checkpoint_split_frames = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -232,6 +259,7 @@ static void city_leave_to_map(QsGame *g) {
         g->city_checkpoint_active = 0; /* next attempt starts fresh */
         g->city_bonus_mask = 0; /* replay-collect on the next attempt */
         g->city_attempt_frames = 0;
+        g->city_checkpoint_split_frames = 0;
     }
     g->mode = QS_MAP;
 }
@@ -572,8 +600,19 @@ static void update_city_checkpoint(QsGame *g) {
         g->stage != 0 || g->city_checkpoint_active)
         return;
     if (overlaps(g->hero.x,g->hero.y,12,20,
-                 QS_CITY_CHECKPOINT_X,QS_CITY_CHECKPOINT_Y,12,20))
+                 QS_CITY_CHECKPOINT_X,QS_CITY_CHECKPOINT_Y,12,20)) {
+        int split = g->city_attempt_frames;
         g->city_checkpoint_active = 1;
+        /* No reward on lethal/pit/numeric retry: this routine is
+         * already reached only in survived-frame arbitration. */
+        if (split >= 1 && split <= QS_CITY_TIMER_MAX) {
+            g->city_checkpoint_split_frames = split;
+            if (g->city_best_checkpoint_frames < 1 ||
+                g->city_best_checkpoint_frames > QS_CITY_TIMER_MAX ||
+                split < g->city_best_checkpoint_frames)
+                g->city_best_checkpoint_frames = split;
+        }
+    }
 }
 
 /*
@@ -1120,6 +1159,14 @@ void qs_step(QsGame *g, QsInput input) {
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
             if (g->city_checkpoint_active != 1)
                 g->city_checkpoint_active = 0;
+            if (g->city_checkpoint_split_frames < 0 ||
+                g->city_checkpoint_split_frames > QS_CITY_TIMER_MAX)
+                g->city_checkpoint_split_frames = 0;
+            if (g->city_checkpoint_active == 0)
+                g->city_checkpoint_split_frames = 0;
+            if (g->city_best_checkpoint_frames < 0 ||
+                g->city_best_checkpoint_frames > QS_CITY_TIMER_MAX)
+                g->city_best_checkpoint_frames = 0;
             if (g->city_bonus_mask < 0 || g->city_bonus_mask > 3)
                 g->city_bonus_mask = 0;
             if (g->city_best_bonus_score != 0 &&
