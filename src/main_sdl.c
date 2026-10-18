@@ -417,6 +417,128 @@ static int run_parallax_sdl_smoke(SDL_Renderer *renderer) {
     return 0;
 }
 
+
+/*
+ * Real SDL pixel-level consistency test for ALL rendered world objects.
+ * Stage 21 proved simulated current/render camera pairs in guest CSV;
+ * Stage 24 separately tests that actual raster output uses presentation
+ * camera for hero, terrain, enemies, pickups, shots and both planes.
+ * These synthetic states intentionally exaggerate the current-vs-render
+ * difference to reveal accidentally reading the wrong camera field.
+ */
+#define QS_LATCH_ROWS 8
+#define QS_LATCH_STATES 5
+static const int camera_latch_scanlines[QS_LATCH_ROWS] = {
+    6, 69, 103, 136, 155, 172, 182, 185
+};
+
+static int camera_latch_capture(SDL_Renderer *renderer, const QsGame *g,
+                                uint32_t rows[QS_LATCH_ROWS][QS_VIEW_W]) {
+    int i;
+    if (SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) != 0 ||
+        SDL_RenderClear(renderer) != 0) return 0;
+    render_stage(renderer, g);
+    for (i = 0; i < QS_LATCH_ROWS; ++i) {
+        SDL_Rect scan = {0, camera_latch_scanlines[i], QS_VIEW_W, 1};
+        if (SDL_RenderReadPixels(renderer, &scan, SDL_PIXELFORMAT_ARGB8888,
+                                 rows[i], QS_VIEW_W * (int)sizeof(uint32_t)) != 0)
+            return 0;
+    }
+    return 1;
+}
+
+static int run_camera_latch_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    static uint32_t pixels[QS_LATCH_STATES][QS_LATCH_ROWS][QS_VIEW_W];
+    static const int current[QS_LATCH_STATES] = {40, 99, 100, 101, 48};
+    static const int presented[QS_LATCH_STATES] = {40, 40, 41, 42, 40};
+    struct Probe { int row, x; uint32_t rgb; const char *name; };
+    static const struct Probe probes[] = {
+        {0, 10, 0xef606c, "HUD heart"},
+        {3, 164, 0xfaeda7, "hero"},
+        {4, 223, 0x4f3c74, "enemy"},
+        {5, 255, 0xf078a0, "pickup"},
+        {6, 284, 0xffe16c, "shot"},
+        {7, 203, 0x715c72, "terrain"}
+    };
+    int s, row, x;
+    size_t n;
+
+    qs_init(&g);
+    g.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g, 0);
+    for (row = 0; row < QS_ROWS; ++row)
+        for (x = 0; x < QS_COLUMNS; ++x)
+            g.terrain[row][x] = '.';
+    g.terrain[11][15] = '#';
+    for (s = 0; s < QS_MAX_ENEMIES; ++s) g.enemies[s].active = 0;
+    for (s = 0; s < QS_MAX_PICKUPS; ++s) g.pickups[s].active = 0;
+    for (s = 0; s < QS_MAX_SHOTS; ++s) g.shots[s].active = 0;
+    g.hero.x = 201;
+    g.hero.y = 130;
+    g.hero.hurt_frames = 0;
+    g.enemies[0].active = 1;
+    g.enemies[0].x = 260;
+    g.enemies[0].y = 151;
+    g.pickups[0].active = 1;
+    g.pickups[0].kind = QS_PICKUP_HEART;
+    g.pickups[0].x = 292;
+    g.pickups[0].y = 169;
+    g.shots[0].active = 1;
+    g.shots[0].x = 322;
+    g.shots[0].y = 181;
+    g.shots[0].red = 0;
+
+    for (s = 0; s < QS_LATCH_STATES; ++s) {
+        g.camera_x = (float)current[s];
+        g.render_camera_x = (float)presented[s];
+        if (!camera_latch_capture(renderer, &g, pixels[s])) {
+            fprintf(stderr, "CAMERA_LATCH_SDL_FAIL: SDL raster readback %d: %s\n",
+                    s, SDL_GetError());
+            return 1;
+        }
+    }
+    /* Strong object-presence check: shift relations alone can pass on
+     * an empty raster, so ensure every class has distinct real pixels. */
+    for (n = 0; n < sizeof(probes) / sizeof(probes[0]); ++n) {
+        uint32_t rgb = pixels[0][probes[n].row][probes[n].x] & UINT32_C(0x00ffffff);
+        if (rgb != probes[n].rgb) {
+            fprintf(stderr, "CAMERA_LATCH_SDL_FAIL: absent %s, actual=%06x expected=%06x\n",
+                    probes[n].name, (unsigned)rgb, (unsigned)probes[n].rgb);
+            return 1;
+        }
+    }
+    for (row = 0; row < QS_LATCH_ROWS; ++row) {
+        for (x = 0; x < QS_VIEW_W; ++x) {
+            if (pixels[0][row][x] != pixels[1][row][x] ||
+                pixels[0][row][x] != pixels[4][row][x]) {
+                fprintf(stderr, "CAMERA_LATCH_SDL_FAIL: current camera leaked into render row=%d x=%d\n",
+                        camera_latch_scanlines[row], x);
+                return 1;
+            }
+        }
+    }
+    /* HUD is screen-fixed. Far B moves 0/1 px, near A moves 1/2,
+     * all five foreground feature classes move 1/2 for render 41/42.
+     * Test actual renderer output, not a second coordinate calculation. */
+    for (s = 2; s <= 3; ++s) {
+        for (row = 0; row < QS_LATCH_ROWS; ++row) {
+            int shift = row == 0 ? 0 : row == 1 ? (presented[s] / 2 - 20)
+                                                : presented[s] - 40;
+            for (x = 32; x < QS_VIEW_W - 36; ++x) {
+                if (pixels[s][row][x] != pixels[0][row][x + shift]) {
+                    fprintf(stderr,
+                            "CAMERA_LATCH_SDL_FAIL: world-plane sync row=%d x=%d shift=%d state=%d\n",
+                            camera_latch_scanlines[row], x, shift, s);
+                    return 1;
+                }
+            }
+        }
+    }
+    puts("CAMERA_LATCH_SDL_PASS: renderer latches world, actor, projectiles, tiles, both planes; HUD fixed; simulated camera isolated");
+    return 0;
+}
+
 /* Records only numeric state, never file paths, controllers' IDs or ROM data. */
 static void runtime_event(QsTrace *trace, const QsGame *g, QsTraceEvent event,
                           int controller_count, int detail) {
@@ -443,7 +565,7 @@ int main(int argc, char **argv) {
     int burst_forward_left = 0, burst_reverse_left = 0;
     const char *trace_path = getenv("QS_TRACE_PATH");
     const char *motion_path = getenv("QS_MOTION_PATH");
-    int smoke = 0, parallax_smoke = 0;
+    int smoke = 0, parallax_smoke = 0, camera_latch_smoke = 0;
 #ifdef __SWITCH__
     /* Homebrew arguments may include the launch pathname: do not reject them. */
     (void)argc;
@@ -455,14 +577,15 @@ int main(int argc, char **argv) {
 #else
     smoke = argc == 2 && strcmp(argv[1], "--smoke") == 0;
     parallax_smoke = argc == 2 && strcmp(argv[1], "--parallax-smoke") == 0;
+    camera_latch_smoke = argc == 2 && strcmp(argv[1], "--camera-latch-smoke") == 0;
     if (argc == 3 && strcmp(argv[1], "--probe-frames") == 0) {
         char *end = NULL;
         long count = strtol(argv[2], &end, 10);
         if (argv[2][0] && end && *end == '\0' && count >= 1 && count <= 1200)
             probe_frames = (unsigned)count;
     }
-    if ((argc != 1 && !smoke && !parallax_smoke && !probe_frames) || (argc == 3 && !probe_frames)) {
-        fprintf(stderr, "Usage: %s [--smoke | --parallax-smoke | --probe-frames 1..1200]\n", argv[0]);
+    if ((argc != 1 && !smoke && !parallax_smoke && !camera_latch_smoke && !probe_frames) || (argc == 3 && !probe_frames)) {
+        fprintf(stderr, "Usage: %s [--smoke | --parallax-smoke | --camera-latch-smoke | --probe-frames 1..1200]\n", argv[0]);
         return 2;
     }
 #endif
@@ -487,9 +610,9 @@ int main(int argc, char **argv) {
     runtime_event(&trace, &game, QS_TRACE_SDL_READY, 0, 0);
     window = SDL_CreateWindow("QuackShot: experimental engine (no original assets)",
                               SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                              (smoke || parallax_smoke) ? QS_VIEW_W : 1200,
-                              (smoke || parallax_smoke) ? QS_VIEW_H : 720,
-                              (smoke || parallax_smoke) ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+                              (smoke || parallax_smoke || camera_latch_smoke) ? QS_VIEW_W : 1200,
+                              (smoke || parallax_smoke || camera_latch_smoke) ? QS_VIEW_H : 720,
+                              (smoke || parallax_smoke || camera_latch_smoke) ? SDL_WINDOW_HIDDEN : SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         runtime_event(&trace, &game, QS_TRACE_FAILURE, 0, 2);
@@ -499,7 +622,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     runtime_event(&trace, &game, QS_TRACE_WINDOW_READY, 0, 0);
-    renderer = (smoke || parallax_smoke) ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
+    renderer = (smoke || parallax_smoke || camera_latch_smoke) ? SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE)
                      : SDL_CreateRenderer(window, -1,
                            SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
@@ -529,8 +652,9 @@ int main(int argc, char **argv) {
         qs_trace_close(&trace);
         return 1;
     }
-    if (parallax_smoke) {
-        int result = run_parallax_sdl_smoke(renderer);
+    if (parallax_smoke || camera_latch_smoke) {
+        int result = parallax_smoke ? run_parallax_sdl_smoke(renderer)
+                                    : run_camera_latch_sdl_smoke(renderer);
         runtime_event(&trace, &game, QS_TRACE_SMOKE, 0, result);
         runtime_event(&trace, &game, QS_TRACE_SHUTDOWN, 0, result);
         SDL_DestroyRenderer(renderer);

@@ -48,6 +48,11 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 24 adds a separate **real SDL pixel readback** which verifies that the
+hero, enemy, pickup, projectile, tile geometry and two planes all use the
+latched display camera, while the HUD remains stationary. The deliberate
+synthetic mismatch of game/display camera exposes accidental coupling.
+See [pixel-level camera binding](docs/REFERENCE_CITY_CAMERA_RASTER_BINDING_RU.md).
 The asset-free city's 2:1 hardware-observed parallax is checked with rendered SDL pixels and guest NRO telemetry. See [parallax baseline](docs/REFERENCE_CITY_PARALLAX_RU.md) and [reverse/odd-even regression](docs/REFERENCE_CITY_PARALLAX_REVERSAL_RU.md).
 
 ## Switch homebrew

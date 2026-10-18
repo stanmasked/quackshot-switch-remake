@@ -65,6 +65,24 @@ jobs:
           assert int(rows[4]["detail"]) == 0, rows
           print("PARALLAX_TRACE_PASS: ordered guest-compatible SDL render proof")
           PY
+      - name: Verify city camera latch across hero, terrain, objects and both SDL layers
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+          SDL_RENDER_DRIVER: software
+          QS_TRACE_PATH: camera-latch-runtime.csv
+        run: |
+          ./build-desktop/quackshot-prototype --camera-latch-smoke | tee camera-latch-pixels.log
+          grep -q '^CAMERA_LATCH_SDL_PASS:' camera-latch-pixels.log
+          python3 - <<'PY'
+          import csv
+          with open("camera-latch-runtime.csv", newline="") as fh:
+              rows=list(csv.DictReader(fh))
+          assert [int(r["event"]) for r in rows] == [1,2,3,4,11,9], rows
+          assert int(rows[4]["detail"]) == 0, rows
+          assert [int(r["seq"]) for r in rows] == list(range(len(rows))), rows
+          print("CAMERA_LATCH_TRACE_PASS: software raster evidence and clean shutdown")
+          PY
       - name: Verify actual first frame and 600-frame heartbeat
         env:
           SDL_VIDEODRIVER: dummy
