@@ -91,6 +91,7 @@ jobs:
           grep -q '^TIMER_BOUNDARY_SDL_PASS:' smoke.log
           grep -q '^HERO_STATUS_SDL_PASS:' smoke.log
           grep -q '^PRE_MOVE_SHOTS_SDL_PASS:' smoke.log
+          grep -q '^WEAPON_QUEUE_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
