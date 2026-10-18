@@ -2643,6 +2643,110 @@ static int run_city_time_trial_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 69: SDL proof that the current checkpoint split appears only
+ * after a real survived touch, remains frozen through a lethal retry,
+ * and that the fastest split survives Back on the map. This reads real
+ * SDL pixels and compares the entire map image against a no-record map.
+ */
+static int run_city_checkpoint_split_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,blank,legacy;
+    QsInput in={0};
+    uint64_t earned_map=0,unearned_map=0,improved_map=0;
+    uint32_t map_pixel=0,empty_pixel=0;
+    SDL_Rect mark={239,203,1,1};
+    const uint32_t amber=UINT32_C(0xffffb481);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+
+    if(qs_city_checkpoint_split_time(&g)!=0 ||
+       qs_city_best_checkpoint_time(&g)!=0 ||
+       !verify_city_digits_pixels(renderer,&g,NULL,126,amber))
+        return 0;
+    for(int t=0;t<9;t++) qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!g.city_checkpoint_active ||
+       qs_city_checkpoint_split_time(&g)!=10 ||
+       qs_city_best_checkpoint_time(&g)!=10 ||
+       qs_city_attempt_time(&g)!=10 ||
+       !verify_city_digits_pixels(renderer,&g,"0010",126,amber))
+        return 0;
+    /* Death after valid touch retains first split but advances clock. */
+    g.hero.hearts=1;g.hero.hurt_frames=0;
+    g.enemies[0].active=1;
+    g.enemies[0].x=g.enemies[0].min_x=g.enemies[0].max_x=g.hero.x;
+    g.enemies[0].y=188;g.enemies[0].dir=1;
+    qs_step(&g,in);
+    if(g.hero.x!=QS_CITY_CHECKPOINT_X ||
+       g.hero.hearts!=3 ||
+       qs_city_checkpoint_split_time(&g)!=10 ||
+       qs_city_attempt_time(&g)!=11 ||
+       !verify_city_digits_pixels(renderer,&g,"0010",126,amber))
+        return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.city_checkpoint_split_frames!=0 ||
+       qs_city_checkpoint_split_time(&g)!=0 ||
+       qs_city_best_checkpoint_time(&g)!=10 ||
+       !capture_frame(renderer,&g,&earned_map) ||
+       SDL_RenderReadPixels(renderer,&mark,SDL_PIXELFORMAT_ARGB8888,
+                            &map_pixel,(int)sizeof(map_pixel))!=0 ||
+       map_pixel!=amber) {
+        fprintf(stderr,"CITY_SPLIT_SDL_FAIL: map value=%d color=%08x\n",
+                qs_city_best_checkpoint_time(&g),(unsigned)map_pixel);
+        return 0;
+    }
+    blank=g;
+    blank.city_best_checkpoint_frames=0;
+    if(!capture_frame(renderer,&blank,&unearned_map) ||
+       earned_map==unearned_map ||
+       SDL_RenderReadPixels(renderer,&mark,SDL_PIXELFORMAT_ARGB8888,
+                            &empty_pixel,(int)sizeof(empty_pixel))!=0 ||
+       empty_pixel!=UINT32_C(0xff1f2a40))
+        return 0;
+
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE ||
+       g.physics_profile!=QS_PHYSICS_REFERENCE_CITY ||
+       qs_city_checkpoint_split_time(&g)!=0 ||
+       qs_city_best_checkpoint_time(&g)!=10 ||
+       !verify_city_digits_pixels(renderer,&g,NULL,126,amber))
+        return 0;
+    in=(QsInput){0};
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_checkpoint_split_time(&g)!=1 ||
+       qs_city_best_checkpoint_time(&g)!=1 ||
+       !verify_city_digits_pixels(renderer,&g,"0001",126,amber))
+        return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_checkpoint_time(&g)!=1 ||
+       !capture_frame(renderer,&g,&improved_map) ||
+       improved_map==earned_map)
+        return 0;
+    qs_init(&legacy);
+    qs_begin_stage(&legacy,0);
+    if(qs_city_checkpoint_split_time(&legacy)!=0 ||
+       !verify_city_digits_pixels(renderer,&legacy,NULL,126,amber))
+        return 0;
+    qs_init(&blank);
+    if(qs_city_best_checkpoint_time(&blank)!=0)
+        return 0;
+    printf("CITY_SPLIT_SDL_PASS: split10=%016llx empty=%016llx best1=%016llx amber=%08x\n",
+           (unsigned long long)earned_map,
+           (unsigned long long)unearned_map,
+           (unsigned long long)improved_map,(unsigned)amber);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2720,6 +2824,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_map_best_score_sdl_smoke(renderer)) return 1;
     if (!run_cross_stage_record_sdl_smoke(renderer)) return 1;
     if (!run_city_time_trial_sdl_smoke(renderer)) return 1;
+    if (!run_city_checkpoint_split_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
