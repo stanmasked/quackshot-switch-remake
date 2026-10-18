@@ -2301,6 +2301,42 @@ static int run_personal_best_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 64: ensure the selected CITY map row shows the best session
+ * result, rather than only displaying it during stage gameplay.
+ * Compare the actual map raster after 0000, 0500 and 1000 records.
+ */
+static int run_map_best_score_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    uint64_t zero=0,five=0,ten=0;
+    uint32_t pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    g.stage=0;g.mode=QS_MAP;g.selected_stage=0;
+    if (!capture_frame(renderer,&g,&zero)) return 0;
+    g.city_best_bonus_score=500;
+    if (!capture_frame(renderer,&g,&five) ||
+        !read_map_progress_pixels(renderer,&g,
+            (uint32_t[QS_STAGE_COUNT]){0})) return 0;
+    g.city_best_bonus_score=1000;
+    if (!capture_frame(renderer,&g,&ten)) return 0;
+    {
+        SDL_Rect at={282,62,1,1};
+        if (SDL_RenderReadPixels(renderer,&at,SDL_PIXELFORMAT_ARGB8888,
+                                 &pixel,(int)sizeof(pixel))!=0)
+            return 0;
+    }
+    if(zero==five || five==ten || zero==ten ||
+       pixel!=UINT32_C(0xff49748e)) {
+        fprintf(stderr,"MAP_BEST_SCORE_SDL_FAIL: 0000=%016llx 0500=%016llx 1000=%016llx pixel=%08x\n",
+                (unsigned long long)zero,(unsigned long long)five,
+                (unsigned long long)ten,(unsigned)pixel);
+        return 0;
+    }
+    puts("MAP_BEST_SCORE_SDL_PASS: map shows distinct 0000/0500/1000 session records");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2375,6 +2411,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_bonus_beacons_sdl_smoke(renderer)) return 1;
     if (!run_bonus_set_heal_sdl_smoke(renderer)) return 1;
     if (!run_bonus_score_sdl_smoke(renderer)) return 1;
+    if (!run_map_best_score_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
