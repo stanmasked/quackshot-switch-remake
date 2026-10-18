@@ -679,6 +679,54 @@ static void sanitize_city_enemies(QsGame *g) {
     }
 }
 
+/*
+ * Stage 47: validate the opt-in CITY TEST player and both camera phases
+ * BEFORE exit checks, shot creation, movement, collisions or SDL drawing.
+ * Corrupt finite/non-finite coordinates would otherwise reach float-to-int
+ * conversions in tile stepping, parallax and the desktop renderer.
+ * Real first-city motion stays well within these deliberately generous
+ * ceilings. The ordinary prototype is not modified.
+ */
+static void sanitize_city_hero_camera(QsGame *g) {
+    QsPlayer *h = &g->hero;
+    const float world_w = (float)(QS_COLUMNS * QS_TILE);
+    const float camera_max = world_w - QS_VIEW_W;
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+
+    /* A completely displaced actor is not a valid exit or a safe body
+     * for contact/terrain casts. Respawn also resets both camera phases,
+     * the fixed-point ramp and pending city shots atomically. */
+    if (!isfinite(h->x) || !isfinite(h->y) ||
+        h->x < -12.0f || h->x > world_w ||
+        h->y < -20.0f || h->y > QS_VIEW_H + 22.0f) {
+        respawn(g);
+        return;
+    }
+
+    /* Never call ceilf -> int or enter substep loops with corrupt speeds.
+     * Preserve valid near-wall, jumping and pit motion exactly. */
+    if (!isfinite(h->vx) || absolute(h->vx) > 8.0f)
+        h->vx = 0.0f;
+    if (!isfinite(h->vy) || absolute(h->vy) > 16.0f) {
+        h->vy = 0.0f;
+        h->grounded = 0;
+        g->reference_jump_steps = 0;
+    }
+
+    /* A damaged camera must not reach parallax's integer conversion.
+     * Recover both present/simulation phases together; keeping only one
+     * would create an unrelated full-screen scroll jump. */
+    if (!isfinite(g->camera_x) || !isfinite(g->render_camera_x) ||
+        g->camera_x < 0.0f || g->camera_x > camera_max ||
+        g->render_camera_x < 0.0f ||
+        g->render_camera_x > camera_max) {
+        float recovered = clampf(h->x - 141.0f, 0.0f, camera_max);
+        g->camera_x = recovered;
+        g->render_camera_x = recovered;
+    }
+}
+
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
         int held_back = input.left || input.up;
@@ -716,6 +764,7 @@ void qs_step(QsGame *g, QsInput input) {
     } else {
         /* Validation precedes even the early Back/finish handoffs:
          * no invalid actor may survive into the next rendered state. */
+        sanitize_city_hero_camera(g);
         sanitize_city_enemies(g);
         /*
          * A CITY TEST exit already crossed at tick start is a completed
