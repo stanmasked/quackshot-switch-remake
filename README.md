@@ -186,6 +186,12 @@ A deterministic gamepad-input script runs and jumps to the first city
 checkpoint; it checks respawn, replay and voluntary map exit. See
 [spawn-to-checkpoint checks](docs/REFERENCE_CITY_SPAWN_CHECKPOINT_RU.md).
 
+Stage 87 joins both city halves with an **uninterrupted spawn-to-exit
+regression** using actual QsInput commands: pit, roof, checkpoint,
+shootable box, spring, airborne heart, one-way ledge, and stage clear.
+It also checks pause and re-entry. See
+[full city route checks](docs/REFERENCE_CITY_FULL_ROUTE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
