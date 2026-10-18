@@ -461,6 +461,18 @@ static int run_progress_map_sdl_smoke(SDL_Renderer *renderer) {
         return 0;
     }
     expected.cleared[0] = 1;
+    /*
+     * Stage 68: the real CITY TEST finish now also earns a completed
+     * time-trial result. The expected image must include that freshly
+     * earned green map record, while retaining the independently
+     * constructed progress and unlock baseline.
+     */
+    if (game.city_best_clear_frames != 1) {
+        fprintf(stderr,"PROGRESS_MAP_SDL_FAIL: expected one-tick clear, got %d\n",
+                game.city_best_clear_frames);
+        return 0;
+    }
+    expected.city_best_clear_frames = game.city_best_clear_frames;
     if (!capture_frame(renderer, &game, &map_after) ||
         !capture_frame(renderer, &expected, &expected_map) ||
         map_before == map_after || map_after != expected_map) {
