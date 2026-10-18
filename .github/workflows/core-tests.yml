@@ -87,6 +87,7 @@ jobs:
           grep -q '^HERO_CAMERA_NUMERIC_SDL_PASS:' smoke.log
           grep -q '^NUMERIC_TRANSITION_SDL_PASS:' smoke.log
           grep -q '^PICKUP_NUMERIC_SDL_PASS:' smoke.log
+          grep -q '^FRAME_ARBITRATION_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
