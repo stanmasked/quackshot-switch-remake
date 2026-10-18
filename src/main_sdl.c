@@ -2481,10 +2481,32 @@ static int run_cross_stage_record_sdl_smoke(SDL_Renderer *renderer) {
     memset(g.enemies,0,sizeof(g.enemies));
     memset(g.pickups,0,sizeof(g.pickups));
     in=(QsInput){0};
+    /*
+     * Stage 68: the personal best is for the highest SINGLE attempt.
+     * Collect A and B within this new attempt before expecting 1000.
+     * One lone B in a new attempt is 500, even when A was earned
+     * on an earlier failed/abandoned run.
+     */
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_bonus_mask!=1 ||
+       qs_city_bonus_score(&g)!=500 ||
+       qs_city_best_bonus_score(&g)!=500) {
+        fprintf(stderr,"CROSS_STAGE_RECORD_SDL_FAIL: first token after reentry mask=%d best=%d\n",
+                g.city_bonus_mask,qs_city_best_bonus_score(&g));
+        return 0;
+    }
     g.hero.x=QS_CITY_BONUS_B_X-5;g.hero.y=188;
     g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
     qs_step(&g,in);
-    if(qs_city_best_bonus_score(&g)!=1000) return 0;
+    if(g.city_bonus_mask!=3 ||
+       qs_city_bonus_score(&g)!=1000 ||
+       qs_city_best_bonus_score(&g)!=1000) {
+        fprintf(stderr,"CROSS_STAGE_RECORD_SDL_FAIL: complete set mask=%d best=%d\n",
+                g.city_bonus_mask,qs_city_best_bonus_score(&g));
+        return 0;
+    }
     in.back=1;qs_step(&g,in);
     if(g.mode!=QS_MAP || qs_city_best_bonus_score(&g)!=1000 ||
        !capture_frame(renderer,&g,&thousand) ||
