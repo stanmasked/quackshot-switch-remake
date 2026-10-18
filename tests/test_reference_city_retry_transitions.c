@@ -84,6 +84,10 @@ static void natural_pit_fall_retries_once_and_stabilizes(void) {
 static void lethal_enemy_respawn_retires_previous_attempt(void) {
     QsGame g = city();
     g.hero.x = 50; g.hero.y = 188;
+    /* The queued shot must fly AWAY from this overlapping enemy;
+     * otherwise the shot correctly stuns it before contact and the
+     * intended fatal-respawn branch is not reached. */
+    g.hero.facing = -1;
     g.hero.hearts = 1; g.hero.hurt_frames = 0;
     g.enemies[0].active = 1;
     g.enemies[0].x = 50; g.enemies[0].y = 188;
