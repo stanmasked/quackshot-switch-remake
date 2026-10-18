@@ -39,6 +39,7 @@ jobs:
           ./build-desktop/quackshot-prototype --smoke | tee smoke.log
           grep -q '^SDL_SMOKE_PASS ' smoke.log
           grep -q '^PROGRESS_MAP_SDL_PASS ' smoke.log
+          grep -q '^MULTISTAGE_MAP_SDL_PASS ' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:

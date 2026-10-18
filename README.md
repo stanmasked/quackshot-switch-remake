@@ -52,6 +52,13 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 34 makes simultaneous map navigation/confirmation unambiguous:
+navigation wins, a new confirmation edge is required to launch a stage,
+and opposing directions cancel. Synthetic three-stage progress tests
+verify all completion flags, persistent red weapon unlocks, map
+wraparound, CITY TEST opt-in, and 240-tick replay. An additional SDL
+software-raster test reads the actual green completion markers on all
+three map rows. See [multi-stage routing](docs/MULTISTAGE_MAP_PROGRESS_RU.md).
 Stage 33 unifies manual and completed CITY TEST exits: cleared
 milestones and unlocked ammo persist, while transient shots and camera
 history are cleared before returning to the map. A new pixel-level SDL

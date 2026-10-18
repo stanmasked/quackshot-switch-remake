@@ -344,6 +344,89 @@ static int run_progress_map_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Multi-stage map proof reads actual 1x1 ARGB8888 SDL pixels at the
+ * center of each earned completion token. The token is drawn only
+ * when its progress flag is set. We complete THREE independent
+ * synthetic test stages and verify that earlier markers never vanish.
+ */
+static int read_map_progress_pixels(SDL_Renderer *renderer, const QsGame *g,
+                                    uint32_t samples[QS_STAGE_COUNT]) {
+    int i;
+    if (SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) != 0 ||
+        SDL_RenderClear(renderer) != 0) return 0;
+    render_map(renderer, g);
+    for (i = 0; i < QS_STAGE_COUNT; ++i) {
+        SDL_Rect one = {329, 45 + i * 53 + 19, 1, 1};
+        if (SDL_RenderReadPixels(renderer, &one, SDL_PIXELFORMAT_ARGB8888,
+                                 &samples[i], (int)sizeof(uint32_t)) != 0)
+            return 0;
+    }
+    return 1;
+}
+
+static int run_multistage_map_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in = {0};
+    uint32_t pixels[QS_STAGE_COUNT];
+    const uint32_t green = UINT32_C(0xff5edd8a); /* color(94,221,138) */
+    int stage, row;
+    qs_init(&g);
+    g.red_unlocked = 1;
+    g.weapon = QS_RED;
+    if (!read_map_progress_pixels(renderer, &g, pixels)) return 0;
+    for (row = 0; row < QS_STAGE_COUNT; ++row) {
+        if (pixels[row] == green) return 0;
+    }
+    in.select = 1; in.dash = 1;
+    qs_step(&g, in);
+    for (stage = 0; stage < QS_STAGE_COUNT; ++stage) {
+        if (g.mode != QS_STAGE || g.stage != stage ||
+            (stage == 0 && g.physics_profile != QS_PHYSICS_REFERENCE_CITY) ||
+            (stage > 0 && g.physics_profile != QS_PHYSICS_PROTOTYPE))
+            return 0;
+        g.hero.x = (QS_COLUMNS - 4) * QS_TILE + 0.5f;
+        in = (QsInput){0};
+        qs_step(&g, in);
+        if (g.mode != QS_MAP || !g.cleared[stage] ||
+            !read_map_progress_pixels(renderer, &g, pixels)) return 0;
+        for (row = 0; row < QS_STAGE_COUNT; ++row) {
+            if ((pixels[row] == green) != (row <= stage)) {
+                fprintf(stderr, "MULTISTAGE_MAP_SDL_FAIL stage=%d row=%d pixel=%08x\n",
+                        stage, row, (unsigned)pixels[row]);
+                return 0;
+            }
+        }
+        if (stage + 1 < QS_STAGE_COUNT) {
+            in.right = 1;
+            qs_step(&g, in);
+            if (g.mode != QS_MAP || g.selected_stage != stage + 1) return 0;
+            in = (QsInput){0};
+            qs_step(&g, in);
+            in.select = 1;
+            qs_step(&g, in);
+        }
+    }
+    /* From stage 2, R+A plus Right on the SAME tick must navigate
+     * to stage 0 but NOT enter it. Confirm needs a new button edge. */
+    in = (QsInput){0};
+    in.right = 1; in.select = 1; in.dash = 1;
+    qs_step(&g, in);
+    if (g.mode != QS_MAP || g.selected_stage != 0) return 0;
+    in = (QsInput){0};
+    qs_step(&g, in);
+    in.select = 1; in.dash = 1;
+    qs_step(&g, in);
+    if (g.mode != QS_STAGE || g.stage != 0 ||
+        g.physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        !g.cleared[0] || !g.cleared[1] || !g.cleared[2] ||
+        !g.red_unlocked || g.weapon != QS_RED ||
+        g.camera_x != 0 || g.render_camera_x != 0 ||
+        g.pickups[0].active) return 0;
+    puts("MULTISTAGE_MAP_SDL_PASS: three SDL completion tokens and atomic map navigation/reentry");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -390,6 +473,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
         }
     }
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
+    if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],

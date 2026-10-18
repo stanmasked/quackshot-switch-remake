@@ -527,11 +527,24 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
 
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
-        if (edge(input.left, g->previous.left) || edge(input.up, g->previous.up))
+        int nav_back = edge(input.left, g->previous.left) ||
+                       edge(input.up, g->previous.up);
+        int nav_forward = edge(input.right, g->previous.right) ||
+                          edge(input.down, g->previous.down);
+        /*
+         * One map action per simulation tick. If a direction and
+         * confirmation start together, navigate only. Previously the
+         * newly selected stage immediately launched by accident.
+         * Opposite directions cancel one another and never enter a
+         * stage through the same tick's confirm button.
+         */
+        if (nav_back && !nav_forward)
             g->selected_stage = (g->selected_stage + QS_STAGE_COUNT - 1) % QS_STAGE_COUNT;
-        if (edge(input.right, g->previous.right) || edge(input.down, g->previous.down))
+        if (nav_forward && !nav_back)
             g->selected_stage = (g->selected_stage + 1) % QS_STAGE_COUNT;
-        if (edge(input.select, g->previous.select) || edge(input.jump, g->previous.jump)) {
+        if (!nav_back && !nav_forward &&
+            (edge(input.select, g->previous.select) ||
+             edge(input.jump, g->previous.jump))) {
             /*
              * R+A together on the city-map selector opts in to the research
              * envelope. Normal A or B leaves the v0.1 prototype unchanged.
