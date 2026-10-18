@@ -121,6 +121,14 @@ The original-free animation is checked by native C replay tests and
 exact SDL2 ARGB8888 pixel probes. See
 [crate debris feedback](docs/REFERENCE_CITY_CRATE_DEBRIS_RU.md).
 
+Stage 75 makes crate destruction **occlusion-aware**: a closer
+solid tile or enemy stops the shot before it can destroy the crate,
+while a direct yellow/red hit still shatters it. The synthetic
+projectile timeline retains its deterministic ordering for multiple
+shots, and a dedicated CTest plus SDL ARGB8888 scene checks
+wall/foe/box priority. See
+[crate impact priority](docs/REFERENCE_CITY_CRATE_PRIORITY_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
