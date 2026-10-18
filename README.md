@@ -38,6 +38,14 @@ reentering restores cyan. SDL2 raster smoke tests verify both colors,
 the distant-camera state, and isolation from the regular prototype.
 See [checkpoint HUD proof](docs/REFERENCE_CITY_CHECKPOINT_HUD_RU.md).
 
+Stage 60 adds two **synthetic optional gold bonus beacons** at x=900
+and x=1040 in the opt-in CITY TEST. Each is worth 500 practice points,
+and a corresponding permanent-in-attempt HUD stamp lights up when
+collected. A fatal hit or pit retry keeps the stamps but cannot award
+a token during the failed frame. Returning to the map resets both
+beacons for a fresh attempt. The default prototype remains untouched.
+See [bonus beacon gameplay](docs/REFERENCE_CITY_BONUS_BEACONS_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
