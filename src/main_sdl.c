@@ -1364,6 +1364,66 @@ static int run_pre_move_shots_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 54: validate the real HUD and the one-tick ammo latch.
+ * Bad weapon/unlock/queue values cannot create an immediate red shot;
+ * a valid RED fire press remains red if the weapon is switched to
+ * yellow during the following (dispatch) frame.
+ */
+static int run_weapon_queue_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t safe_yellow=0,armed_red=0,switched_yellow=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.red_unlocked=INT_MIN;
+    g.weapon=QS_RED;
+    g.pending_reference_shot=INT_MAX;
+    g.pending_reference_red=INT_MAX;
+    qs_step(&g,in);
+    if (g.red_unlocked || g.weapon!=QS_YELLOW ||
+        g.pending_reference_shot || g.pending_reference_red ||
+        g.shots[0].active ||
+        !read_multishot_pixel(renderer,&g,360,6,&safe_yellow) ||
+        safe_yellow!=UINT32_C(0xffe9cf6e)) {
+        fprintf(stderr,"WEAPON_QUEUE_SDL_FAIL: damaged HUD=%08x\n",
+                (unsigned)safe_yellow);
+        return 0;
+    }
+    g.red_unlocked=INT_MAX;g.weapon=QS_RED;
+    in.fire=1;
+    qs_step(&g,in);
+    if(g.red_unlocked!=1 || g.weapon!=QS_RED ||
+       g.pending_reference_shot!=1 || g.pending_reference_red!=1 ||
+       g.shots[0].active ||
+       !read_multishot_pixel(renderer,&g,360,6,&armed_red) ||
+       armed_red!=UINT32_C(0xffe04946)) {
+        fprintf(stderr,"WEAPON_QUEUE_SDL_FAIL: red HUD=%08x\n",
+                (unsigned)armed_red);
+        return 0;
+    }
+    memset(&in,0,sizeof(in));
+    in.change=1;
+    qs_step(&g,in);
+    if(g.weapon!=QS_YELLOW || g.pending_reference_shot ||
+       !g.shots[0].active || !g.shots[0].red ||
+       g.shots[0].vx!=5.5f ||
+       !read_multishot_pixel(renderer,&g,360,6,&switched_yellow) ||
+       switched_yellow!=UINT32_C(0xffe9cf6e)) {
+        fprintf(stderr,"WEAPON_QUEUE_SDL_FAIL: switched=%08x shot=%d red=%d\n",
+                (unsigned)switched_yellow,g.shots[0].active,g.shots[0].red);
+        return 0;
+    }
+    printf("WEAPON_QUEUE_SDL_PASS: safe=%08x armed=%08x switched=%08x latched_red=%d\n",
+           (unsigned)safe_yellow,(unsigned)armed_red,
+           (unsigned)switched_yellow,g.shots[0].red);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1429,6 +1489,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_timer_boundary_sdl_smoke(renderer)) return 1;
     if (!run_hero_status_sdl_smoke(renderer)) return 1;
     if (!run_pre_move_shots_sdl_smoke(renderer)) return 1;
+    if (!run_weapon_queue_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
