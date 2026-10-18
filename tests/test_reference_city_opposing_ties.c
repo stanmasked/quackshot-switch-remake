@@ -87,13 +87,17 @@ static void wall_on_left_blocks_left_shot_but_right_hits_foe(void){
 }
 static void matching_wall_faces_block_both_colors(void){
     QsGame g=scene(QS_PHYSICS_REFERENCE_CITY);
-    g.terrain[12][8]='#'; /* x128..143 */
+    /* Distinct solid columns on BOTH sides of the enemy: the left
+     * yellow shot dies at col7 while the right red shot attaches
+     * to the right face of col9. Neither can reach the central foe. */
+    g.terrain[12][7]=g.terrain[12][9]='#';
     foe(&g,0,135,184);
-    shot(&g,0,120,16,0,194);
-    shot(&g,1,157,-16,1,194);
+    shot(&g,0,100,46,0,194);
+    shot(&g,1,167,-46,1,194);
     qs_step(&g,idle());
     CHECK(!g.shots[0].active);
     CHECK(g.shots[1].active && g.shots[1].attached);
+    CHECK(g.shots[1].x==160);
     CHECK(g.enemies[0].stunned_frames==0);
 }
 static void already_stunned_foe_remains_solid_to_both(void){
