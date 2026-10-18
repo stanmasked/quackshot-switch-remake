@@ -2,6 +2,7 @@
 #include "qs_trace.h"
 #include "qs_motion.h"
 #include "qs_parallax.h"
+#include "qs_route_probe.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <float.h>
@@ -4414,6 +4415,27 @@ int main(int argc, char **argv) {
         qs_trace_close(&trace);
         return 1;
     }
+#ifdef __SWITCH__
+    /*
+     * Stage 88: a separate, clearly labelled deterministic GAME-CORE
+     * self-test runs once in the guest NRO. It does not inject pad
+     * events into the visible session; those are still measured using
+     * quackshot-motion.csv. NeXium demands the route CSV as evidence.
+     */
+    {
+        const char *path = getenv("QS_ROUTE_PATH");
+        FILE *route_stream;
+        if (!path || !*path) path="sdmc:/switch/quackshot-route.csv";
+        route_stream=fopen(path,"w");
+        if (!route_stream) {
+            fprintf(stderr,"CITY_ROUTE_PROBE_UNAVAILABLE: cannot write guest route CSV\n");
+        } else {
+            int ok=qs_route_probe_write(route_stream);
+            if (fclose(route_stream)!=0)ok=0;
+            fprintf(stderr,"CITY_ROUTE_PROBE_%s\n",ok?"PASS":"FAIL");
+        }
+    }
+#endif
     if (parallax_smoke || camera_latch_smoke) {
         int result = parallax_smoke ? run_parallax_sdl_smoke(renderer)
                                     : run_camera_latch_sdl_smoke(renderer);
