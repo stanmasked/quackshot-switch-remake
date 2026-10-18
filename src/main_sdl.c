@@ -2764,6 +2764,111 @@ static int run_city_checkpoint_split_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 70: exact SDL pixels for a first split with no comparison,
+ * a green -0005 improvement, a red +0005 slower run and a cyan
+ * 0000 tie. The previous PB, not a just-written record, is the
+ * reference; this test detects changing the order of those steps.
+ */
+static int run_checkpoint_pace_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    QsInput in={0};
+    uint32_t signed_color=0,top=0;
+    const uint32_t green=UINT32_C(0xff5edd8a);
+    const uint32_t red=UINT32_C(0xffef606c);
+    const uint32_t cyan=UINT32_C(0xff70cadd);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.hero.x=100;g.hero.y=188;g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    for(int i=0;i<9;i++)qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_best_checkpoint_time(&g)!=10 ||
+       qs_city_checkpoint_gap_valid(&g) ||
+       !verify_city_digits_pixels(renderer,&g,NULL,89,green))
+        return 0;
+    /* Restart through the real map path and beat the 10-tick record
+     * in 5 ticks: -0005 green with a horizontal minus sign only. */
+    in.back=1;qs_step(&g,in);
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE)return 0;
+    in=(QsInput){0};
+    memset(g.enemies,0,sizeof(g.enemies));
+    for(int i=0;i<4;i++)qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!qs_city_checkpoint_gap_valid(&g) ||
+       qs_city_checkpoint_gap_time(&g)!=-5 ||
+       qs_city_best_checkpoint_time(&g)!=5 ||
+       !verify_city_digits_pixels(renderer,&g,"0005",89,green) ||
+       !read_multishot_pixel(renderer,&g,81,7,&signed_color) ||
+       signed_color!=green ||
+       !read_multishot_pixel(renderer,&g,81,5,&top) ||
+       top!=UINT32_C(0xff1c2636)) {
+        fprintf(stderr,"CHECKPOINT_PACE_SDL_FAIL: faster=%08x vertical=%08x\n",
+                (unsigned)signed_color,(unsigned)top);
+        return 0;
+    }
+    /* Another real attempt takes 10 ticks, five slower than PB. */
+    in.back=1;qs_step(&g,in);
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE)return 0;
+    in=(QsInput){0};
+    memset(g.enemies,0,sizeof(g.enemies));
+    for(int i=0;i<9;i++)qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!qs_city_checkpoint_gap_valid(&g) ||
+       qs_city_checkpoint_gap_time(&g)!=5 ||
+       qs_city_best_checkpoint_time(&g)!=5 ||
+       !verify_city_digits_pixels(renderer,&g,"0005",89,red) ||
+       !read_multishot_pixel(renderer,&g,81,7,&signed_color) ||
+       signed_color!=red ||
+       !read_multishot_pixel(renderer,&g,81,5,&top) ||
+       top!=red) {
+        fprintf(stderr,"CHECKPOINT_PACE_SDL_FAIL: slower=%08x vertical=%08x\n",
+                (unsigned)signed_color,(unsigned)top);
+        return 0;
+    }
+    /* Exactly matching PB is a valid cyan zero, not 'no comparison'. */
+    in.back=1;qs_step(&g,in);
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE)return 0;
+    in=(QsInput){0};
+    memset(g.enemies,0,sizeof(g.enemies));
+    for(int i=0;i<4;i++)qs_step(&g,in);
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!qs_city_checkpoint_gap_valid(&g) ||
+       qs_city_checkpoint_gap_time(&g)!=0 ||
+       !verify_city_digits_pixels(renderer,&g,"0000",89,cyan) ||
+       !read_multishot_pixel(renderer,&g,81,7,&signed_color) ||
+       signed_color!=cyan)
+        return 0;
+    /* Legacy profile has no pace pixels, even if its state is forged. */
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.city_checkpoint_active=1;
+    legacy.city_checkpoint_split_frames=2;
+    legacy.city_checkpoint_gap_valid=1;
+    legacy.city_checkpoint_gap_frames=-1;
+    if(qs_city_checkpoint_gap_valid(&legacy) ||
+       !verify_city_digits_pixels(renderer,&legacy,NULL,89,green))
+        return 0;
+    puts("CHECKPOINT_PACE_SDL_PASS: faster -0005 green, slower +0005 red, tied 0000 cyan, first split absent");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2842,6 +2947,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_cross_stage_record_sdl_smoke(renderer)) return 1;
     if (!run_city_time_trial_sdl_smoke(renderer)) return 1;
     if (!run_city_checkpoint_split_sdl_smoke(renderer)) return 1;
+    if (!run_checkpoint_pace_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
