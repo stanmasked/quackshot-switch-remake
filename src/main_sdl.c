@@ -2338,6 +2338,117 @@ static int run_map_best_score_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 65: exercise the real level-selector input path. Earn 0500 in
+ * optional CITY TEST, visit RUINS and ROOFTOP in legacy physics, then
+ * verify the blue record is still visible on the original CITY row.
+ * A fresh prototype session remains free of any record display.
+ */
+static int run_cross_stage_record_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,blank;
+    QsInput in={0};
+    uint64_t saved=0,without_record=0,rooftop=0,thousand=0;
+    uint32_t pixel=0;
+    SDL_Rect top_segment={279,61,1,1};
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_best_bonus_score!=500 || qs_city_best_bonus_score(&g)!=500)
+        return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_bonus_score(&g)!=500) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.right=1;qs_step(&g,in);
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=1 ||
+       g.physics_profile!=QS_PHYSICS_PROTOTYPE ||
+       qs_city_best_bonus_score(&g)!=0) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.stage!=1 ||
+       g.physics_profile!=QS_PHYSICS_PROTOTYPE ||
+       qs_city_best_bonus_score(&g)!=500 ||
+       !capture_frame(renderer,&g,&saved) ||
+       SDL_RenderReadPixels(renderer,&top_segment,SDL_PIXELFORMAT_ARGB8888,
+                            &pixel,(int)sizeof(pixel))!=0 ||
+       pixel!=UINT32_C(0xff70cadd)) {
+        fprintf(stderr,"CROSS_STAGE_RECORD_SDL_FAIL: after ruins pixel=%08x best=%d\n",
+                (unsigned)pixel,qs_city_best_bonus_score(&g));
+        return 0;
+    }
+    blank=g;
+    blank.city_best_bonus_score=0;
+    if(!capture_frame(renderer,&blank,&without_record) ||
+       saved==without_record) {
+        fputs("CROSS_STAGE_RECORD_SDL_FAIL: map pixel hash independent of best\n",stderr);
+        return 0;
+    }
+    /* A second normal stage must not wipe the session record. */
+    in=(QsInput){0};qs_step(&g,in);
+    in.right=1;qs_step(&g,in);
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=2 ||
+       g.physics_profile!=QS_PHYSICS_PROTOTYPE ||
+       qs_city_best_bonus_score(&g)!=0) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.stage!=2 ||
+       qs_city_best_bonus_score(&g)!=500 ||
+       !capture_frame(renderer,&g,&rooftop) ||
+       SDL_RenderReadPixels(renderer,&top_segment,SDL_PIXELFORMAT_ARGB8888,
+                            &pixel,(int)sizeof(pixel))!=0 ||
+       pixel!=UINT32_C(0xff70cadd)) {
+        fputs("CROSS_STAGE_RECORD_SDL_FAIL: after rooftop\n",stderr);
+        return 0;
+    }
+    /* Return to the measured city, improve the record, exit again. */
+    in=(QsInput){0};qs_step(&g,in);
+    in.right=1;qs_step(&g,in);
+    if(g.selected_stage!=0 || g.mode!=QS_MAP) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE ||
+       g.physics_profile!=QS_PHYSICS_REFERENCE_CITY ||
+       qs_city_best_bonus_score(&g)!=500) return 0;
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    in=(QsInput){0};
+    g.hero.x=QS_CITY_BONUS_B_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_best_bonus_score(&g)!=1000) return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_best_bonus_score(&g)!=1000 ||
+       !capture_frame(renderer,&g,&thousand) ||
+       SDL_RenderReadPixels(renderer,&top_segment,SDL_PIXELFORMAT_ARGB8888,
+                            &pixel,(int)sizeof(pixel))!=0 ||
+       pixel!=UINT32_C(0xff49748e)) {
+        fprintf(stderr,"CROSS_STAGE_RECORD_SDL_FAIL: 1000 on map pixel=%08x\n",
+                (unsigned)pixel);
+        return 0;
+    }
+    qs_init(&blank);
+    if(qs_city_best_bonus_score(&blank)!=0 ||
+       !capture_frame(renderer,&blank,&without_record) ||
+       SDL_RenderReadPixels(renderer,&top_segment,SDL_PIXELFORMAT_ARGB8888,
+                            &pixel,(int)sizeof(pixel))!=0 ||
+       pixel!=UINT32_C(0xff49748e)) {
+        fputs("CROSS_STAGE_RECORD_SDL_FAIL: default prototype map altered\n",stderr);
+        return 0;
+    }
+    printf("CROSS_STAGE_RECORD_SDL_PASS: ruins=%016llx rooftop=%016llx improved=%016llx fresh=%016llx\n",
+           (unsigned long long)saved,(unsigned long long)rooftop,
+           (unsigned long long)thousand,(unsigned long long)without_record);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2413,6 +2524,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_bonus_set_heal_sdl_smoke(renderer)) return 1;
     if (!run_bonus_score_sdl_smoke(renderer)) return 1;
     if (!run_map_best_score_sdl_smoke(renderer)) return 1;
+    if (!run_cross_stage_record_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
