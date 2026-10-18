@@ -121,6 +121,32 @@ int qs_city_best_checkpoint_time(const QsGame *g) {
     return g->city_best_checkpoint_frames;
 }
 
+/* Stage 78: the second sector starts at the FIRST safe checkpoint
+ * contact in this attempt, not at a life-respawn or map visit.
+ * Saturated 9999-frame attempts remain safe signed integer math. */
+int qs_city_sector_time(const QsGame *g) {
+    if (!g || g->mode != QS_STAGE || g->stage != 0 ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->city_checkpoint_active != 1 ||
+        g->city_checkpoint_split_frames < 1 ||
+        g->city_checkpoint_split_frames > QS_CITY_TIMER_MAX ||
+        g->city_attempt_frames < g->city_checkpoint_split_frames ||
+        g->city_attempt_frames > QS_CITY_TIMER_MAX)
+        return 0;
+    return g->city_attempt_frames - g->city_checkpoint_split_frames;
+}
+
+int qs_city_best_sector_time(const QsGame *g) {
+    if (!g || g->city_best_sector_frames < 1 ||
+        g->city_best_sector_frames >= QS_CITY_TIMER_MAX)
+        return 0;
+    if (g->mode != QS_MAP &&
+        (g->mode != QS_STAGE || g->stage != 0 ||
+         g->physics_profile != QS_PHYSICS_REFERENCE_CITY))
+        return 0;
+    return g->city_best_sector_frames;
+}
+
 /*
  * Stage 70: compare this attempt's split against the PREVIOUS session
  * record, before the record is lowered. A signed negative gap is faster.
@@ -148,6 +174,20 @@ static void record_city_clear_time(QsGame *g) {
     elapsed = g->city_attempt_frames;
     if (elapsed < 1 || elapsed > QS_CITY_TIMER_MAX)
         return;
+    /*
+     * Record second-sector PB only on a real clear after the flag;
+     * a quick retry, Back, numeric rollback or skipped flag cannot
+     * forge it. The value never includes any time before the split.
+     */
+    if (g->city_checkpoint_active == 1 &&
+        g->city_checkpoint_split_frames >= 1 &&
+        g->city_checkpoint_split_frames < elapsed) {
+        int sector = elapsed - g->city_checkpoint_split_frames;
+        if (g->city_best_sector_frames < 1 ||
+            g->city_best_sector_frames >= QS_CITY_TIMER_MAX ||
+            sector < g->city_best_sector_frames)
+            g->city_best_sector_frames = sector;
+    }
     if (g->city_best_clear_frames < 1 ||
         g->city_best_clear_frames > QS_CITY_TIMER_MAX ||
         elapsed < g->city_best_clear_frames)
