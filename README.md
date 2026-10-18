@@ -18,6 +18,19 @@ mechanics of *QuackShot Starring Donald Duck* (Mega Drive/Genesis, 1991).
 - Bounded asset-free SDL2 boot/first-frame/controller/heartbeat diagnostics on Switch SD, with host-side integration tests.
 - Independent original-ROM metadata inspector lives in PR #1.
 
+## Experimental gameplay addition: city checkpoint (stage 58)
+
+The opt-in **CITY TEST** now has an **original-free blue/gold flag at
+world x=640**. Reach the flag to enable a mid-level restart after
+a pit or fatal enemy hit, with three hearts, brief immunity and the
+camera re-centered at the checkpoint. Before touching it, retries
+still start at x=40. Returning to the map clears the flag for the
+next attempt; the default prototype is unchanged.
+
+This is a self-authored convenience mechanic, **not** a claim about
+the original 1991 QuackShot. See
+[checkpoint gameplay and tests](docs/REFERENCE_CITY_CHECKPOINT_GAMEPLAY_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
