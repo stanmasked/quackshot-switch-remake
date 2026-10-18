@@ -161,6 +161,12 @@ is calculated without extra mutable state; pause freezes it and
 retries clear the live indicator. See
 [second-sector budget feedback](docs/REFERENCE_CITY_SECTOR_BUDGET_RU.md).
 
+Stage 80 adds a **procedural spring pad** on the final CITY TEST
+ground segment. Landing triggers a fixed bounce and a brief cyan
+flash. It integrates with jump-hold physics, time-trial pause and
+quick retry, while the ordinary prototype stays unaffected. See
+[spring pad gameplay and tests](docs/REFERENCE_CITY_SPRING_PAD_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
