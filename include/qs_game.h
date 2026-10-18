@@ -19,6 +19,10 @@
 #define QS_CITY_BONUS_B_X 1040.0f
 #define QS_CITY_BONUS_Y 188.0f
 #define QS_CITY_BONUS_VALUE 500
+/* Original-free obstacle between the two CITY TEST bonus beacons. */
+#define QS_CITY_CRATE_X 968.0f
+#define QS_CITY_CRATE_Y 192.0f
+#define QS_CITY_CRATE_SIZE 16.0f
 #define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
 
 #ifdef __cplusplus
@@ -47,6 +51,7 @@ typedef struct {
     int red_unlocked;
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
+    int city_crate_active; /* city-only breakable box, reset on new attempt */
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int city_attempt_frames; /* reset at every stage/map handoff */
     int city_best_clear_frames; /* 0 means no finish; lowest wins */
