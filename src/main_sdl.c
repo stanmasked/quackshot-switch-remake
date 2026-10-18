@@ -2869,6 +2869,95 @@ static int run_checkpoint_pace_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 71: an interactive R + Start practice retry changes the
+ * rendered CITY TEST scene immediately, without visiting the map.
+ * Snapshot comparisons are performed against a clean stage and
+ * independent digits/original-free token positions in SDL ARGB8888.
+ */
+static int run_city_quick_retry_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,expected;
+    QsInput in={0};
+    uint64_t before=0,after=0,fresh=0,held=0;
+    const uint32_t green=UINT32_C(0xff5edd8a);
+    const uint32_t gold=UINT32_C(0xffffe16c);
+    uint32_t flag=0,checkpoint=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(!g.city_checkpoint_active ||
+       qs_city_best_checkpoint_time(&g)!=1)return 0;
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_bonus_score(&g)!=500 ||
+       qs_city_best_bonus_score(&g)!=500)return 0;
+    g.city_best_clear_frames=17; /* previous session result */
+    g.pending_reference_shot=1;
+    g.pending_reference_red=1;
+    g.shots[0].active=g.shots[0].attached=1;
+    g.shots[0].x=101;g.shots[0].y=160;
+    g.shots[0].frames=40;
+    if(!capture_frame(renderer,&g,&before))return 0;
+
+    /* Fresh baseline includes identical session PBs but no local
+     * stage objects, split, coins or elapsed time. */
+    expected=g;
+    qs_begin_stage(&expected,0);
+    in.back=in.dash=in.fire=in.right=in.jump=1;
+    qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=0 ||
+       g.hero.x!=40 || g.hero.y!=188 ||
+       g.city_attempt_frames!=0 ||
+       g.city_checkpoint_active || g.city_bonus_mask ||
+       g.city_checkpoint_split_frames || g.city_checkpoint_gap_valid ||
+       g.pending_reference_shot || g.shots[0].active ||
+       g.city_best_bonus_score!=500 ||
+       g.city_best_checkpoint_frames!=1 ||
+       g.city_best_clear_frames!=17 ||
+       !capture_frame(renderer,&g,&after) ||
+       !capture_frame(renderer,&expected,&fresh) ||
+       before==after || after!=fresh ||
+       !verify_city_digits_pixels(renderer,&g,"0000",166,green) ||
+       !verify_city_digits_pixels(renderer,&g,"0000",245,gold) ||
+       !verify_city_digits_pixels(renderer,&g,"0500",205,
+                                  UINT32_C(0xff70cadd))) {
+        fprintf(stderr,"CITY_QUICK_RETRY_SDL_FAIL: before=%016llx after=%016llx fresh=%016llx\n",
+                (unsigned long long)before,(unsigned long long)after,
+                (unsigned long long)fresh);
+        return 0;
+    }
+    /* Holding R + Start cannot repeatedly reset the clock and the
+     * same held Fire input cannot trigger an unexpected new edge. */
+    qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_attempt_frames!=1 ||
+       g.pending_reference_shot ||
+       !capture_frame(renderer,&g,&held) || held==after)
+        return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_attempt_frames!=2)return 0;
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP ||
+       qs_city_best_bonus_score(&g)!=500 ||
+       qs_city_best_clear_time(&g)!=17 ||
+       qs_city_best_checkpoint_time(&g)!=1 ||
+       g.city_attempt_frames!=0 ||
+       !read_map_progress_pixels(renderer,&g,
+            (uint32_t[QS_STAGE_COUNT]){0}))
+        return 0;
+    printf("CITY_QUICK_RETRY_SDL_PASS: old=%016llx restart=%016llx fresh=%016llx held=%016llx\n",
+           (unsigned long long)before,(unsigned long long)after,
+           (unsigned long long)fresh,(unsigned long long)held);
+    (void)checkpoint;(void)flag;
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2948,6 +3037,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_time_trial_sdl_smoke(renderer)) return 1;
     if (!run_city_checkpoint_split_sdl_smoke(renderer)) return 1;
     if (!run_checkpoint_pace_sdl_smoke(renderer)) return 1;
+    if (!run_city_quick_retry_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
