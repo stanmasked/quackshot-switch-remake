@@ -119,6 +119,7 @@ jobs:
           grep -q '^CHECKPOINT_PACE_SDL_PASS:' smoke.log
           grep -q '^CITY_QUICK_RETRY_SDL_PASS:' smoke.log
           grep -q '^CRATE_SDL_PASS:' smoke.log
+          grep -q '^CRATE_DEBRIS_SDL_PASS:' smoke.log
           python3 - <<'PY'
           import csv
           with open("smoke-runtime.csv", newline="") as f:
