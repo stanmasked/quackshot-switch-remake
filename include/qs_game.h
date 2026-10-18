@@ -52,6 +52,8 @@ typedef struct {
     int city_best_clear_frames; /* 0 means no finish; lowest wins */
     int city_checkpoint_split_frames; /* first valid flag touch in attempt, 0 if not earned */
     int city_best_checkpoint_frames; /* fastest flag split of session, 0 if none */
+    int city_checkpoint_gap_frames; /* signed frames vs PREVIOUS best split, -9998..9998 */
+    int city_checkpoint_gap_valid; /* false on first split in session */
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
@@ -77,6 +79,8 @@ int qs_city_attempt_time(const QsGame *game); /* 0..9999 frames */
 int qs_city_best_clear_time(const QsGame *game); /* 0 or 1..9999 frames */
 int qs_city_checkpoint_split_time(const QsGame *game); /* 0 or 1..9999 frames */
 int qs_city_best_checkpoint_time(const QsGame *game); /* 0 or 1..9999 frames */
+int qs_city_checkpoint_gap_valid(const QsGame *game); /* measured comparison available */
+int qs_city_checkpoint_gap_time(const QsGame *game); /* signed, negative=faster */
 
 #ifdef __cplusplus
 }
