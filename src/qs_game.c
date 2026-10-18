@@ -527,6 +527,8 @@ static void move_hero(QsGame *g, QsInput in, int jump_pressed) {
 
 void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_MAP) {
+        int held_back = input.left || input.up;
+        int held_forward = input.right || input.down;
         int nav_back = edge(input.left, g->previous.left) ||
                        edge(input.up, g->previous.up);
         int nav_forward = edge(input.right, g->previous.right) ||
@@ -535,14 +537,17 @@ void qs_step(QsGame *g, QsInput input) {
          * One map action per simulation tick. If a direction and
          * confirmation start together, navigate only. Previously the
          * newly selected stage immediately launched by accident.
-         * Opposite directions cancel one another and never enter a
-         * stage through the same tick's confirm button.
+         * The rule also covers STAGGERED opposing holds: an old left
+         * hold plus a newly pressed right must not move the menu.
+         * Confirmation requires no direction held at all, even when
+         * the direction's new-edge event already happened earlier.
+         * A suppressed confirmation is consumed; release/repress it.
          */
-        if (nav_back && !nav_forward)
+        if (held_back && !held_forward && nav_back)
             g->selected_stage = (g->selected_stage + QS_STAGE_COUNT - 1) % QS_STAGE_COUNT;
-        if (nav_forward && !nav_back)
+        if (held_forward && !held_back && nav_forward)
             g->selected_stage = (g->selected_stage + 1) % QS_STAGE_COUNT;
-        if (!nav_back && !nav_forward &&
+        if (!held_back && !held_forward &&
             (edge(input.select, g->previous.select) ||
              edge(input.jump, g->previous.jump))) {
             /*

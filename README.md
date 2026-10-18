@@ -52,6 +52,12 @@ The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
 using the official GitHub Releases asset digest (2026-10-18). The
 download remains fail-closed: future nightly changes require a new
 independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
+Stage 35 prevents staggered opposing button holds from moving the
+map and blocks stage entry until all directions are released. Short
+rapid-input regressions and a 1,200-step reproducible state-machine
+stress test verify the selection, all completion flags, and profile
+isolation. SDL2 now checks the actual highlighted row after each
+chord and valid entry. See [map chord guard](docs/MAP_INPUT_CHORD_GUARD_RU.md).
 Stage 34 makes simultaneous map navigation/confirmation unambiguous:
 navigation wins, a new confirmation edge is required to launch a stage,
 and opposing directions cancel. Synthetic three-stage progress tests

@@ -427,6 +427,68 @@ static int run_multistage_map_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Pixel-level selection proof for staggered map-button chords.
+ * The highlight's left 7px strip is gold at the selected row and
+ * grey at every other row. Sample real SDL_ARGB8888 pixels.
+ */
+static int map_selection_pixels(SDL_Renderer *renderer,
+                                const QsGame *g, int selected) {
+    int i;
+    const uint32_t active = UINT32_C(0xffffd06d);
+    const uint32_t inactive = UINT32_C(0xff6b717f);
+    if (g->mode != QS_MAP || g->selected_stage != selected) return 0;
+    if (SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255) != 0 ||
+        SDL_RenderClear(renderer) != 0) return 0;
+    render_map(renderer, g);
+    for (i=0; i<QS_STAGE_COUNT; ++i) {
+        SDL_Rect point = {52, 45 + 53*i + 19, 1, 1};
+        uint32_t p=0;
+        if (SDL_RenderReadPixels(renderer, &point, SDL_PIXELFORMAT_ARGB8888,
+                                 &p, (int)sizeof(p)) != 0 ||
+            p != (i==selected ? active : inactive)) {
+            fprintf(stderr, "MAP_CHORD_SDL_FAIL row=%d pixel=%08x selected=%d\n",
+                    i, (unsigned)p, selected);
+            return 0;
+        }
+    }
+    return 1;
+}
+static int run_map_chord_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in = {0};
+    qs_init(&g);
+    if (!map_selection_pixels(renderer,&g,0)) return 0;
+    in.left=1;
+    qs_step(&g,in); /* wrap backwards to stage 2 */
+    if (!map_selection_pixels(renderer,&g,2)) return 0;
+    in.right=1; in.select=1;
+    qs_step(&g,in); /* left still held: no forward navigation/enter */
+    if (!map_selection_pixels(renderer,&g,2)) return 0;
+    in.left=0;
+    qs_step(&g,in); /* held right and select: no new event */
+    if (!map_selection_pixels(renderer,&g,2)) return 0;
+    in = (QsInput){0};
+    qs_step(&g,in);
+    in.right=1;
+    qs_step(&g,in);
+    if (!map_selection_pixels(renderer,&g,0)) return 0;
+    in.select=1;
+    qs_step(&g,in); /* right is held: no entry */
+    if (!map_selection_pixels(renderer,&g,0)) return 0;
+    in=(QsInput){0};
+    qs_step(&g,in);
+    in.select=1; in.dash=1;
+    qs_step(&g,in);
+    if (g.mode!=QS_STAGE || g.stage!=0 ||
+        g.physics_profile!=QS_PHYSICS_REFERENCE_CITY) {
+        fprintf(stderr,"MAP_CHORD_SDL_FAIL separate confirm failed\n");
+        return 0;
+    }
+    puts("MAP_CHORD_SDL_PASS: opposing holds, suppressed confirm, three true SDL highlight rows");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -474,6 +536,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     }
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
+    if (!run_map_chord_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
