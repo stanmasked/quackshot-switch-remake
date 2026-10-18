@@ -1190,7 +1190,14 @@ void qs_step(QsGame *g, QsInput input) {
     if (g->mode == QS_STAGE && g->stage == 0 &&
         g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
         int back_edge=edge(input.back,g->previous.back);
-        int pause_chord=back_edge && input.change && !input.dash;
+        /*
+         * Stage 77: do not reinterpret historical multibutton safety
+         * chords as PAUSE. X+Start may be held with directional input
+         * (e.g. while running), but firing, jumping, or confirming
+         * makes it a regular Back/menu command unless R requests retry.
+         */
+        int pause_chord=back_edge && input.change && !input.dash &&
+                        !input.fire && !input.jump && !input.select;
         if (g->city_paused != 1) g->city_paused=0;
         if (g->city_paused ||
             (pause_chord && g->hero.x < (QS_COLUMNS-4)*QS_TILE)) {
