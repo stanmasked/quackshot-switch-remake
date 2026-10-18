@@ -167,6 +167,12 @@ flash. It integrates with jump-hold physics, time-trial pause and
 quick retry, while the ordinary prototype stays unaffected. See
 [spring pad gameplay and tests](docs/REFERENCE_CITY_SPRING_PAD_RU.md).
 
+Stage 84 adds a **one-way sky ledge** near the exit of CITY TEST.
+The ledge catches descending landings, allows rising passage from below,
+and uses the uppermost crossed surface when red-shot anchors are also
+present. No standard prototype physics are changed. See
+[sky ledge checks](docs/REFERENCE_CITY_SKY_LEDGE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

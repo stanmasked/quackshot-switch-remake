@@ -320,6 +320,16 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                       (int)QS_CITY_SPRING_WIDTH-10,2,
                       color(112,202,221));
     }
+    /* Stage 84: decorative top of the one-way sky ledge. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        int x=(int)QS_CITY_SKY_LEDGE_X-cam;
+        int y=(int)QS_CITY_SKY_LEDGE_TOP;
+        rectangle(renderer,x,y-4,(int)QS_CITY_SKY_LEDGE_WIDTH,4,
+                  color(104,177,205));
+        rectangle(renderer,x+4,y-6,(int)QS_CITY_SKY_LEDGE_WIDTH-8,2,
+                  color(255,239,173));
+    }
     /* Stage 81: reachable spring-route heart, independent from the
      * two ground beacons and their 1000-point scoreboard. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
@@ -3854,6 +3864,42 @@ static int run_city_air_reward_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+
+/* Stage 84: real SDL pixel readback for the city-only sky ledge. */
+static int run_city_sky_ledge_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,legacy;
+    const int cam=QS_COLUMNS*QS_TILE-QS_VIEW_W;
+    const int x=(int)QS_CITY_SKY_LEDGE_X-cam;
+    const int y=(int)QS_CITY_SKY_LEDGE_TOP;
+    uint32_t body=0,trim=0,shifted=0,old=0;
+    const uint32_t cyan=UINT32_C(0xff68b1cd);
+    const uint32_t cream=UINT32_C(0xffffefad);
+    qs_init(&g);g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=40;g.hero.y=188;
+    g.camera_x=g.render_camera_x=(float)cam;
+    if(!read_multishot_pixel(renderer,&g,x+2,y-2,&body) ||
+       !read_multishot_pixel(renderer,&g,x+5,y-5,&trim) ||
+       body!=cyan || trim!=cream) {
+        fprintf(stderr,"CITY_SKY_LEDGE_SDL_FAIL body=%08x trim=%08x\n",
+                (unsigned)body,(unsigned)trim);
+        return 0;
+    }
+    g.render_camera_x=(float)cam-20;
+    if(!read_multishot_pixel(renderer,&g,x+22,y-2,&shifted) ||
+       shifted!=cyan) return 0;
+    qs_init(&legacy);qs_begin_stage(&legacy,0);
+    legacy.camera_x=legacy.render_camera_x=(float)cam;
+    legacy.hero.x=40;legacy.hero.y=188;
+    if(!read_multishot_pixel(renderer,&legacy,x+2,y-2,&old) ||
+       old==cyan) return 0;
+    printf("CITY_SKY_LEDGE_SDL_PASS body=%08x trim=%08x\n",
+           (unsigned)body,(unsigned)trim);
+    return 1;
+}
+
 static int run_city_spring_sdl_smoke(SDL_Renderer *renderer) {
     QsGame g,legacy;
     QsInput in={0};
@@ -4032,6 +4078,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_sector_time_sdl_smoke(renderer)) return 1;
     if (!run_city_sector_budget_sdl_smoke(renderer)) return 1;
     if (!run_city_spring_sdl_smoke(renderer)) return 1;
+    if (!run_city_sky_ledge_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_fx_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_hud_sdl_smoke(renderer)) return 1;

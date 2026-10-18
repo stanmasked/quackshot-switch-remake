@@ -30,6 +30,10 @@
 #define QS_CITY_SPRING_WIDTH 24.0f
 #define QS_CITY_SPRING_BOUNCE -8.0f
 #define QS_CITY_SPRING_FLASH_TICKS 12
+/* Stage 84: original-free one-way exit-side ledge. */
+#define QS_CITY_SKY_LEDGE_X 1176.0f
+#define QS_CITY_SKY_LEDGE_TOP 144.0f
+#define QS_CITY_SKY_LEDGE_WIDTH 28.0f
 /* Stage 81: optional airborne heart on the bounce trajectory, not an original asset. */
 #define QS_CITY_AIR_REWARD_X 1152.0f
 #define QS_CITY_AIR_REWARD_Y 96.0f

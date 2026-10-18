@@ -850,6 +850,21 @@ static void shoot(QsGame *g) {
     shoot_as(g, g->red_unlocked && g->weapon == QS_RED);
 }
 
+
+/* Stage 84: independent static surface, crossed only while descending.
+ * The usual prototype never collides with this geometry. */
+static int city_sky_ledge_surface(const QsGame *g, float hero_x,
+                                 float old_bottom, float new_bottom,
+                                 float *surface_y) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        g->stage != 0 || old_bottom > QS_CITY_SKY_LEDGE_TOP + 0.01f ||
+        new_bottom < QS_CITY_SKY_LEDGE_TOP ||
+        hero_x >= QS_CITY_SKY_LEDGE_X + QS_CITY_SKY_LEDGE_WIDTH ||
+        hero_x + 12 <= QS_CITY_SKY_LEDGE_X)
+        return 0;
+    *surface_y=QS_CITY_SKY_LEDGE_TOP;
+    return 1;
+}
 static int city_anchor_surface(const QsGame *g, float hero_x,
                                float old_bottom, float new_bottom,
                                float *surface_y) {
@@ -947,10 +962,18 @@ static int move_hero(QsGame *g, QsInput in, int jump_pressed) {
         trial = h->y + segment;
         if (dy > 0) {
             if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
-                float nearest;
-                if (city_anchor_surface(g, h->x, old_bottom, trial + 20, &nearest)) {
-                    h->y = nearest - 20;
-                    on_anchor = 1;
+                float nearest, ledge;
+                int found = city_anchor_surface(g, h->x, old_bottom,
+                                                trial + 20, &nearest);
+                if (city_sky_ledge_surface(g, h->x, old_bottom,
+                                           trial + 20, &ledge) &&
+                    (!found || ledge < nearest)) {
+                    nearest=ledge;
+                    found=1;
+                }
+                if (found) {
+                    h->y=nearest-20;
+                    on_anchor=1;
                 }
             } else {
                 /* Keep ordinary prototype's original slot-order behavior. */
