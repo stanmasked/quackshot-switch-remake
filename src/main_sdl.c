@@ -1007,6 +1007,44 @@ static int run_enemy_numeric_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* The stage-47 guard must retire invalid hero/camera values before
+ * render_stage can cast them to pixel coordinates. Also prove a distinct
+ * stunned actor is not lost by the player-state recovery. */
+static int run_hero_camera_numeric_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput idle={0};
+    uint32_t hero_pixel=0, enemy_pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    g.hero.x=NAN;g.hero.y=FLT_MAX;
+    g.hero.vx=INFINITY;g.hero.vy=-INFINITY;
+    g.camera_x=NAN;g.render_camera_x=INFINITY;
+    g.enemies[0].active=1;
+    g.enemies[0].x=135;g.enemies[0].y=184;
+    g.enemies[0].min_x=g.enemies[0].max_x=135;
+    g.enemies[0].dir=1;
+    g.enemies[0].stunned_frames=2;
+    qs_step(&g,idle);
+    if (g.mode!=QS_STAGE ||
+        g.hero.x!=40 || g.hero.y!=188 ||
+        g.camera_x!=0 || g.render_camera_x!=0 ||
+        !isfinite(g.hero.vx) || !isfinite(g.hero.vy) ||
+        g.enemies[0].stunned_frames!=1 ||
+        !read_multishot_pixel(renderer,&g,41,191,&hero_pixel) ||
+        !read_multishot_pixel(renderer,&g,138,186,&enemy_pixel) ||
+        hero_pixel!=UINT32_C(0xfffaeda7) ||
+        enemy_pixel!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"HERO_CAMERA_NUMERIC_SDL_FAIL: hero=%08x enemy=%08x camera=%.2f\n",
+                (unsigned)hero_pixel,(unsigned)enemy_pixel,(double)g.camera_x);
+        return 0;
+    }
+    printf("HERO_CAMERA_NUMERIC_SDL_PASS: recovered hero=%08x valid enemy=%08x\n",
+           (unsigned)hero_pixel,(unsigned)enemy_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1065,6 +1103,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_global_timeline_sdl_smoke(renderer)) return 1;
     if (!run_velocity_guard_sdl_smoke(renderer)) return 1;
     if (!run_enemy_numeric_sdl_smoke(renderer)) return 1;
+    if (!run_hero_camera_numeric_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
