@@ -121,10 +121,33 @@ static int hits_tiles(const QsGame *g, float x, float y, float w, float h) {
     return 0;
 }
 
+/*
+ * Clear transient actors on a CITY TEST retry or map exit.
+ * Persistent unlocks, completion flags and authored stage geometry
+ * intentionally survive. Other prototype profiles retain their
+ * original respawn and map-exit behavior.
+ */
+static void clear_city_transients(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    memset(g->shots, 0, sizeof(g->shots));
+    g->pending_reference_shot = 0;
+    g->pending_reference_red = 0;
+    g->reference_jump_steps = 0;
+}
+
 static void respawn(QsGame *g) {
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
     g->hero.hearts = 3; g->hero.hurt_frames = 90;
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+        clear_city_transients(g);
+        g->hero.facing = 1;
+        g->hero.grounded = 0;
+        /* A new spawn must not present a viewport from the old pit. */
+        g->camera_x = 0;
+        g->render_camera_x = 0;
+    }
 }
 
 static void hurt(QsGame *g) {
@@ -507,6 +530,7 @@ void qs_step(QsGame *g, QsInput input) {
         }
     } else {
         if (edge(input.back, g->previous.back)) {
+            clear_city_transients(g);
             g->mode = QS_MAP;
         } else {
             if (edge(input.change, g->previous.change) && g->red_unlocked)

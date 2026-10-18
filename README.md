@@ -48,6 +48,11 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+Stage 32 isolates CITY TEST retries from previous lives: pit and
+combat respawns clear active plungers, attached red platforms, queued
+one-tick shots and camera history without removing unlocks or stage
+completion progress. Returning to the stage map also drops temporary
+city shot state. See [retry and stage transition regressions](docs/REFERENCE_CITY_RETRY_TRANSITIONS_RU.md).
 Stage 31 checks world-edge collision safety: red plungers cannot
 anchor on *invisible sentinel columns*, while authored last-column
 walls still block shots. CITY TEST enemy patrols clamp the full
