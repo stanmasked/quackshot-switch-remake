@@ -687,12 +687,12 @@ static void sanitize_city_enemies(QsGame *g) {
  * Real first-city motion stays well within these deliberately generous
  * ceilings. The ordinary prototype is not modified.
  */
-static void sanitize_city_hero_camera(QsGame *g) {
+static int sanitize_city_hero_camera(QsGame *g) {
     QsPlayer *h = &g->hero;
     const float world_w = (float)(QS_COLUMNS * QS_TILE);
     const float camera_max = world_w - QS_VIEW_W;
     if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
-        return;
+        return 0;
 
     /* A completely displaced actor is not a valid exit or a safe body
      * for contact/terrain casts. Respawn also resets both camera phases,
@@ -701,7 +701,7 @@ static void sanitize_city_hero_camera(QsGame *g) {
         h->x < -12.0f || h->x > world_w ||
         h->y < -20.0f || h->y > QS_VIEW_H + 22.0f) {
         respawn(g);
-        return;
+        return 1;
     }
 
     /* Never call ceilf -> int or enter substep loops with corrupt speeds.
@@ -725,6 +725,7 @@ static void sanitize_city_hero_camera(QsGame *g) {
         g->camera_x = recovered;
         g->render_camera_x = recovered;
     }
+    return 0;
 }
 
 /*
@@ -789,8 +790,9 @@ void qs_step(QsGame *g, QsInput input) {
         }
     } else {
         /* Validation precedes even the early Back/finish handoffs:
-         * no invalid actor may survive into the next rendered state. */
-        sanitize_city_hero_camera(g);
+         * no invalid actor may survive into the next rendered state.
+         * Remember a numeric respawn for this frame's reward arbitration. */
+        int numeric_retry = sanitize_city_hero_camera(g);
         sanitize_city_enemies(g);
         sanitize_city_pickups(g);
         /*
@@ -862,7 +864,11 @@ void qs_step(QsGame *g, QsInput input) {
                 /* The death location and new spawn are different
                  * simulation phases. Do not pick up a spawn item
                  * on the fatal contact's old-life tick. */
-                if (!lethal_retry) update_pickups(g);
+                /* A corrupted hero position can force a fresh spawn
+                 * before movement. Like lethal/pit retries, the spawn
+                 * must not collect items during the OLD attempt's tick.
+                 * Nonfatal contact still allows the usual same-tick item. */
+                if (!lethal_retry && !numeric_retry) update_pickups(g);
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
              * the VDP HScroll buffer can trail the gameplay RAM position.
