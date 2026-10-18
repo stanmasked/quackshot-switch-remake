@@ -92,6 +92,16 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
     /* Stage exit marker. */
     rectangle(renderer, (QS_COLUMNS - 4) * QS_TILE - cam, 161, 7, 47,
               color(255, 228, 134));
+    /* Stage 58: visible ORIGINAL-FREE test checkpoint. The flag head
+     * changes from muted blue to gold on genuine contact. */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        int marker_x=(int)QS_CITY_CHECKPOINT_X-cam;
+        rectangle(renderer, marker_x+5, 183, 3, 25, color(28, 38, 54));
+        rectangle(renderer, marker_x, 179, 12, 5,
+                  game->city_checkpoint_active
+                    ? color(255, 208, 109) : color(112, 167, 221));
+    }
     for (i = 0; i < QS_MAX_ENEMIES; ++i) {
         const QsEnemy *e = &game->enemies[i];
         if (e->active)
