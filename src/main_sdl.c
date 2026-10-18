@@ -45,6 +45,43 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
     rectangle(renderer, 50, 215, 300, 4, color(130, 146, 167));
 }
 
+/*
+ * Stage 62: tiny original-free seven-segment scoreboard. Each digit is
+ * 5x7 pixels, so all four decimal positions fit to the left of the
+ * existing checkpoint/bonus/weapon indicators on the 400px HUD.
+ */
+static void render_bonus_score_digit(SDL_Renderer *renderer,
+                                     int x, int y, int digit) {
+    static const unsigned char segments[10] = {
+        0x3f, 0x06, 0x5b, 0x4f, 0x66,
+        0x6d, 0x7d, 0x07, 0x7f, 0x6f
+    };
+    unsigned int bits;
+    SDL_Color lit=color(255,225,108);
+    if (digit < 0 || digit > 9) return;
+    bits=segments[digit];
+    if (bits & 0x01) rectangle(renderer,x+1,y,3,1,lit);
+    if (bits & 0x02) rectangle(renderer,x+4,y+1,1,2,lit);
+    if (bits & 0x04) rectangle(renderer,x+4,y+4,1,2,lit);
+    if (bits & 0x08) rectangle(renderer,x+1,y+6,3,1,lit);
+    if (bits & 0x10) rectangle(renderer,x,y+4,1,2,lit);
+    if (bits & 0x20) rectangle(renderer,x,y+1,1,2,lit);
+    if (bits & 0x40) rectangle(renderer,x+1,y+3,3,1,lit);
+}
+
+static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) {
+    int score, place;
+    if (game->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
+        game->stage != 0)
+        return;
+    score=qs_city_bonus_score(game);
+    for (place=3;place>=0;--place) {
+        int decimal=score%10;
+        render_bonus_score_digit(renderer,245+8*place,4,decimal);
+        score/=10;
+    }
+}
+
 static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
     int row, col, i;
     QsParallax parallax = qs_parallax_offsets(game);
@@ -177,6 +214,7 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
                   game->city_bonus_mask == 3
                     ? color(94, 221, 138) : color(90, 88, 107));
     }
+    render_city_bonus_score(renderer,game);
 }
 
 static int pressed(const Uint8 *keys, SDL_Scancode key) { return keys[key] != 0; }
