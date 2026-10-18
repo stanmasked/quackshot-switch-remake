@@ -51,13 +51,13 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
  * existing checkpoint/bonus/weapon indicators on the 400px HUD.
  */
 static void render_bonus_score_digit(SDL_Renderer *renderer,
-                                     int x, int y, int digit) {
+                                     int x, int y, int digit,
+                                     SDL_Color lit) {
     static const unsigned char segments[10] = {
         0x3f, 0x06, 0x5b, 0x4f, 0x66,
         0x6d, 0x7d, 0x07, 0x7f, 0x6f
     };
     unsigned int bits;
-    SDL_Color lit=color(255,225,108);
     if (digit < 0 || digit > 9) return;
     bits=segments[digit];
     if (bits & 0x01) rectangle(renderer,x+1,y,3,1,lit);
@@ -77,9 +77,20 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
     score=qs_city_bonus_score(game);
     for (place=3;place>=0;--place) {
         int decimal=score%10;
-        render_bonus_score_digit(renderer,245+8*place,4,decimal);
+        render_bonus_score_digit(renderer,245+8*place,4,decimal,
+                                 color(255,225,108));
         score/=10;
     }
+    /* Stage 63: cyan session-best display is distinct from the
+     * gold current-attempt score. Both are pixel-aligned to the HUD. */
+    score=qs_city_best_bonus_score(game);
+    for(place=3;place>=0;--place) {
+        int decimal=score%10;
+        render_bonus_score_digit(renderer,205+8*place,4,decimal,
+                                 color(112,202,221));
+        score/=10;
+    }
+    rectangle(renderer,239,4,1,7,color(107,113,127));
 }
 
 static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
