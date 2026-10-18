@@ -53,8 +53,17 @@ int qs_city_bonus_score(const QsGame *g) {
  * Only canonical values count. The default prototype is unchanged.
  */
 int qs_city_best_bonus_score(const QsGame *g) {
-    if (!g || g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
-        g->stage != 0)
+    if (!g)
+        return 0;
+    /*
+     * Stage 65: on the MAP the earned personal best belongs to the
+     * game session, not to whichever stage physics ran last. Keep the
+     * existing reference-city-only contract DURING stage simulation.
+     * This also allows the city row to retain its record after visiting
+     * RUINS / ROOFTOP TEST without changing their gameplay profile.
+     */
+    if (g->mode != QS_MAP &&
+        (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0))
         return 0;
     return (g->city_best_bonus_score == 500 ||
             g->city_best_bonus_score == 1000)
