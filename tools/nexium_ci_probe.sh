@@ -13,7 +13,10 @@ mkdir -p "$out"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 release="https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz"
-expected="29250067b941f84b85a4fc2ec1357eeba33b31334b715c3b33545c38146eed76"
+# Published asset digest from the official GitHub Releases API, checked
+# on 2026-10-18. This nightly tag is mutable: any future archive change
+# MUST fail closed and be manually verified against the new release digest.
+expected="0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761"
 
 {
     echo "emulator=NeXium experimental nightly"

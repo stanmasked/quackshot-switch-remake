@@ -48,6 +48,10 @@ a confirmed recreation of the Mega Drive VDP buffer schedule. See
 Stage 21 additionally requires two authentic 24-tick NRO camera bursts,
 verified against an independent host-side consecutive-tick oracle with
 negative mutation tests. See [camera-timing protocol](docs/CAMERA_TIMING_BURSTS_RU.md).
+The stage-32 CI rerun also refreshes the pinned NeXium nightly SHA-256
+using the official GitHub Releases asset digest (2026-10-18). The
+download remains fail-closed: future nightly changes require a new
+independently verified pin. See [NeXium provenance](docs/NEXIUM_PIN_2026_10_18_RU.md).
 Stage 32 isolates CITY TEST retries from previous lives: pit and
 combat respawns clear active plungers, attached red platforms, queued
 one-tick shots and camera history without removing unlocks or stage
