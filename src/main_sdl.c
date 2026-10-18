@@ -2209,6 +2209,82 @@ static int run_bonus_score_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 63: actual SDL score readback for current (gold) vs personal
+ * best (cyan). Reentry wipes 0000 current while preserving 0500 PB;
+ * later improvement raises PB to 1000, a weaker attempt cannot
+ * lower it. Verify the entire independent 29x7 glyph raster.
+ */
+static int run_personal_best_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,prototype;
+    QsInput in={0};
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=100;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+#define CHECK_PB(cur,best) do { \
+    if (!verify_city_digits_pixels(renderer,&g,(best),205,UINT32_C(0xff70cadd)) || \
+        !verify_bonus_score_pixels(renderer,&g,(cur))) return 0; \
+} while(0)
+    CHECK_PB("0000","0000");
+    g.hero.x=QS_CITY_BONUS_A_X-5;
+    qs_step(&g,in);
+    if(qs_city_bonus_score(&g)!=500 ||
+       qs_city_best_bonus_score(&g)!=500) return 0;
+    CHECK_PB("0500","0500");
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || qs_city_bonus_score(&g)!=0 ||
+       qs_city_best_bonus_score(&g)!=500) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_bonus_mask ||
+       qs_city_best_bonus_score(&g)!=500) return 0;
+    memset(g.enemies,0,sizeof(g.enemies));
+    CHECK_PB("0000","0500");
+    in=(QsInput){0};
+    g.hero.x=QS_CITY_BONUS_B_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_bonus_score(&g)!=500 ||
+       qs_city_best_bonus_score(&g)!=500) return 0;
+    CHECK_PB("0500","0500");
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_bonus_score(&g)!=1000 ||
+       qs_city_best_bonus_score(&g)!=1000) return 0;
+    CHECK_PB("1000","1000");
+    g.hero.x=(QS_COLUMNS-4)*QS_TILE+0.5f;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || !g.cleared[0] ||
+       qs_city_best_bonus_score(&g)!=1000) return 0;
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_bonus_mask!=0 ||
+       qs_city_best_bonus_score(&g)!=1000) return 0;
+    memset(g.enemies,0,sizeof(g.enemies));
+    CHECK_PB("0000","1000");
+    in=(QsInput){0};
+    g.hero.x=QS_CITY_BONUS_A_X-5;g.hero.y=188;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(qs_city_bonus_score(&g)!=500 ||
+       qs_city_best_bonus_score(&g)!=1000) return 0;
+    CHECK_PB("0500","1000");
+    qs_init(&prototype);qs_begin_stage(&prototype,0);
+    prototype.city_bonus_mask=3;
+    prototype.city_best_bonus_score=1000;
+    if(!verify_city_digits_pixels(renderer,&prototype,NULL,205,
+                                  UINT32_C(0xff70cadd)) ||
+       !verify_bonus_score_pixels(renderer,&prototype,NULL)) return 0;
+#undef CHECK_PB
+    puts("PERSONAL_BEST_SDL_PASS: cyan PB 0000/0500/1000, gold current 0000/0500/1000, restart and legacy isolation");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2283,6 +2359,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_bonus_beacons_sdl_smoke(renderer)) return 1;
     if (!run_bonus_set_heal_sdl_smoke(renderer)) return 1;
     if (!run_bonus_score_sdl_smoke(renderer)) return 1;
+    if (!run_personal_best_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
