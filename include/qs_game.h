@@ -54,6 +54,7 @@ typedef struct {
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int city_crate_active; /* city-only breakable box, reset on new attempt */
     int city_crate_fx_frames; /* remaining visible debris ticks, never collidable */
+    int city_paused; /* opt-in X+Start training pause, not gameplay time */
     int city_best_bonus_score; /* session best: 0, 500, 1000 */
     int city_attempt_frames; /* reset at every stage/map handoff */
     int city_best_clear_frames; /* 0 means no finish; lowest wins */
