@@ -59,6 +59,18 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
             value/=10;
         }
     }
+    /*
+     * Stage 67: session-best completed CITY time is shown alongside
+     * the blue score. No clear record means no green digits on map.
+     */
+    if (qs_city_best_clear_time(game)>0) {
+        int time=qs_city_best_clear_time(game),place;
+        for(place=3;place>=0;--place) {
+            render_bonus_score_digit(renderer,238+8*place,61,time%10,
+                                     color(94,221,138));
+            time/=10;
+        }
+    }
     rectangle(renderer, 50, 215, 300, 4, color(130, 146, 167));
 }
 
@@ -108,6 +120,15 @@ static void render_city_bonus_score(SDL_Renderer *renderer, const QsGame *game) 
         score/=10;
     }
     rectangle(renderer,239,4,1,7,color(107,113,127));
+    /* Current CITY TEST timer in ticks, starting at 0000 and
+     * saturating at 9999. The personal fastest clear is shown on MAP. */
+    score=qs_city_attempt_time(game);
+    for(place=3;place>=0;--place) {
+        int decimal=score%10;
+        render_bonus_score_digit(renderer,166+8*place,4,decimal,
+                                 color(94,221,138));
+        score/=10;
+    }
 }
 
 static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
