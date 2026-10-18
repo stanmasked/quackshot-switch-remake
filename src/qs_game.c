@@ -77,6 +77,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
     g->city_checkpoint_active = 0;
+    g->city_bonus_mask = 0;
     memset(g->pickups, 0, sizeof(g->pickups));
     g->hero.x = 40; g->hero.y = 188;
     g->hero.vx = 0; g->hero.vy = 0;
@@ -147,6 +148,7 @@ static void city_leave_to_map(QsGame *g) {
         g->camera_x = 0;
         g->render_camera_x = 0;
         g->city_checkpoint_active = 0; /* next attempt starts fresh */
+        g->city_bonus_mask = 0; /* replay-collect on the next attempt */
     }
     g->mode = QS_MAP;
 }
@@ -489,6 +491,28 @@ static void update_city_checkpoint(QsGame *g) {
     if (overlaps(g->hero.x,g->hero.y,12,20,
                  QS_CITY_CHECKPOINT_X,QS_CITY_CHECKPOINT_Y,12,20))
         g->city_checkpoint_active = 1;
+}
+
+/*
+ * Stage 60: two player-visible, ORIGINAL-FREE bonus beacons provide
+ * optional score progress after the first CITY TEST checkpoint.
+ * Beacons may only be claimed during a valid survived frame; a lethal
+ * contact, pit or numeric retry cannot collect one at the new spawn.
+ * Their bitmask persists across lives in the same attempt, not across
+ * a map exit. Each bit awards 500 points; no arithmetic accumulation
+ * is needed, eliminating overflow and duplicate rewards.
+ */
+static void update_city_bonus(QsGame *g) {
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    if (!(g->city_bonus_mask & 1) &&
+        overlaps(g->hero.x,g->hero.y,12,20,
+                 QS_CITY_BONUS_A_X,QS_CITY_BONUS_Y,10,10))
+        g->city_bonus_mask |= 1;
+    if (!(g->city_bonus_mask & 2) &&
+        overlaps(g->hero.x,g->hero.y,12,20,
+                 QS_CITY_BONUS_B_X,QS_CITY_BONUS_Y,10,10))
+        g->city_bonus_mask |= 2;
 }
 
 static void shoot_as(QsGame *g, int red) {
@@ -982,9 +1006,12 @@ void qs_step(QsGame *g, QsInput input) {
         sanitize_city_pickups(g);
         sanitize_city_shots(g);
         sanitize_city_weapon_queue(g);
-        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0 &&
-            g->city_checkpoint_active != 1)
-            g->city_checkpoint_active = 0;
+        if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
+            if (g->city_checkpoint_active != 1)
+                g->city_checkpoint_active = 0;
+            if (g->city_bonus_mask < 0 || g->city_bonus_mask > 3)
+                g->city_bonus_mask = 0;
+        }
         /*
          * A CITY TEST exit already crossed at tick start is a completed
          * stage, even if the same input also presses Back. Treat the
@@ -1061,6 +1088,7 @@ void qs_step(QsGame *g, QsInput input) {
                 if (!lethal_retry && !numeric_retry) {
                     update_pickups(g);
                     update_city_checkpoint(g);
+                    update_city_bonus(g);
                 }
             if (g->hero.hurt_frames) --g->hero.hurt_frames;
             /* Snapshot BEFORE simulation camera update. In the measured city
