@@ -806,15 +806,31 @@ static void sanitize_city_shots(QsGame *g) {
     for (i=0;i<QS_MAX_SHOTS;i++) {
         QsShot *s=&g->shots[i];
         if (!s->active) continue;
-        if (!isfinite(s->x) || !isfinite(s->y) || !isfinite(s->vx) ||
-            s->x < 0.0f || s->x + 7.0f > world_w ||
-            s->y < -4.0f || s->y > world_h ||
-            absolute(s->vx) > world_w ||
-            s->frames <= 1 ||
-            (s->attached != 0 && s->attached != 1) ||
-            (s->red != 0 && s->red != 1)) {
-            s->active=0;
-            s->attached=0;
+        /*
+         * Stage 57: a discarded projectile must not carry NaN/Inf into
+         * a deterministic snapshot. Keep expired-but-otherwise-valid
+         * coordinates and the original frames counter untouched;
+         * only malformed geometry/flags need canonicalization.
+         */
+        {
+            int malformed_geometry =
+                !isfinite(s->x) || !isfinite(s->y) || !isfinite(s->vx) ||
+                s->x < 0.0f || s->x + 7.0f > world_w ||
+                s->y < -4.0f || s->y > world_h ||
+                absolute(s->vx) > world_w;
+            int malformed_flags =
+                (s->attached != 0 && s->attached != 1) ||
+                (s->red != 0 && s->red != 1);
+            if (malformed_geometry || malformed_flags || s->frames <= 1) {
+                s->active=0;
+                s->attached=0;
+                if (malformed_geometry || malformed_flags) {
+                    s->x=0.0f;
+                    s->y=0.0f;
+                    s->vx=0.0f;
+                    s->red=0;
+                }
+            }
         }
     }
 }
