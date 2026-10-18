@@ -145,6 +145,14 @@ and corrupted-state behavior. GCC/Clang and SDL regressions explicitly
 enforce the distinction. See
 [pause chord arbitration](docs/REFERENCE_CITY_PAUSE_CHORD_ARBITRATION_RU.md).
 
+Stage 78 adds **a second-sector time trial**: after reaching the
+CITY TEST checkpoint, a lavender HUD counter shows the elapsed
+post-checkpoint frames. Completing the level after the flag records
+the fastest second-half time independently of full-run and
+checkpoint-split PBs. Abandoning, quick retries, and legacy stages
+cannot fabricate sector records. See
+[second-sector timing](docs/REFERENCE_CITY_SECOND_SECTOR_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
