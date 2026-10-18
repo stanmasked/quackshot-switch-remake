@@ -1617,6 +1617,95 @@ static int run_shot_canonical_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 58: an original-free visible flag turns from muted blue to
+ * gold on geometric contact. A lethal retry returns to x=640 with a
+ * synchronized camera; map exit and a fresh stage reset the marker.
+ * Sample the real SDL ARGB8888 raster, not an offline image substitute.
+ */
+static int run_city_checkpoint_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t inactive=0,active=0,after_retry=0,after_reentry=0,hero=0;
+    int flag_px;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=QS_CITY_CHECKPOINT_X-5;
+    g.hero.y=QS_CITY_CHECKPOINT_Y;
+    g.hero.vx=g.hero.vy=0;
+    g.hero.grounded=1;
+    g.camera_x=QS_CITY_CHECKPOINT_X-141;
+    g.render_camera_x=g.camera_x;
+    flag_px=(int)QS_CITY_CHECKPOINT_X-(int)g.render_camera_x+6;
+    if (g.city_checkpoint_active ||
+        !read_multishot_pixel(renderer,&g,flag_px,181,&inactive) ||
+        inactive!=UINT32_C(0xff70a7dd)) {
+        fprintf(stderr,"CITY_CHECKPOINT_SDL_FAIL: inactive=%08x\n",
+                (unsigned)inactive);
+        return 0;
+    }
+    qs_step(&g,in);
+    flag_px=(int)QS_CITY_CHECKPOINT_X-(int)g.render_camera_x+6;
+    if (!g.city_checkpoint_active ||
+        !read_multishot_pixel(renderer,&g,flag_px,181,&active) ||
+        active!=UINT32_C(0xffffd06d)) {
+        fprintf(stderr,"CITY_CHECKPOINT_SDL_FAIL: activated=%08x\n",
+                (unsigned)active);
+        return 0;
+    }
+    g.hero.hearts=1;g.hero.hurt_frames=0;
+    g.enemies[0].active=1;
+    g.enemies[0].x=g.hero.x;g.enemies[0].y=188;
+    g.enemies[0].min_x=g.enemies[0].max_x=g.hero.x;
+    g.enemies[0].dir=1;
+    qs_step(&g,in);
+    flag_px=(int)QS_CITY_CHECKPOINT_X-(int)g.render_camera_x+6;
+    if (!g.city_checkpoint_active ||
+        g.hero.x!=QS_CITY_CHECKPOINT_X ||
+        g.hero.hearts!=3 || g.hero.hurt_frames!=89 ||
+        g.camera_x!=QS_CITY_CHECKPOINT_X-141 ||
+        g.render_camera_x!=g.camera_x ||
+        !read_multishot_pixel(renderer,&g,flag_px,181,&after_retry) ||
+        after_retry!=active ||
+        !read_multishot_pixel(renderer,&g,flag_px-4,191,&hero) ||
+        hero!=UINT32_C(0xfffaeda7)) {
+        fprintf(stderr,"CITY_CHECKPOINT_SDL_FAIL: retry=%08x hero=%08x\n",
+                (unsigned)after_retry,(unsigned)hero);
+        return 0;
+    }
+    in.back=1;
+    qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.city_checkpoint_active) {
+        fputs("CITY_CHECKPOINT_SDL_FAIL: map retained checkpoint\n",stderr);
+        return 0;
+    }
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.stage!=0 ||
+       g.physics_profile!=QS_PHYSICS_REFERENCE_CITY ||
+       g.city_checkpoint_active || g.hero.x!=40) {
+        fputs("CITY_CHECKPOINT_SDL_FAIL: new attempt retained checkpoint\n",stderr);
+        return 0;
+    }
+    g.camera_x=QS_CITY_CHECKPOINT_X-141;
+    g.render_camera_x=g.camera_x;
+    flag_px=(int)QS_CITY_CHECKPOINT_X-(int)g.render_camera_x+6;
+    if(!read_multishot_pixel(renderer,&g,flag_px,181,&after_reentry) ||
+       after_reentry!=inactive) {
+        fprintf(stderr,"CITY_CHECKPOINT_SDL_FAIL: new marker=%08x\n",
+                (unsigned)after_reentry);
+        return 0;
+    }
+    printf("CITY_CHECKPOINT_SDL_PASS: muted=%08x active=%08x respawn=%08x reset=%08x\n",
+           (unsigned)inactive,(unsigned)active,
+           (unsigned)after_retry,(unsigned)after_reentry);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1686,6 +1775,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_map_integrity_sdl_smoke(renderer)) return 1;
     if (!run_scene_recovery_sdl_smoke(renderer)) return 1;
     if (!run_shot_canonical_sdl_smoke(renderer)) return 1;
+    if (!run_city_checkpoint_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
