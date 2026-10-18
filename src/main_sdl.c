@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <stdio.h>
 #include <float.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
