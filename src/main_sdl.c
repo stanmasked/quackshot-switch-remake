@@ -301,6 +301,25 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
         rectangle(renderer,x+7,y-9-age/2,2,2,
                   color(255,242,190));
     }
+    /*
+     * Stage 80: original-free spring pad on the flat approach to
+     * CITY TEST's exit. The fixed golden body is always visible,
+     * and a short blue highlight communicates a successful bounce.
+     * Gameplay physics never depend on whether a frame is rendered.
+     */
+    if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+        game->stage == 0) {
+        int x=(int)QS_CITY_SPRING_X-cam;
+        rectangle(renderer,x,(int)QS_CITY_SPRING_TOP-4,
+                  (int)QS_CITY_SPRING_WIDTH,4,color(255,201,92));
+        rectangle(renderer,x+4,(int)QS_CITY_SPRING_TOP-6,
+                  (int)QS_CITY_SPRING_WIDTH-8,2,color(255,239,173));
+        if (game->city_spring_flash_frames>0 &&
+            game->city_spring_flash_frames<=QS_CITY_SPRING_FLASH_TICKS)
+            rectangle(renderer,x+5,(int)QS_CITY_SPRING_TOP-10,
+                      (int)QS_CITY_SPRING_WIDTH-10,2,
+                      color(112,202,221));
+    }
     /* Stage 72: a small original-free barricade can be shot away,
      * or bypassed by jumping. It is only present in CITY TEST. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
