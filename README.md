@@ -90,6 +90,14 @@ on the map. Fatal contact cannot earn a split, retries keep the current
 one, and the ordinary prototype is unaffected. See
 [checkpoint split verification](docs/REFERENCE_CITY_CHECKPOINT_SPLIT_RU.md).
 
+Stage 70 adds **live split pace feedback** against the previous
+session record. A green negative delta means the current checkpoint
+was reached faster, red positive means slower, and cyan zero is a
+tie. The first split in a fresh session has no comparison. The
+opt-in CITY TEST HUD uses self-drawn digits and the regular prototype
+is unchanged. See
+[checkpoint pace verification](docs/REFERENCE_CITY_CHECKPOINT_PACE_RU.md).
+
 ## Recent CITY TEST safeguards (stages 50–55)
 
 The opt-in research stage now checks the order of damage, item awards and
