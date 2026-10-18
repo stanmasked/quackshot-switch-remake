@@ -1314,6 +1314,56 @@ static int run_hero_status_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 53: a NaN attached red anchor must be eliminated BEFORE the
+ * hero's vertical collision step. Compare real SDL pixels against a
+ * matching scene with the same healthy support but no damaged slot.
+ * The player must land on the healthy support with no NaN coordinates.
+ */
+static int run_pre_move_shots_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,baseline;
+    QsInput in={0};
+    uint64_t damaged_frame=0,clean_frame=0;
+    uint32_t hero_pixel=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.shots,0,sizeof(g.shots));
+    memset(g.pickups,0,sizeof(g.pickups));
+    g.hero.x=100;g.hero.y=139.92f;
+    g.hero.vx=g.hero.vy=0;g.hero.grounded=0;
+    g.shots[1].active=g.shots[1].attached=g.shots[1].red=1;
+    g.shots[1].x=100;g.shots[1].y=160.02f;g.shots[1].vx=0;
+    g.shots[1].frames=40;
+    baseline=g;
+    g.shots[0].active=g.shots[0].attached=g.shots[0].red=1;
+    g.shots[0].x=100;g.shots[0].y=NAN;
+    g.shots[0].frames=40;
+    qs_step(&g,in);
+    qs_step(&baseline,in);
+    if (g.shots[0].active || g.shots[0].attached ||
+        !g.shots[1].active || !g.hero.grounded ||
+        !isfinite(g.hero.x) || !isfinite(g.hero.y) ||
+        fabsf(g.hero.y-140.02f)>0.0001f ||
+        g.hero.y!=baseline.hero.y || g.camera_x!=baseline.camera_x ||
+        !capture_frame(renderer,&g,&damaged_frame) ||
+        !capture_frame(renderer,&baseline,&clean_frame) ||
+        damaged_frame!=clean_frame ||
+        !read_multishot_pixel(renderer,&g,101,142,&hero_pixel) ||
+        hero_pixel!=UINT32_C(0xfffaeda7)) {
+        fprintf(stderr,"PRE_MOVE_SHOTS_SDL_FAIL: y=%.4f clean=%.4f frames=%016llx/%016llx px=%08x\n",
+                (double)g.hero.y,(double)baseline.hero.y,
+                (unsigned long long)damaged_frame,
+                (unsigned long long)clean_frame,(unsigned)hero_pixel);
+        return 0;
+    }
+    printf("PRE_MOVE_SHOTS_SDL_PASS: healthy landing %.4f hash=%016llx hero=%08x\n",
+           (double)g.hero.y,(unsigned long long)damaged_frame,
+           (unsigned)hero_pixel);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -1378,6 +1428,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_frame_arbitration_sdl_smoke(renderer)) return 1;
     if (!run_timer_boundary_sdl_smoke(renderer)) return 1;
     if (!run_hero_status_sdl_smoke(renderer)) return 1;
+    if (!run_pre_move_shots_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
