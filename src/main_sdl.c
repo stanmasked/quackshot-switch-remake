@@ -1953,6 +1953,96 @@ static int run_bonus_beacons_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 61: real SDL proof of the bonus-set reward. A single beacon
+ * changes its 500-point stamp only; collecting the second heals one
+ * missing heart and lights the green set-completion tile. Replaying
+ * contact cannot heal again. The prototype never draws this tile.
+ */
+static int run_bonus_set_heal_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g,prototype;
+    QsInput in={0};
+    uint32_t pending=0,partial=0,complete=0,heart_before=0;
+    uint32_t heart_after=0,no_repeat=0,reset=0,legacy=0;
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    memset(g.enemies,0,sizeof(g.enemies));
+    memset(g.pickups,0,sizeof(g.pickups));
+    memset(g.shots,0,sizeof(g.shots));
+    g.hero.x=QS_CITY_BONUS_A_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    g.hero.hearts=2;
+    if (!read_multishot_pixel(renderer,&g,285,8,&pending) ||
+        !read_multishot_pixel(renderer,&g,39,8,&heart_before) ||
+        pending!=UINT32_C(0xff5a586b) ||
+        heart_before!=UINT32_C(0xff5a586b)) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: initial=%08x heart=%08x\n",
+                (unsigned)pending,(unsigned)heart_before);
+        return 0;
+    }
+    qs_step(&g,in);
+    if(g.city_bonus_mask!=1 || g.hero.hearts!=2 ||
+       !read_multishot_pixel(renderer,&g,285,8,&partial) ||
+       partial!=pending) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: first stamp=%08x hearts=%d\n",
+                (unsigned)partial,g.hero.hearts);
+        return 0;
+    }
+    g.hero.x=QS_CITY_BONUS_B_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.city_bonus_mask!=3 || g.hero.hearts!=3 ||
+       !read_multishot_pixel(renderer,&g,285,8,&complete) ||
+       !read_multishot_pixel(renderer,&g,39,8,&heart_after) ||
+       complete!=UINT32_C(0xff5edd8a) ||
+       heart_after!=UINT32_C(0xffef606c)) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: set=%08x healed=%08x mask=%d hearts=%d\n",
+                (unsigned)complete,(unsigned)heart_after,
+                g.city_bonus_mask,g.hero.hearts);
+        return 0;
+    }
+    /* The green marker stays earned; the reward itself does not
+     * repeat if another life later loses a heart. */
+    g.hero.hearts=2;
+    g.hero.x=QS_CITY_BONUS_A_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    g.hero.x=QS_CITY_BONUS_B_X-5;
+    g.hero.y=188;g.hero.vx=g.hero.vy=0;g.hero.grounded=1;
+    qs_step(&g,in);
+    if(g.hero.hearts!=2 ||
+       !read_multishot_pixel(renderer,&g,285,8,&no_repeat) ||
+       no_repeat!=complete) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: duplicate reward=%08x hearts=%d\n",
+                (unsigned)no_repeat,g.hero.hearts);
+        return 0;
+    }
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP || g.city_bonus_mask!=0) return 0;
+    in=(QsInput){0};qs_step(&g,in);
+    in.select=in.dash=1;qs_step(&g,in);
+    if(g.mode!=QS_STAGE || g.city_bonus_mask!=0 ||
+       !read_multishot_pixel(renderer,&g,285,8,&reset) ||
+       reset!=pending) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: fresh=%08x\n",
+                (unsigned)reset);
+        return 0;
+    }
+    qs_init(&prototype);qs_begin_stage(&prototype,0);
+    prototype.city_bonus_mask=3;
+    if(!read_multishot_pixel(renderer,&prototype,285,8,&legacy) ||
+       legacy!=UINT32_C(0xff1c2636)) {
+        fprintf(stderr,"BONUS_SET_HEAL_SDL_FAIL: prototype=%08x\n",
+                (unsigned)legacy);
+        return 0;
+    }
+    printf("BONUS_SET_HEAL_SDL_PASS: partial=%08x complete=%08x healed=%08x retry_stamp=%08x reset=%08x\n",
+           (unsigned)partial,(unsigned)complete,(unsigned)heart_after,
+           (unsigned)no_repeat,(unsigned)reset);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -2025,6 +2115,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_checkpoint_sdl_smoke(renderer)) return 1;
     if (!run_checkpoint_hud_sdl_smoke(renderer)) return 1;
     if (!run_bonus_beacons_sdl_smoke(renderer)) return 1;
+    if (!run_bonus_set_heal_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
