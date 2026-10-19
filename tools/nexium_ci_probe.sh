@@ -276,12 +276,17 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           step=6
         elif [ "$step" -eq 6 ] && [ "$heart_nudge_done" -eq 0 ] && \
               [ "$fin_heart" = "0" ] && [ "$fin_mode" = "1" ] && \
+              [ "$fin_ground" = "0" ] && [ "$fin_checkpoint" = "1" ] && \
+              [ "$fin_crate" = "0" ] && [ "$fin_ledge" = "0" ] && \
+              [ "$fin_source" = "live_controller_qs_step" ] && \
               [[ "$fin_x" =~ ^[0-9]+$ && "$fin_y" =~ ^[0-9]+$ ]] && \
               [ "$fin_x" -ge 1137000 ] && [ "$fin_x" -le 1141000 ] && \
               [ "$fin_y" -ge 50000 ] && [ "$fin_y" -le 160000 ]; then
           # In real run #2 the hero halted at X=1139.781, short of the
           # airborne heart at X=1152. Issue a single physical controller
           # RIGHT pulse only while guest telemetry proves spring flight.
+          # Gate on a live, airborne, checkpointed NRO witness so a
+          # stale/landed/wrong-phase CSV row never triggers an input.
           # The game still must collect the heart and finish itself.
           echo "SPRING_HEART_ALIGN_GUEST frame=$fin_frame x_milli=$fin_x y_milli=$fin_y"
           heart_nudge_done=1

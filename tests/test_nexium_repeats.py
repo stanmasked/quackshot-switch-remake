@@ -35,6 +35,63 @@ def three():
 
 
 
+
+class SpringControllerShellGateTests(unittest.TestCase):
+    """Stage 111: execute the actual CI shell gate, not a Python imitation."""
+
+    @staticmethod
+    def probe(**overrides):
+        import os
+        import re
+        import subprocess
+        script=(Path(__file__).resolve().parents[1] /
+                "tools" / "nexium_ci_probe.sh").read_text(encoding="utf-8")
+        match=re.search(
+            r'(?ms)^\s*elif \[ "\$step" -eq 6 \] && '
+            r'\[ "\$heart_nudge_done" -eq 0 \].*?; then',
+            script)
+        if not match:
+            raise AssertionError("CI script has no spring heart gate")
+        # Reuse Bash's own condition language: the original elif has
+        # the same semantics as if within a standalone fixture.
+        shell=match.group(0).strip().replace("elif ","if ",1)+" echo PASS; fi"
+        profile=dict(step="6",heart_nudge_done="0",fin_heart="0",
+                     fin_mode="1",fin_ground="0",fin_checkpoint="1",
+                     fin_crate="0",fin_ledge="0",
+                     fin_source="live_controller_qs_step",
+                     fin_x="1139781",fin_y="100000")
+        profile.update({k:str(v) for k,v in overrides.items()})
+        result=subprocess.run(["bash","-c",shell],
+                              env=dict(os.environ,**profile),
+                              capture_output=True,text=True,check=True)
+        return result.stdout.strip()=="PASS"
+
+    def test_real_spring_flight_permits_one_nudge(self):
+        self.assertTrue(self.probe())
+
+    def test_grounded_or_stale_guest_data_rejected(self):
+        for values in ({"fin_ground":"1"},
+                       {"fin_source":"unknown"},
+                       {"fin_checkpoint":"0"},
+                       {"fin_crate":"1"},
+                       {"fin_ledge":"1"}):
+            with self.subTest(values=values):
+                self.assertFalse(self.probe(**values))
+
+    def test_heart_collected_or_already_nudged_rejected(self):
+        self.assertFalse(self.probe(fin_heart="1"))
+        self.assertFalse(self.probe(heart_nudge_done="1"))
+
+    def test_out_of_bounds_and_invalid_coordinates_rejected(self):
+        for values in ({"fin_x":"1136999"},
+                       {"fin_x":"1141001"},
+                       {"fin_y":"49999"},
+                       {"fin_y":"160001"},
+                       {"fin_x":"unknown"}):
+            with self.subTest(values=values):
+                self.assertFalse(self.probe(**values))
+
+
 class SpringHeartAlignmentTests(unittest.TestCase):
     """Stage 110: do not mistake a host log line for real guest input."""
 
