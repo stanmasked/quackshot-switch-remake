@@ -247,6 +247,15 @@ checks stage-local completion-time and milestone stability. The
 independent Stage 88 scripted route does not count as a controller run.
 See [three-run reproducibility](docs/NEXIUM_REPLAY_STABILITY_RU.md).
 
+Stage 95 deliberately varies **host virtual input timing** across the
+three separate NeXium runs: 0 / 25 / 45 ms extra delay immediately before
+B (pit, roof) and Y (crate), plus 85 / 90 / 95 ms host polling intervals.
+Every input delay is measured and logged, and a new independent verifier
+requires matching timing profiles, non-forged markers and the complete
+guest-world route. This measures tolerance to controller dispatch latency,
+**not** directly a change in the emulator simulation frame rate.
+See [NeXium input latency profiles](docs/NEXIUM_INPUT_LATENCY_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

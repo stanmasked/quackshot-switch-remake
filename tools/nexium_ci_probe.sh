@@ -10,6 +10,14 @@ fi
 nro="$(realpath "$1")"
 out="$(realpath -m "$2")"
 mkdir -p "$out"
+# Matrix stress profiles are explicit: any unrecognised timing setting
+# fails closed before the emulator or user-input simulation can run.
+edge_delay_ms="${QS_INPUT_DELAY_MS:-0}"
+poll_ms="${QS_POLL_MS:-85}"
+case "${QS_REPEAT_ID:-single}:$edge_delay_ms:$poll_ms" in
+  1:0:85|2:25:90|3:45:95) ;;
+  *) echo "BLOCKED: unsupported Stage 95 input timing profile" >&2; exit 2 ;;
+esac
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 release="https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz"
@@ -25,6 +33,8 @@ expected="0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761"
     echo "nro_sha256=$(sha256sum "$nro" | cut -d ' ' -f 1)"
     echo "host_arch=$(uname -m)"
     echo "ci_repeat_id=${QS_REPEAT_ID:-single}"
+    echo "ci_input_edge_delay_ms=$edge_delay_ms"
+    echo "ci_poll_ms=$poll_ms"
 } > "$out/metadata.txt"
 
 # Verify a pinned release hash before executing a downloaded binary. Fail closed.
@@ -139,13 +149,33 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool keyup e
       sleep 0.30
       xdotool keydown --clearmodifiers d
+      # Stage 95: instrument actual elapsed host-side edge scheduling
+      # latency. These delays are inserted BEFORE virtual keydown calls,
+      # and the guest must STILL independently prove world-state changes.
+      # This does not claim NeXium frame-rate throttling.
+      input_delay_ms="${QS_INPUT_DELAY_MS:-0}"
+      poll_interval_ms="${QS_POLL_MS:-85}"
+      echo "INPUT_TIMING_PROFILE profile=${QS_REPEAT_ID:-0} edge_delay_ms=$input_delay_ms poll_ms=$poll_interval_ms"
+      delayed_keydown() {
+        local event="$1" key="$2" begun finished actual
+        if [ "$input_delay_ms" -gt 0 ]; then
+          begun="$(date +%s%3N)"
+          sleep "0.$(printf "%03d" "$input_delay_ms")"
+          finished="$(date +%s%3N)"
+          actual=$((finished-begun))
+        else
+          actual=0
+        fi
+        echo "INPUT_EDGE_DELAY event=$event requested_ms=$input_delay_ms measured_ms=$actual"
+        xdotool keydown --clearmodifiers "$key"
+      }
       obstacle_file=""
       postcheck_file=""
       finish_file=""
       step=0
       wall_recovery=0
       for attempt in $(seq 1 300); do
-        sleep 0.085
+        sleep "0.$(printf "%03d" "$poll_interval_ms")"
         if [ -z "$obstacle_file" ]; then
           obstacle_file="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
             -type f -name quackshot-obstacle.csv -print -quit 2>/dev/null || true)"
@@ -188,7 +218,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
            [ "$x_milli" -ge 276000 ] && [ "$x_milli" -le 305000 ] && \
            [ "$grounded" -eq 1 ]; then
           echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
-          xdotool keydown --clearmodifiers x
+          delayed_keydown pit x
           sleep 0.36
           xdotool keyup x
           step=1
@@ -196,7 +226,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
              [ "$x_milli" -ge 382000 ] && [ "$x_milli" -le 410000 ] && \
              [ "$grounded" -eq 1 ]; then
           echo "ROOF_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
-          xdotool keydown --clearmodifiers x
+          delayed_keydown roof x
           sleep 0.36
           xdotool keyup x
           step=2
@@ -218,7 +248,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
              [ "$x_milli" -ge 902000 ] && [ "$x_milli" -le 946000 ] && \
              [ "$pc_crate" = "1" ]; then
           echo "CRATE_FIRE_GUEST frame=$frame x_milli=$x_milli"
-          xdotool keydown --clearmodifiers z
+          delayed_keydown crate z
           sleep 0.18
           xdotool keyup z
           step=4

@@ -17,6 +17,7 @@ from tools.verify_postcheck import verify as verify_postcheck, load as load_post
 from tools.verify_finish_route import verify as verify_finish, load as load_finish, FIELDS as FINISH_COLUMNS
 from tools.verify_live_control import check as verify_live, load as load_live
 from tools.verify_live_timeline import validate_timeline, read_csv, MOTION_COLUMNS
+from tools.verify_input_latency import verify_latency_profile, PROFILES
 
 EXPECTED_IDS=(1,2,3)
 EVENT_KEYS=("pit_jump_tick","pit_cross_tick","roof_jump_tick",
@@ -73,6 +74,7 @@ def collect(root,run_id):
     actions=(directory/"input-injection.txt").read_text(encoding="utf-8")
     if "OBSTACLE_INPUT_STEP=10" not in actions or "LIVE_STAGE_CLEAR_GUEST" not in actions:
         raise ValueError("virtual controller did not independently reach map clear")
+    latency=verify_latency_profile(meta,actions,run_id)
     if not (directory/"finish-summary.txt").read_text(encoding="utf-8").startswith("LIVE_FULL_CITY_GUEST_PASS "):
         raise ValueError("missing guest-generated complete-city proof")
     if not (directory/"obstacle-summary.txt").read_text(encoding="utf-8").startswith("LIVE_OBSTACLE_GUEST_PASS "):
@@ -98,6 +100,9 @@ def collect(root,run_id):
         raise ValueError("gameplay milestones disagree within the same emulator run")
     return {
         "run_id":run_id,"nro_sha256":digest,
+        "input_delay_ms":latency["input_delay_ms"],
+        "poll_interval_ms":latency["poll_interval_ms"],
+        "edge_elapsed_ms":latency["edge_elapsed_ms"],
         "pit_jump_tick":prev["pit_jump_tick"],
         "pit_cross_tick":prev["pit_cross_tick"],
         "roof_jump_tick":prev["roof_jump_tick"],
@@ -120,6 +125,11 @@ def compare(runs):
     ids=[r.get("run_id") for r in runs]
     if len(runs)!=3 or sorted(ids)!=list(EXPECTED_IDS) or len(set(ids))!=3:
         raise ValueError("three DISTINCT CI matrix runs are mandatory")
+    for run in runs:
+        expected_delay,expected_poll=PROFILES[run["run_id"]]
+        if (run.get("input_delay_ms")!=expected_delay or
+            run.get("poll_interval_ms")!=expected_poll):
+            raise ValueError("replay timing profiles missing or interchanged")
     digests={r.get("nro_sha256") for r in runs}
     if len(digests)!=1 or not re.fullmatch(r"[0-9a-f]{64}",next(iter(digests)) or ""):
         raise ValueError("NRO digest differs across independent runs")
@@ -150,6 +160,9 @@ def compare(runs):
     return {
         "repetitions":3,
         "status":"PASS",
+        "profiles_ms":{str(r["run_id"]):{"input_delay":r["input_delay_ms"],
+                     "poll_interval":r["poll_interval_ms"]}
+                       for r in runs},
         "source":"three independent NeXium CI jobs with live controller inputs",
         "nro_sha256":next(iter(digests)),
         "max_completion_spread_frames":LIMITS["best_clear_frames"],

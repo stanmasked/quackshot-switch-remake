@@ -13,6 +13,7 @@ on:
       - "tools/verify_postcheck.py"
       - "tools/verify_finish_route.py"
       - "tools/verify_nexium_repeats.py"
+      - "tools/verify_input_latency.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -59,9 +60,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        repeat: [1, 2, 3]
+        include:
+          - repeat: 1
+            input_delay_ms: 0
+            poll_ms: 85
+          - repeat: 2
+            input_delay_ms: 25
+            poll_ms: 90
+          - repeat: 3
+            input_delay_ms: 45
+            poll_ms: 95
     env:
       QS_REPEAT_ID: ${{ matrix.repeat }}
+      QS_INPUT_DELAY_MS: ${{ matrix.input_delay_ms }}
+      QS_POLL_MS: ${{ matrix.poll_ms }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

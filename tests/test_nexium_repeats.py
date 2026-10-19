@@ -17,6 +17,8 @@ def three():
            ledge_tick=801+i,best_clear_frames=825+i,
            heart_and_ledge_samples=35,checkpoint_x_px=628.375,
            spring_x_px=1132.125,ledge_x_px=1188.531,
+           input_delay_ms={1:0,2:25,3:45}[i],
+           poll_interval_ms={1:85,2:90,3:95}[i],
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
 
