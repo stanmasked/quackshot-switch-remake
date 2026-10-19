@@ -128,6 +128,8 @@ def collect(root,run_id):
         "guest_hold_frames":{key:[p["observed_hold_frames"] for p in value]
                               for key,value in pulses["pulses"].items()},
         "guest_jump_arcs":arcs["arcs"],
+        "roof_path":arcs["roof_path"],
+        "wall_recovery_arc":arcs["wall_recovery"],
         "wall_recovery_used":pulses["wall_recovery"] is not None,
         "guest_frame_windows":{name:event["guest_frame_window"]
                                 for name,event in edge_events.items()},
@@ -179,17 +181,36 @@ def compare(runs):
         arcs=run.get("guest_jump_arcs")
         if not isinstance(arcs,dict) or set(arcs)!={"pit","roof"}:
             raise ValueError("missing complete guest jump arcs")
-        for name in ("pit","roof"):
-            item=arcs[name]
-            if (not isinstance(item,dict) or
-                type(item.get("rise_px")) not in (int,float) or
-                type(item.get("flight_frames")) is not int or
-                type(item.get("landing_x_px")) not in (int,float) or
-                not 61<=item["rise_px"]<=68 or
-                not 24<=item["flight_frames"]<=76 or
-                not ((365<=item["landing_x_px"]<=415) if name=="pit"
-                     else (415<=item["landing_x_px"]<=475))):
-                raise ValueError("invalid measured B flight or landing")
+        def arc_ok(item,xlo,xhi,ylo,yhi,hlo=61,hhi=68):
+            return (isinstance(item,dict) and
+                type(item.get("rise_px")) in (int,float) and
+                type(item.get("flight_frames")) is int and
+                type(item.get("landing_x_px")) in (int,float) and
+                type(item.get("landing_y_px")) in (int,float) and
+                hlo<=item["rise_px"]<=hhi and
+                20<=item["flight_frames"]<=80 and
+                xlo<=item["landing_x_px"]<=xhi and
+                ylo<=item["landing_y_px"]<=yhi)
+        if not arc_ok(arcs["pit"],365,415,182,193):
+            raise ValueError("invalid physical pit flight or landing")
+        path=run.get("roof_path")
+        recovery=run.get("wall_recovery_arc")
+        if path=="direct_sky_ledge":
+            if not arc_ok(arcs["roof"],415,475,123.5,125):
+                raise ValueError("invalid direct roof landing")
+        elif path=="ground_then_wall_recovery":
+            if (not arc_ok(arcs["roof"],440,495,182,193,18,45) or
+                not arc_ok(recovery,600,660,182,193) or
+                recovery["pressed_frame"]<=arcs["roof"]["landing_frame"]):
+                raise ValueError("blocked roof lacks physical full wall recovery")
+        else:
+            raise ValueError("unknown roof jump route")
+        if (recovery is not None and
+            (not arc_ok(recovery,600,660,182,193) or
+             recovery["pressed_frame"]<=arcs["roof"]["landing_frame"])):
+            raise ValueError("unverified wall recovery landing")
+        if bool(recovery)!=bool(run.get("wall_recovery_used")):
+            raise ValueError("wall recovery mismatch with B input evidence")
         holds=run.get("guest_hold_frames")
         if (not isinstance(holds,dict) or set(holds)!={"B","Y"} or
             len(holds["B"]) not in (2,3) or len(holds["Y"])!=1 or
@@ -209,18 +230,32 @@ def compare(runs):
         if spread>LIMITS[key]:
             raise ValueError(f"unstable {key}: spread={spread} frames, max={LIMITS[key]}")
         spreads[key]=spread
+    grouped_arcs={
+        "pit":[r["guest_jump_arcs"]["pit"] for r in runs],
+        "roof_direct":[r["guest_jump_arcs"]["roof"] for r in runs
+                       if r["roof_path"]=="direct_sky_ledge"],
+        "roof_blocked":[r["guest_jump_arcs"]["roof"] for r in runs
+                        if r["roof_path"]=="ground_then_wall_recovery"],
+        "wall_recovery":[r["wall_recovery_arc"] for r in runs
+                         if r["wall_recovery_arc"] is not None],
+    }
     jump_spreads={}
-    for jump in ("pit","roof"):
+    for jump,items in grouped_arcs.items():
         jump_spreads[jump]={}
+        if not items:
+            continue
         for key,bound in (("rise_px",2.0),("flight_frames",12),
                           ("landing_x_px",20.0)):
-            values=[r["guest_jump_arcs"][jump][key] for r in runs]
+            values=[r[key] for r in items]
             spread=round(max(values)-min(values),3)
             if spread>bound:
                 raise ValueError(f"unstable {jump} {key}: spread={spread}, max={bound}")
             jump_spreads[jump][key]=spread
     return {
         "guest_jump_arc_spreads":jump_spreads,
+        "roof_path_counts":{
+            "direct_sky_ledge":sum(r["roof_path"]=="direct_sky_ledge" for r in runs),
+            "ground_then_wall_recovery":sum(r["roof_path"]=="ground_then_wall_recovery" for r in runs)},
         "repetitions":3,
         "status":"PASS",
         "guest_button_hold_frames_by_run":{

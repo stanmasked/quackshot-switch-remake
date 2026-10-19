@@ -272,12 +272,14 @@ or an additional B only if a real wall-recovery command is tied to guest
 physics and host evidence. Extra, stuck, or repeated buttons fail CI.
 See [live controller button pulses](docs/NEXIUM_GUEST_BUTTON_PULSES_RU.md).
 
-Stage 98 verifies the COMPLETE physical trajectories of the two
-virtual B jumps, requiring a guest-observed ascent, 61–68px apex,
-continuous flight and grounded landing on the far pit bank and the
-upper roof. The short roof descent (landing near the apex) is accepted
-only with genuine grounded contact. Separate negative-fixture tests
-and three-run revalidation reject teleports or invented landings.
+Stage 98 verifies complete B-jump arcs in real NeXium guest physics:
+the pit must have a 61–68px apex and far-bank grounded landing.
+The roof jump can either land on the sky ledge at Y=124, or can
+hit the overhang and land back on Y=188 ONLY if a separately observed
+and fully measured wall-recovery B jump clears the wall. The CI audit
+never mislabels the second case as a roof landing and compares
+durations/heights within the actual route type. Negative fixtures
+reject missing, invented or teleported landings.
 See [live guest jump arcs](docs/NEXIUM_GUEST_JUMP_ARCS_RU.md).
 
 Stage 81 adds a **single-use airborne heart** above the spring pad.
