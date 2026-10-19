@@ -26,6 +26,18 @@ def _measure(rows,pulse,name):
     if (departure["grounded"]!=0 or not departure["input_bits"]&4 or
         not 182000<=departure["y_milli"]<=187500):
         raise ValueError(f"{name} did not initiate a physical airborne jump")
+    # Guest keydown alone is insufficient: prove that the first flying
+    # sample genuinely follows a grounded player at the city floor.
+    # Previously a corrupted sample directly before keydown could hide
+    # an instantaneous vertical warp outside the airborne-only segment.
+    previous=rows[index-1] if index else None
+    if (previous is None or previous["grounded"]!=1 or
+        previous["input_bits"]&4 or
+        not 182000<=previous["y_milli"]<=193000 or
+        not 0<departure["frame"]-previous["frame"]<=4 or
+        abs(departure["y_milli"]-previous["y_milli"]) >
+            12000*(departure["frame"]-previous["frame"])+3000):
+        raise ValueError(f"{name} jump launch lacks continuous grounded takeoff")
     landing=None
     for row in rows[index+1:]:
         if row["frame"]-start>85:

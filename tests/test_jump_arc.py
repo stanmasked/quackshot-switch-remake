@@ -142,6 +142,17 @@ class GuestArcTests(unittest.TestCase):
         self.rows[143]["y_milli"]=str(int(self.rows[143]["y_milli"])+55000)
         with self.assertRaisesRegex(ValueError,"vertical teleport"):
             verify_jump_arcs(self.host,self.rows)
+    def test_launch_rejects_corrupted_previous_ground_height(self):
+        # The real B edge and flight remain unchanged. Only the
+        # preceding grounded guest position has been forged.
+        self.rows[102]["y_milli"]="300000"
+        with self.assertRaisesRegex(ValueError,"continuous grounded takeoff"):
+            verify_jump_arcs(self.host,self.rows)
+    def test_recovery_rejects_corrupted_previous_ground_height(self):
+        host,rows=blocked_roof_fixture()
+        rows[227]["y_milli"]="300000"
+        with self.assertRaisesRegex(ValueError,"continuous grounded takeoff"):
+            verify_jump_arcs(host,rows)
     def test_reversed_vertical_motion_during_ascent(self):
         # A 7px disturbance looks velocity-plausible, but reverses
         # the physical upward trajectory before the apex.
