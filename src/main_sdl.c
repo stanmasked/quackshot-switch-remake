@@ -4512,7 +4512,7 @@ int main(int argc, char **argv) {
             qs_step(&game, in);
             (void)qs_live_probe_tick(&live_probe, &game, in, old_mode,
                                      hero_x_before,hero_y_before,
-                                     pad!=NULL);
+                                     pad!=NULL,input_before);
             accumulator -= 1.0 / 60.0;
             if (game.mode == QS_STAGE &&
                 ((game.frames % 5) == 0 || old_mode != game.mode ||
