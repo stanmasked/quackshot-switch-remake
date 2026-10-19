@@ -80,7 +80,7 @@ vulkaninfo --summary > "$out/vulkan.txt" 2>&1 || true
 set +e
 xvfb-run -a -s "-screen 0 1280x720x24" \
   bash -c '
-    timeout --signal=TERM --kill-after=5s 40s "$1" "$2" > "$3" 2>&1 &
+    timeout --signal=TERM --kill-after=5s 50s "$1" "$2" > "$3" 2>&1 &
     emu_pid=$!
     (
       sleep 5
@@ -139,6 +139,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       sleep 0.30
       xdotool keydown --clearmodifiers d
       obstacle_file=""
+      postcheck_file=""
       step=0
       wall_recovery=0
       for attempt in $(seq 1 180); do
@@ -153,6 +154,18 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
         if ! [[ "$x_milli" =~ ^[0-9]+$ && "$grounded" =~ ^[01]$ && \
                "$checkpoint" =~ ^[01]$ && "$mode" =~ ^[01]$ ]]; then
           continue
+        fi
+        # Guest-side continuation data: read only; the CI host never
+        # writes or injects any game-state values.
+        if [ -z "$postcheck_file" ]; then
+          postcheck_file="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+            -type f -name quackshot-postcheck.csv -print -quit 2>/dev/null || true)"
+        fi
+        pc_crate=""
+        pc_flash=""
+        if [ -n "$postcheck_file" ]; then
+          pc_line="$(tail -n 1 "$postcheck_file" || true)"
+          IFS=, read -r pc_seq pc_frame pc_attempt pc_x pc_y pc_vy pc_ground pc_mask pc_flag pc_crate pc_flash pc_heart pc_ledge pc_clear pc_mode pc_source <<< "$pc_line"
         fi
         if [ "$step" -eq 0 ] && [ "$mode" -eq 1 ] && \
            [ "$x_milli" -ge 276000 ] && [ "$x_milli" -le 305000 ] && \
@@ -182,10 +195,25 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
         elif [ "$step" -eq 2 ] && [ "$mode" -eq 1 ] && \
              [ "$checkpoint" -eq 1 ]; then
           echo "CHECKPOINT_REACHED_GUEST frame=$frame x_milli=$x_milli"
-          xdotool keyup d
-          sleep 0.10
-          xdotool key --clearmodifiers --delay 120 m
+          # Keep the right stick held. The next goal is the crate.
           step=3
+        elif [ "$step" -eq 3 ] && [ "$mode" -eq 1 ] && \
+             [ "$x_milli" -ge 902000 ] && [ "$x_milli" -le 946000 ] && \
+             [ "$pc_crate" = "1" ]; then
+          echo "CRATE_FIRE_GUEST frame=$frame x_milli=$x_milli"
+          xdotool keydown --clearmodifiers z
+          sleep 0.18
+          xdotool keyup z
+          step=4
+        elif [ "$step" -eq 4 ] && [ "$pc_crate" = "0" ] && \
+             [ "$mode" -eq 1 ]; then
+          echo "CRATE_DESTROYED_GUEST frame=$frame x_milli=$x_milli"
+          step=5
+        elif [ "$step" -eq 5 ] && [[ "$pc_flash" =~ ^[0-9]+$ ]] && \
+             [ "$pc_flash" -gt 0 ]; then
+          echo "SPRING_REACHED_GUEST frame=$frame x_milli=$x_milli"
+          xdotool keyup d
+          step=6
           break
         fi
       done
@@ -248,6 +276,14 @@ if [ -s "$out/obstacle-trace-paths.txt" ]; then
 fi
 python3 tools/verify_obstacle_route.py "$out/guest-obstacle.csv" \
     "$out/obstacle-summary.txt"
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-postcheck.csv' -print > "$out/postcheck-trace-paths.txt"
+if [ -s "$out/postcheck-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/postcheck-trace-paths.txt"
+    cp "$first" "$out/guest-postcheck.csv"
+fi
+python3 tools/verify_postcheck.py "$out/guest-postcheck.csv" \
+    "$out/postcheck-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv
