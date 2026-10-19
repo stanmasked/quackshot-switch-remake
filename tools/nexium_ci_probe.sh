@@ -175,6 +175,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       finish_file=""
       step=0
       wall_recovery=0
+      heart_nudge_done=0
       roof_min_x_milli=382000
       roof_max_x_milli=410000
       if [ "${QS_ROOF_LATE:-0}" = "1" ]; then
@@ -273,6 +274,20 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           echo "SPRING_REACHED_GUEST frame=$frame x_milli=$x_milli"
           xdotool keyup d
           step=6
+        elif [ "$step" -eq 6 ] && [ "$heart_nudge_done" -eq 0 ] && \
+              [ "$fin_heart" = "0" ] && [ "$fin_mode" = "1" ] && \
+              [[ "$fin_x" =~ ^[0-9]+$ && "$fin_y" =~ ^[0-9]+$ ]] && \
+              [ "$fin_x" -ge 1137000 ] && [ "$fin_x" -le 1141000 ] && \
+              [ "$fin_y" -ge 50000 ] && [ "$fin_y" -le 160000 ]; then
+          # In real run #2 the hero halted at X=1139.781, short of the
+          # airborne heart at X=1152. Issue a single physical controller
+          # RIGHT pulse only while guest telemetry proves spring flight.
+          # The game still must collect the heart and finish itself.
+          echo "SPRING_HEART_ALIGN_GUEST frame=$fin_frame x_milli=$fin_x y_milli=$fin_y"
+          heart_nudge_done=1
+          xdotool keydown --clearmodifiers d
+          sleep 0.10
+          xdotool keyup d
         elif [ "$step" -eq 6 ] && [ "$fin_heart" = "1" ] && \
              [ "$fin_mode" = "1" ]; then
           echo "AIR_HEART_COLLECTED_GUEST frame=$fin_frame x_milli=$fin_x"
