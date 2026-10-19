@@ -14,7 +14,7 @@ def fixture():
             x=1144.656 + min(38, (tick-760)*1.625)
         if tick>=822:
             x=1182.656 + (tick-822)*1.625
-        heart=int(tick>=753)
+        heart=int(tick>=765)
         ledge=int(813<=tick<=822)
         last=tick==876
         row={"seq":str(len(finish)),"frame":str(860+tick),
