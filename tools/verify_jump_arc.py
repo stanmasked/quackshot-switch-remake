@@ -62,6 +62,12 @@ def _measure(rows,pulse,name):
             b["x_milli"]+8000<a["x_milli"] or
             b["x_milli"]-a["x_milli"]>10000):
             raise ValueError(f"{name} jump landing hides lost frames or teleport")
+        # Reference-city jump starts at roughly 2.93 px/frame vertically.
+        # Allow a deliberately generous 12 px/frame plus rounding/sampling
+        # slack, but never accept a single-sample vertical warp, including
+        # the final grounded sample (which is not part of segment).
+        if abs(b["y_milli"]-a["y_milli"]) > 12000*(b["frame"]-a["frame"])+3000:
+            raise ValueError(f"{name} jump hides vertical teleport")
     if landing["x_milli"]-departure["x_milli"]<=12000:
         raise ValueError(f"{name} jump landing lacks horizontal progress")
     return {

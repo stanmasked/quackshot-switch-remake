@@ -127,6 +127,16 @@ class GuestArcTests(unittest.TestCase):
         self.rows[142]["x_milli"]="999999"
         with self.assertRaisesRegex(ValueError,"teleport"):
             verify_jump_arcs(self.host,self.rows)
+    def test_airborne_vertical_teleport(self):
+        self.rows[143]["y_milli"]=str(int(self.rows[143]["y_milli"])+55000)
+        with self.assertRaisesRegex(ValueError,"vertical teleport"):
+            verify_jump_arcs(self.host,self.rows)
+    def test_touchdown_vertical_teleport(self):
+        # The last airborne sample is corrupted, but touchdown itself
+        # and all recorded horizontal coordinates look legitimate.
+        self.rows[212]["y_milli"]="182000"
+        with self.assertRaisesRegex(ValueError,"vertical teleport"):
+            verify_jump_arcs(self.host,self.rows)
     def test_input_jumps_are_required(self):
         for row in self.rows[103:113]:row["input_bits"]="2"
         with self.assertRaises(ValueError):verify_jump_arcs(self.host,self.rows)
