@@ -283,7 +283,7 @@ if [ -s "$out/postcheck-trace-paths.txt" ]; then
     cp "$first" "$out/guest-postcheck.csv"
 fi
 python3 tools/verify_postcheck.py "$out/guest-postcheck.csv" \
-    "$out/postcheck-summary.txt"
+    "$out/guest-obstacle.csv" "$out/postcheck-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv

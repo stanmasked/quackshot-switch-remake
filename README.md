@@ -223,6 +223,13 @@ time two virtual B presses while moving right toward the real pit,
 wall and checkpoint. A separate verifier refuses scripted-route evidence.
 See [live obstacle route](docs/NEXIUM_LIVE_OBSTACLE_RU.md).
 
+Stage 92 continues the *same* second NeXium virtual-controller attempt
+past the checkpoint. It presses the real virtual Y before the crate and
+requires guest-observed crate destruction and spring bounce, with a
+continuity link to the Stage 91 log and independent negative-fixture
+tests. This is distinct from the synthetic Stage 88 full-route witness.
+See [live post-checkpoint proof](docs/NEXIUM_POSTCHECK_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
