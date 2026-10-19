@@ -7,7 +7,7 @@ These timings are NOT measurements of NeXium's internal frame rate.
 """
 import re
 
-PROFILES={1:(0,85),2:(25,90),3:(45,95)}
+PROFILES={1:(0,85),2:(25,90),3:(45,95),4:(25,90),5:(45,95)}
 EVENTS=("pit","roof","crate")
 TIMING=re.compile(r"^INPUT_TIMING_PROFILE profile=(\d+) edge_delay_ms=(\d+) poll_ms=(\d+)$")
 EDGE=re.compile(r"^INPUT_EDGE_DELAY event=(pit|roof|crate) requested_ms=(\d+) measured_ms=(\d+)$")

@@ -14,9 +14,9 @@ mkdir -p "$out"
 # fails closed before the emulator or user-input simulation can run.
 edge_delay_ms="${QS_INPUT_DELAY_MS:-0}"
 poll_ms="${QS_POLL_MS:-85}"
-case "${QS_REPEAT_ID:-single}:$edge_delay_ms:$poll_ms" in
-  1:0:85|2:25:90|3:45:95) ;;
-  *) echo "BLOCKED: unsupported Stage 95 input timing profile" >&2; exit 2 ;;
+case "${QS_REPEAT_ID:-single}:$edge_delay_ms:$poll_ms:${QS_ROOF_LATE:-0}" in
+  1:0:85:0|2:25:90:0|3:45:95:0|4:25:90:1|5:45:95:1) ;;
+  *) echo "BLOCKED: unsupported input/roof testing profile" >&2; exit 2 ;;
 esac
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
@@ -35,6 +35,7 @@ expected="0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761"
     echo "ci_repeat_id=${QS_REPEAT_ID:-single}"
     echo "ci_input_edge_delay_ms=$edge_delay_ms"
     echo "ci_poll_ms=$poll_ms"
+    echo "ci_roof_late=${QS_ROOF_LATE:-0}"
 } > "$out/metadata.txt"
 
 # Verify a pinned release hash before executing a downloaded binary. Fail closed.
@@ -174,6 +175,16 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       finish_file=""
       step=0
       wall_recovery=0
+      roof_min_x_milli=382000
+      roof_max_x_milli=410000
+      if [ "${QS_ROOF_LATE:-0}" = "1" ]; then
+        # Stage 107: request B later (just before the overhead tiles).
+        # Never alter the hero or game state; the NRO must prove contact
+        # with the ceiling, fall to ground and perform a third B at the wall.
+        roof_min_x_milli=398000
+        roof_max_x_milli=416000
+        echo "ROOF_INPUT_STRATEGY=late target_min=$roof_min_x_milli target_max=$roof_max_x_milli"
+      fi
       for attempt in $(seq 1 300); do
         sleep "0.$(printf "%03d" "$poll_interval_ms")"
         if [ -z "$obstacle_file" ]; then
@@ -223,7 +234,8 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           xdotool keyup x
           step=1
         elif [ "$step" -eq 1 ] && [ "$mode" -eq 1 ] && \
-             [ "$x_milli" -ge 382000 ] && [ "$x_milli" -le 410000 ] && \
+             [ "$x_milli" -ge "$roof_min_x_milli" ] && \
+             [ "$x_milli" -le "$roof_max_x_milli" ] && \
              [ "$grounded" -eq 1 ]; then
           echo "ROOF_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
           delayed_keydown roof x

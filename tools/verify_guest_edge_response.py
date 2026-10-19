@@ -14,7 +14,7 @@ import sys
 
 EVENTS=(
     ("pit","PIT_LAUNCH_GUEST",4,276000,305000),
-    ("roof","ROOF_LAUNCH_GUEST",4,382000,410000),
+    ("roof","ROOF_LAUNCH_GUEST",4,382000,416000),
     ("crate","CRATE_FIRE_GUEST",8,902000,946000),
 )
 LAUNCH=re.compile(r"^(PIT_LAUNCH_GUEST|ROOF_LAUNCH_GUEST|CRATE_FIRE_GUEST) frame=(\d+) x_milli=(\d+)$")

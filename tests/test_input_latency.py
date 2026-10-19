@@ -6,7 +6,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from tools.verify_input_latency import verify_latency_profile
 
 def make(run_id):
-    delay,poll={1:(0,85),2:(25,90),3:(45,95)}[run_id]
+    delay,poll={1:(0,85),2:(25,90),3:(45,95),4:(25,90),5:(45,95)}[run_id]
     metadata={"ci_repeat_id":str(run_id),
               "ci_input_edge_delay_ms":str(delay),
               "ci_poll_ms":str(poll)}
@@ -20,7 +20,7 @@ def make(run_id):
 
 class InputLatencyTests(unittest.TestCase):
     def test_three_profiles(self):
-        for i in (1,2,3):
+        for i in (1,2,3,4,5):
             with self.subTest(i=i):
                 meta,log=make(i)
                 result=verify_latency_profile(meta,log,i)
