@@ -4322,6 +4322,10 @@ int main(int argc, char **argv) {
     /* Stage 91: real virtual-pad telemetry for a SECOND CITY TEST run.
      * Unlike qs_route_probe_write, nothing generates QsInput here. */
     FILE *obstacle_file = NULL;
+    FILE *postcheck_file = NULL; /* Stage 92: later phase of SAME live run */
+    int postcheck_records=0;
+    int postcheck_prev_crate=-1,postcheck_prev_spring=0;
+    int postcheck_prev_heart=0;
     int city_entry_count=0, obstacle_records=0;
     unsigned obstacle_previous_bits=~0u;
     int obstacle_previous_checkpoint=0;
@@ -4390,6 +4394,18 @@ int main(int argc, char **argv) {
         }
         if(!obstacle_file)
             fprintf(stderr,"QuackShot: obstacle-controller guest CSV unavailable (non-fatal)\n");
+        const char *postcheck_path=getenv("QS_POSTCHECK_PATH");
+        if(!postcheck_path || !*postcheck_path)
+            postcheck_path="sdmc:/switch/quackshot-postcheck.csv";
+        postcheck_file=fopen(postcheck_path,"w");
+        if(postcheck_file) {
+            if(fputs("seq,frame,attempt,x_milli,y_milli,vy_milli,grounded,input_bits,checkpoint,crate,spring_flash,heart,ledge,cleared,mode,source\n",postcheck_file)<0 ||
+               fflush(postcheck_file)!=0){
+                fclose(postcheck_file);postcheck_file=NULL;
+            }
+        }
+        if(!postcheck_file)
+            fprintf(stderr,"QuackShot: post-checkpoint guest CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4566,6 +4582,38 @@ int main(int argc, char **argv) {
                     }
                 }
             }
+            /* Continue the very same second SDL-controller attempt beyond
+             * checkpoint; unlike Stage 88, this only measures world state.
+             * Record the map-return/clear boundary as well when it occurs. */
+            if(postcheck_file && pad && city_entry_count==2 &&
+               (game.city_checkpoint_active || postcheck_records>0) &&
+               (game.mode==QS_STAGE || old_mode==QS_STAGE) &&
+               postcheck_records<320){
+                int crate=game.city_crate_active!=0;
+                int flash=game.city_spring_flash_frames;
+                int heart=game.city_air_reward_collected!=0;
+                if(postcheck_records==0 || (game.city_attempt_frames%3)==0 ||
+                   crate!=postcheck_prev_crate ||
+                   (flash>0 && postcheck_prev_spring==0) ||
+                   heart!=postcheck_prev_heart ||
+                   game.mode==QS_MAP) {
+                    int ledge=game.hero.grounded &&
+                              game.hero.y==(QS_CITY_SKY_LEDGE_TOP-20);
+                    if(fprintf(postcheck_file,
+                       "%d,%d,%d,%d,%d,%d,%d,%u,%d,%d,%d,%d,%d,%d,%d,live_controller_qs_step\n",
+                       postcheck_records,game.frames,game.city_attempt_frames,
+                       (int)(game.hero.x*1000.0f),(int)(game.hero.y*1000.0f),
+                       (int)(game.hero.vy*1000.0f),game.hero.grounded!=0,
+                       input_after,game.city_checkpoint_active!=0,
+                       crate,flash,heart,ledge,game.cleared[0]!=0,
+                       (int)game.mode)>=0 && fflush(postcheck_file)==0){
+                        postcheck_records++;
+                        postcheck_prev_crate=crate;
+                        postcheck_prev_spring=flash;
+                        postcheck_prev_heart=heart;
+                    }
+                }
+            }
 #endif
             accumulator -= 1.0 / 60.0;
             if (game.mode == QS_STAGE &&
@@ -4635,6 +4683,7 @@ int main(int argc, char **argv) {
     qs_live_probe_close(&live_probe);
 #ifdef __SWITCH__
     if(obstacle_file)fclose(obstacle_file);
+    if(postcheck_file)fclose(postcheck_file);
 #endif
     qs_trace_close(&trace);
     return 0;
