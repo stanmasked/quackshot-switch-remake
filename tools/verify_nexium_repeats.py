@@ -51,6 +51,29 @@ def _guest_rows(path):
     with path.open(encoding="utf-8",newline="") as fp:
         return list(csv.DictReader(fp))
 
+
+def _align_jump_milestone(edge, milestone_tick, obstacle, lower_x, upper_x):
+    """Match a real NRO B edge to the first X-threshold sample of SAME hold.
+
+    The obstacle observer samples every three frames plus input changes.
+    When B becomes visible slightly before X reaches its landmark,
+    the first landmark witness can be up to one 3-frame sample later.
+    Never infer an input edge from position alone or span a button release.
+    """
+    pressed_tick=edge["nro_stage_tick"]
+    lag=milestone_tick-pressed_tick
+    if not 0<=lag<=4:
+        raise ValueError("NRO first-button frames contradict actual world events")
+    witnessed=[r for r in obstacle
+               if pressed_tick<=int(r["attempt"])<=milestone_tick]
+    if (not witnessed or int(witnessed[0]["attempt"])!=pressed_tick or
+        int(witnessed[0]["frame"])!=edge["nro_first_button_frame"] or
+        int(witnessed[-1]["attempt"])!=milestone_tick or
+        not lower_x<=int(witnessed[-1]["x_milli"])<=upper_x or
+        any(not (int(r["input_bits"])&4) for r in witnessed)):
+        raise ValueError("NRO first-button frames contradict actual world events")
+    return lag
+
 def collect(root,run_id):
     directory=root/f"nexium-emulation-evidence-run-{run_id}"
     if not directory.is_dir():
@@ -111,9 +134,13 @@ def collect(root,run_id):
     validate_timeline(read_csv(directory/"guest-motion.csv",MOTION_COLUMNS),
                       load_live(directory/"guest-live-control.csv"))
     edge_events=edges["events"]
-    if (edge_events["pit"]["nro_stage_tick"]!=prev["pit_jump_tick"] or
-        edge_events["roof"]["nro_stage_tick"]!=prev["roof_jump_tick"] or
-        not 0<=mid["shot_tick"]-edge_events["crate"]["nro_stage_tick"]<=6):
+    jump_alignment={
+        "pit":_align_jump_milestone(edge_events["pit"],prev["pit_jump_tick"],
+                                    obstacle,275000,309000),
+        "roof":_align_jump_milestone(edge_events["roof"],prev["roof_jump_tick"],
+                                     obstacle,390000,437000),
+    }
+    if not 0<=mid["shot_tick"]-edge_events["crate"]["nro_stage_tick"]<=6:
         raise ValueError("NRO first-button frames contradict actual world events")
     if (mid["checkpoint_tick"]!=prev["checkpoint_tick"] or
         mid["spring_tick"]!=end["spring_tick"] or
@@ -133,6 +160,7 @@ def collect(root,run_id):
         "wall_recovery_used":pulses["wall_recovery"] is not None,
         "guest_frame_windows":{name:event["guest_frame_window"]
                                 for name,event in edge_events.items()},
+        "jump_edge_to_landmark_frames":jump_alignment,
         "pit_jump_tick":prev["pit_jump_tick"],
         "pit_cross_tick":prev["pit_cross_tick"],
         "roof_jump_tick":prev["roof_jump_tick"],

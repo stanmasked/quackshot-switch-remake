@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from tools.verify_nexium_repeats import compare
+from tools.verify_nexium_repeats import compare, _align_jump_milestone
 
 DIGEST="b"*64
 def three():
@@ -31,6 +31,44 @@ def three():
            wall_recovery_used=False,
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
+
+
+class GuestMilestoneAlignmentTests(unittest.TestCase):
+    def setUp(self):
+        # The B rising edge at attempt 255 is real, but the hero crosses
+        # the X=390 landmark only in the next 3-frame obstacle sample.
+        self.edge={"nro_stage_tick":255,"nro_first_button_frame":1098}
+        self.rows=[
+            {"attempt":"254","frame":"1097","input_bits":"2","x_milli":"385000"},
+            {"attempt":"255","frame":"1098","input_bits":"6","x_milli":"385000"},
+            {"attempt":"258","frame":"1101","input_bits":"6","x_milli":"391000"}]
+    def measure(self,tick=258):
+        return _align_jump_milestone(self.edge,tick,self.rows,390000,437000)
+    def test_real_stage104_roof_offset_allowed(self):
+        self.assertEqual(self.measure(),3)
+    def test_exact_stage_tick_allowed(self):
+        self.edge["nro_stage_tick"]=258
+        self.edge["nro_first_button_frame"]=1101
+        self.assertEqual(self.measure(),0)
+    def test_unbounded_delay_rejected(self):
+        with self.assertRaisesRegex(ValueError,"contradict"):
+            self.measure(261)
+    def test_released_button_cannot_pass(self):
+        self.rows[-1]["input_bits"]="2"
+        with self.assertRaisesRegex(ValueError,"contradict"):
+            self.measure()
+    def test_witnessed_position_must_cross_landmark(self):
+        self.rows[-1]["x_milli"]="389000"
+        with self.assertRaisesRegex(ValueError,"contradict"):
+            self.measure()
+    def test_unknown_guest_edge_frame_rejected(self):
+        self.edge["nro_first_button_frame"]=1100
+        with self.assertRaisesRegex(ValueError,"contradict"):
+            self.measure()
+    def test_no_matching_milestone_sample_rejected(self):
+        self.rows.pop()
+        with self.assertRaisesRegex(ValueError,"contradict"):
+            self.measure()
 
 class RepeatedLiveRunsTests(unittest.TestCase):
     def setUp(self): self.runs=three()
