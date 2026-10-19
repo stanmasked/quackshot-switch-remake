@@ -142,6 +142,18 @@ class GuestArcTests(unittest.TestCase):
         self.rows[143]["y_milli"]=str(int(self.rows[143]["y_milli"])+55000)
         with self.assertRaisesRegex(ValueError,"vertical teleport"):
             verify_jump_arcs(self.host,self.rows)
+    def test_reversed_vertical_motion_during_ascent(self):
+        # A 7px disturbance looks velocity-plausible, but reverses
+        # the physical upward trajectory before the apex.
+        self.rows[108]["y_milli"]=str(int(self.rows[108]["y_milli"])+7000)
+        with self.assertRaisesRegex(ValueError,"reverses downward"):
+            verify_jump_arcs(self.host,self.rows)
+    def test_reversed_vertical_motion_during_descent(self):
+        # Another velocity-plausible alteration makes the descending
+        # hero climb again without an additional authenticated B press.
+        self.rows[147]["y_milli"]=str(int(self.rows[147]["y_milli"])-8000)
+        with self.assertRaisesRegex(ValueError,"reverses upward"):
+            verify_jump_arcs(self.host,self.rows)
     def test_touchdown_vertical_teleport(self):
         # The last airborne sample is corrupted, but touchdown itself
         # and all recorded horizontal coordinates look legitimate.
