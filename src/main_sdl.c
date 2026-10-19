@@ -3,6 +3,7 @@
 #include "qs_motion.h"
 #include "qs_parallax.h"
 #include "qs_route_probe.h"
+#include "qs_live_probe.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <float.h>
@@ -4316,6 +4317,7 @@ int main(int argc, char **argv) {
     QsGame game;
     QsTrace trace = {0};
     QsMotion motion = {0};
+    QsLiveProbe live_probe = {0};
     Uint64 previous, frequency;
     double accumulator = 0.0;
     int running = 1, i, shown_first_frame = 0;
@@ -4361,6 +4363,15 @@ int main(int argc, char **argv) {
     }
     if (motion_path && *motion_path && !qs_motion_open(&motion, motion_path))
         fprintf(stderr, "QuackShot: numeric motion CSV unavailable (non-fatal)\n");
+#ifdef __SWITCH__
+    {
+        const char *live_path=getenv("QS_LIVE_CONTROL_PATH");
+        if(!live_path || !*live_path)
+            live_path="sdmc:/switch/quackshot-live-control.csv";
+        if(!qs_live_probe_open(&live_probe,live_path))
+            fprintf(stderr,"QuackShot: live-controller witness CSV unavailable (non-fatal)\n");
+    }
+#endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
     if (smoke) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -4494,9 +4505,14 @@ int main(int argc, char **argv) {
             QsMode old_mode = game.mode;
             int old_stage = game.stage;
             float camera_before = game.camera_x;
+            float hero_x_before = game.hero.x;
+            float hero_y_before = game.hero.y;
             unsigned input_before = qs_motion_input_bits(game.previous);
             unsigned input_after = qs_motion_input_bits(in);
             qs_step(&game, in);
+            (void)qs_live_probe_tick(&live_probe, &game, in, old_mode,
+                                     hero_x_before,hero_y_before,
+                                     pad!=NULL);
             accumulator -= 1.0 / 60.0;
             if (game.mode == QS_STAGE &&
                 ((game.frames % 5) == 0 || old_mode != game.mode ||
@@ -4559,6 +4575,7 @@ int main(int argc, char **argv) {
     SDL_DestroyWindow(window);
     SDL_Quit();
     qs_motion_close(&motion);
+    qs_live_probe_close(&live_probe);
     qs_trace_close(&trace);
     return 0;
 }

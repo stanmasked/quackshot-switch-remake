@@ -201,6 +201,14 @@ addition to its existing *live* controller/motion trace. This is a
 completed CITY TEST. See
 [NeXium guest route witness](docs/NEXIUM_CITY_ROUTE_GUEST_RU.md).
 
+Stage 89 separately records **live SDL controller-to-world effects** in
+the running guest application. NeXium checks actual stage entry, rising
+jump, forward movement, measured reversal, fire request, active shot,
+and map return. Its verifier also cross-checks the runtime and numeric
+motion traces. This live evidence is not a completed route and is never
+mixed with the Stage 88 simulated full-route witness. See
+[live-controller witness](docs/NEXIUM_LIVE_INPUT_WITNESS_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

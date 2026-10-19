@@ -161,6 +161,17 @@ if [ -s "$out/route-trace-paths.txt" ]; then
     cp "$first" "$out/guest-route.csv"
 fi
 python3 tools/verify_guest_route.py "$out/guest-route.csv" "$out/route-summary.txt"
+# Independent live SDL controller evidence. Unlike the route self-test,
+# these records are only written after actual qs_step(read_input(pad)).
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-live-control.csv' -print > "$out/live-trace-paths.txt"
+if [ -s "$out/live-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/live-trace-paths.txt"
+    cp "$first" "$out/guest-live-control.csv"
+fi
+python3 tools/verify_live_control.py "$out/guest-live-control.csv" \
+    "$out/guest-runtime.csv" "$out/guest-motion.csv" \
+    "$out/live-control-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv

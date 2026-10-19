@@ -7,6 +7,7 @@ on:
       - "Makefile"
       - "tools/nexium_ci_probe.sh"
       - "tools/verify_guest_route.py"
+      - "tools/verify_live_control.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -80,6 +81,8 @@ jobs:
             emulator-evidence/guest-runtime.csv
             emulator-evidence/guest-motion.csv
             emulator-evidence/guest-route.csv
+            emulator-evidence/guest-live-control.csv
+            emulator-evidence/live-control-summary.txt
             emulator-evidence/route-summary.txt
             emulator-evidence/motion-summary.txt
             emulator-evidence/parallax-summary.txt
