@@ -77,7 +77,7 @@ class RepeatedLiveRunsTests(unittest.TestCase):
             compare(self.runs)
     def test_large_jump_height_disagreement(self):
         self.runs[2]["guest_jump_arcs"]["roof"]["rise_px"]=67.4
-        with self.assertRaisesRegex(ValueError,"unstable roof rise"):
+        with self.assertRaisesRegex(ValueError,"unstable roof_direct rise"):
             compare(self.runs)
     def test_blocked_roof_with_verified_recovery(self):
         run=self.runs[1]

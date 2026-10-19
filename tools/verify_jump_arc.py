@@ -54,11 +54,16 @@ def _measure(rows,pulse,name):
         raise ValueError(f"{name} missing genuine descent")
     if name=="roof" and not (descent>=1 or landing["y_milli"]>apex["y_milli"]):
         raise ValueError("roof missing descent/landing contact")
-    for a,b in zip(segment,segment[1:]):
+    # Landing itself must be continuous with the last airborne sample;
+    # previously an impossible teleport precisely at touchdown could hide
+    # outside the checked (airborne-only) segment.
+    for a,b in zip(segment,segment[1:]+[landing]):
         if (b["frame"]-a["frame"]>4 or
             b["x_milli"]+8000<a["x_milli"] or
             b["x_milli"]-a["x_milli"]>10000):
-            raise ValueError(f"{name} arc hides lost frames or teleport")
+            raise ValueError(f"{name} jump landing hides lost frames or teleport")
+    if landing["x_milli"]-departure["x_milli"]<=12000:
+        raise ValueError(f"{name} jump landing lacks horizontal progress")
     return {
         "pressed_frame":start,"released_frame":released,
         "apex_frame":apex["frame"],"apex_y_px":round(apex["y_milli"]/1000,3),

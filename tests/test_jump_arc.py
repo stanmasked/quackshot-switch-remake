@@ -99,7 +99,7 @@ class GuestArcTests(unittest.TestCase):
     def test_fake_recovery_landing(self):
         host,rows=blocked_roof_fixture()
         rows[281]["x_milli"]="570000"
-        with self.assertRaisesRegex(ValueError,"did not clear the wall"):
+        with self.assertRaisesRegex(ValueError,"did not clear the wall|landing hides"):
             verify_jump_arcs(host,rows)
     def test_apex_missing(self):
         for row in self.rows[103:157]:row["y_milli"]="184000"
