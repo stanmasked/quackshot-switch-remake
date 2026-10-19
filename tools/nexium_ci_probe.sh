@@ -140,6 +140,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool keydown --clearmodifiers d
       obstacle_file=""
       step=0
+      wall_recovery=0
       for attempt in $(seq 1 180); do
         sleep 0.085
         if [ -z "$obstacle_file" ]; then
@@ -162,13 +163,22 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           xdotool keyup x
           step=1
         elif [ "$step" -eq 1 ] && [ "$mode" -eq 1 ] && \
-             [ "$x_milli" -ge 394000 ] && [ "$x_milli" -le 425000 ] && \
+             [ "$x_milli" -ge 382000 ] && [ "$x_milli" -le 410000 ] && \
              [ "$grounded" -eq 1 ]; then
           echo "ROOF_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
           xdotool keydown --clearmodifiers x
           sleep 0.36
           xdotool keyup x
           step=2
+        elif [ "$step" -eq 2 ] && [ "$mode" -eq 1 ] && \
+             [ "$wall_recovery" -eq 0 ] && [ "$checkpoint" -eq 0 ] && \
+             [ "$x_milli" -ge 547000 ] && [ "$x_milli" -le 551000 ] && \
+             [ "$grounded" -eq 1 ]; then
+          echo "WALL_RECOVERY_GUEST frame=$frame x_milli=$x_milli"
+          wall_recovery=1
+          xdotool keydown --clearmodifiers x
+          sleep 0.36
+          xdotool keyup x
         elif [ "$step" -eq 2 ] && [ "$mode" -eq 1 ] && \
              [ "$checkpoint" -eq 1 ]; then
           echo "CHECKPOINT_REACHED_GUEST frame=$frame x_milli=$x_milli"
