@@ -75,7 +75,11 @@ class SpringHeartAlignmentTests(unittest.TestCase):
             _verify_spring_heart_nudge(self.lines,self.rows)
 
     def test_heart_collected_before_nudge(self):
-        self.rows[0]["heart"]="1"
+        # An earlier first pickup cannot be legitimised by a later pulse
+        # even if a corrupt trace repeats heart=0 at the marker.
+        self.rows.insert(0,dict(frame="697",x_milli="1135000",
+                                y_milli="104000",heart="1",mode="1",
+                                grounded="0",input_bits="0"))
         with self.assertRaisesRegex(ValueError,"did not precede"):
             _verify_spring_heart_nudge(self.lines,self.rows)
 
