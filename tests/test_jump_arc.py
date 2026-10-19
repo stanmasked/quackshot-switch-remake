@@ -42,19 +42,74 @@ def fixture():
     return host,rows
 
 
+
+
+def blocked_roof_fixture():
+    """Late roof B collides with overhang; genuine wall B rescues path."""
+    host,rows=fixture()
+    host=host.replace("CRATE_FIRE_GUEST",
+                      "WALL_RECOVERY_GUEST frame=227 x_milli=548000\nCRATE_FIRE_GUEST")
+    for frame in range(184,216):
+        r=rows[frame]
+        t=frame-184
+        if frame==215:
+            r["y_milli"]="188000"
+            r["grounded"]="1"
+        else:
+            y=(185070-int(24500*t/10)) if t<=10 else (
+                160570+int(27430*(t-10)/20))
+            r["y_milli"]=str(y)
+            r["grounded"]="0"
+        r["x_milli"]=str(390000+2000*(frame-180))
+    for frame in range(216,228):
+        rows[frame]["x_milli"]=str(460000+int((frame-215)*88000/12))
+        rows[frame]["y_milli"]="188000"
+        rows[frame]["grounded"]="1"
+    for frame in range(228,282):
+        r=rows[frame]
+        t=frame-228
+        r["x_milli"]=str(548000+1600*(frame-227))
+        if frame==281:
+            r["y_milli"]="188000"; r["grounded"]="1"
+        else:
+            y=(185070-int(61328*t/27)) if t<=27 else (
+               123742+int(64258*(t-27)/26))
+            r["y_milli"]=str(y)
+            r["grounded"]="0"
+        r["input_bits"]="6" if 228<=frame<=239 else "2"
+    return host,rows
+
 class GuestArcTests(unittest.TestCase):
     def setUp(self):self.host,self.rows=fixture()
     def test_complete_pit_and_roof_arcs(self):
         r=verify_jump_arcs(self.host,self.rows)
         self.assertEqual(tuple(r["arcs"]),("pit","roof"))
         self.assertEqual(r["arcs"]["roof"]["landing_y_px"],124.0)
+    def test_blocked_roof_with_real_recovery_arc(self):
+        host,rows=blocked_roof_fixture()
+        result=verify_jump_arcs(host,rows)
+        self.assertEqual(result["roof_path"],"ground_then_wall_recovery")
+        self.assertAlmostEqual(result["arcs"]["roof"]["rise_px"],27.43,places=2)
+        self.assertGreater(result["wall_recovery"]["rise_px"],64)
+    def test_blocked_roof_without_authorized_recovery(self):
+        host,rows=blocked_roof_fixture()
+        host=host.replace("WALL_RECOVERY_GUEST","FAKE_WALL_RECOVERY")
+        with self.assertRaises(ValueError):
+            verify_jump_arcs(host,rows)
+    def test_fake_recovery_landing(self):
+        host,rows=blocked_roof_fixture()
+        rows[281]["x_milli"]="570000"
+        with self.assertRaisesRegex(ValueError,"did not clear the wall"):
+            verify_jump_arcs(host,rows)
     def test_apex_missing(self):
         for row in self.rows[103:157]:row["y_milli"]="184000"
         with self.assertRaisesRegex(ValueError,"height|ascent"):
             verify_jump_arcs(self.host,self.rows)
     def test_no_ground_landing(self):
         for row in self.rows[157:184]:row["grounded"]="0"
-        with self.assertRaisesRegex(ValueError,"landed"):
+        # The next roof host anchor must itself be grounded; absence
+        # of a legitimate pit landing must fail even before arc analysis.
+        with self.assertRaisesRegex(ValueError,"landed|grounded release"):
             verify_jump_arcs(self.host,self.rows)
     def test_roof_lands_on_wrong_surface(self):
         self.rows[213]["y_milli"]="188000"
