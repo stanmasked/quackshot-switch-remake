@@ -91,6 +91,17 @@ class GuestArcTests(unittest.TestCase):
         self.assertEqual(result["roof_path"],"ground_then_wall_recovery")
         self.assertAlmostEqual(result["arcs"]["roof"]["rise_px"],27.43,places=2)
         self.assertGreater(result["wall_recovery"]["rise_px"],64)
+    def test_direct_roof_rejects_extra_recovery_B(self):
+        # Preserve the authenticated third B at the wall while replacing
+        # only the roof flight with the already-proven direct flight.
+        # This combination must not be mislabeled a direct route.
+        host,rows=blocked_roof_fixture()
+        _,direct_rows=fixture()
+        for i in range(184,216):
+            rows[i]["y_milli"]=direct_rows[i]["y_milli"]
+            rows[i]["grounded"]=direct_rows[i]["grounded"]
+        with self.assertRaisesRegex(ValueError,"direct roof must not"):
+            verify_jump_arcs(host,rows)
     def test_blocked_roof_without_authorized_recovery(self):
         host,rows=blocked_roof_fixture()
         host=host.replace("WALL_RECOVERY_GUEST","FAKE_WALL_RECOVERY")

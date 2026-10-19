@@ -93,6 +93,16 @@ class RepeatedLiveRunsTests(unittest.TestCase):
         run["wall_recovery_used"]=True
         run["guest_hold_frames"]["B"].append(22)
         self.assertEqual(compare(self.runs)["roof_path_counts"]["ground_then_wall_recovery"],1)
+    def test_direct_roof_rejects_recovery_summary(self):
+        run=self.runs[1]
+        run["wall_recovery_arc"]={
+            "rise_px":64.454,"flight_frames":56,
+            "landing_x_px":605.281,"landing_y_px":188.0,
+            "pressed_frame":381}
+        run["wall_recovery_used"]=True
+        run["guest_hold_frames"]["B"].append(22)
+        with self.assertRaisesRegex(ValueError,"direct roof cannot"):
+            compare(self.runs)
     def test_blocked_roof_without_recovery(self):
         self.runs[1]["roof_path"]="ground_then_wall_recovery"
         with self.assertRaisesRegex(ValueError,"blocked roof"):

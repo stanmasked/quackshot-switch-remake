@@ -67,7 +67,7 @@ def _measure(rows,pulse,name):
         # slack, but never accept a single-sample vertical warp, including
         # the final grounded sample (which is not part of segment).
         if abs(b["y_milli"]-a["y_milli"]) > 12000*(b["frame"]-a["frame"])+3000:
-            raise ValueError(f"{name} jump hides vertical teleport")
+            raise ValueError(f"{name} jump landing/trajectory hides vertical teleport")
     if landing["x_milli"]-departure["x_milli"]<=12000:
         raise ValueError(f"{name} jump landing lacks horizontal progress")
     return {
@@ -105,6 +105,13 @@ def verify_jump_arcs(host_text,samples):
         raise ValueError("pit grounded landing not on far bank")
     direct=_landed(roof,415,475,123.5,125)
     blocked=_landed(roof,440,495,182,193,18,45)
+    # The recovery B is permitted only after a physically blocked roof.
+    # Classifying a full roof landing as 'direct' while also accepting
+    # a third recovery B would make the two routes indistinguishable.
+    if direct and len(all_B)!=2:
+        raise ValueError("direct roof must not contain wall recovery B")
+    if blocked and len(all_B)!=3:
+        raise ValueError("blocked roof requires wall recovery B")
     recovery=None
     if len(all_B)==3:
         if pulses["wall_recovery"] is None:

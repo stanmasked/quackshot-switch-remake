@@ -198,6 +198,8 @@ def compare(runs):
         if path=="direct_sky_ledge":
             if not arc_ok(arcs["roof"],415,475,123.5,125):
                 raise ValueError("invalid direct roof landing")
+            if recovery is not None or run.get("wall_recovery_used"):
+                raise ValueError("direct roof cannot contain wall recovery")
         elif path=="ground_then_wall_recovery":
             if (not arc_ok(arcs["roof"],440,495,182,193,18,45) or
                 not arc_ok(recovery,600,660,182,193) or
