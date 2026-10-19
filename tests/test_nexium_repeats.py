@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from tools.verify_nexium_repeats import compare, _align_jump_milestone
+from tools.verify_nexium_repeats import compare, _align_jump_milestone, _verify_spring_heart_nudge
 
 DIGEST="b"*64
 def three():
@@ -29,9 +29,64 @@ def three():
            roof_path="direct_sky_ledge",
            wall_recovery_arc=None,
            wall_recovery_used=False,
+           spring_heart_alignment_used=False,
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
 
+
+
+class SpringHeartAlignmentTests(unittest.TestCase):
+    """Stage 110: do not mistake a host log line for real guest input."""
+
+    def setUp(self):
+        self.rows=[
+            dict(frame="700",x_milli="1139781",y_milli="100000",
+                 heart="0",mode="1",grounded="0",input_bits="0"),
+            dict(frame="703",x_milli="1143031",y_milli="98000",
+                 heart="0",mode="1",grounded="0",input_bits="2"),
+            dict(frame="706",x_milli="1153031",y_milli="93000",
+                 heart="1",mode="1",grounded="0",input_bits="2"),
+        ]
+        self.lines=("SPRING_REACHED_GUEST frame=680 x_milli=1130000\n"
+                    "SPRING_HEART_ALIGN_GUEST frame=700 x_milli=1139781 y_milli=100000\n"
+                    "AIR_HEART_COLLECTED_GUEST frame=706 x_milli=1153031\n")
+
+    def test_real_guest_response(self):
+        self.assertTrue(_verify_spring_heart_nudge(self.lines,self.rows))
+
+    def test_optional_pulse_not_fabricated(self):
+        self.assertFalse(_verify_spring_heart_nudge(
+            "SPRING_REACHED_GUEST frame=680 x_milli=1130000\n",self.rows))
+
+    def test_duplicate_nudge_rejected(self):
+        line="SPRING_HEART_ALIGN_GUEST frame=700 x_milli=1139781 y_milli=100000\n"
+        with self.assertRaisesRegex(ValueError,"repeated"):
+            _verify_spring_heart_nudge(self.lines+line,self.rows)
+
+    def test_forged_position_rejected(self):
+        self.rows[0]["x_milli"]="1141000"
+        with self.assertRaisesRegex(ValueError,"matching airborne"):
+            _verify_spring_heart_nudge(self.lines,self.rows)
+
+    def test_guest_never_pressed_right(self):
+        self.rows[1]["input_bits"]="0"
+        self.rows[2]["input_bits"]="0"
+        with self.assertRaisesRegex(ValueError,"no timely guest"):
+            _verify_spring_heart_nudge(self.lines,self.rows)
+
+    def test_heart_collected_before_nudge(self):
+        self.rows[0]["heart"]="1"
+        with self.assertRaisesRegex(ValueError,"did not precede"):
+            _verify_spring_heart_nudge(self.lines,self.rows)
+
+    def test_spurious_grounded_witness(self):
+        self.rows[0]["grounded"]="1"
+        with self.assertRaisesRegex(ValueError,"matching airborne"):
+            _verify_spring_heart_nudge(self.lines,self.rows)
+
+    def test_unbracketed_pulse(self):
+        with self.assertRaisesRegex(ValueError,"not bracketed"):
+            _verify_spring_heart_nudge(self.lines.splitlines()[1]+"\n",self.rows)
 
 class GuestMilestoneAlignmentTests(unittest.TestCase):
     def setUp(self):
