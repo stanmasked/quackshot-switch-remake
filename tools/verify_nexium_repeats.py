@@ -74,6 +74,49 @@ def _align_jump_milestone(edge, milestone_tick, obstacle, lower_x, upper_x):
         raise ValueError("NRO first-button frames contradict actual world events")
     return lag
 
+
+def _verify_spring_heart_nudge(actions, finish):
+    """Bind an optional one-shot host RIGHT pulse to real NRO movement.
+
+    The injection log alone cannot prove the guest received the key.
+    A witness row must show the exact pre-pulse airborne position, then
+    the guest must record RIGHT before (or on) heart collection.
+    """
+    lines=actions.splitlines()
+    pulses=[(i,s) for i,s in enumerate(lines)
+            if s.startswith("SPRING_HEART_ALIGN_GUEST")]
+    if not pulses:
+        return False
+    if len(pulses)!=1:
+        raise ValueError("spring heart RIGHT pulse repeated")
+    index,line=pulses[0]
+    match=re.fullmatch(
+        r"SPRING_HEART_ALIGN_GUEST frame=(\d+) x_milli=(\d+) y_milli=(\d+)",
+        line)
+    if match is None:
+        raise ValueError("malformed spring heart alignment marker")
+    frame,x,y=map(int,match.groups())
+    if not (1137000<=x<=1141000 and 50000<=y<=160000):
+        raise ValueError("spring alignment outside measured heart approach")
+    if (not any(s.startswith("SPRING_REACHED_GUEST ") for s in lines[:index]) or
+        not any(s.startswith("AIR_HEART_COLLECTED_GUEST ") for s in lines[index+1:])):
+        raise ValueError("spring alignment not bracketed by spring and heart")
+    if not any(int(row["frame"])==frame and
+               int(row["x_milli"])==x and int(row["y_milli"])==y and
+               int(row["heart"])==0 and int(row["mode"])==1 and
+               int(row["grounded"])==0 for row in finish):
+        raise ValueError("spring alignment lacks matching airborne NRO witness")
+    first_heart=min((int(row["frame"]) for row in finish
+                     if int(row["heart"])==1 and int(row["mode"])==1),
+                    default=None)
+    if first_heart is None or first_heart<=frame:
+        raise ValueError("spring alignment did not precede real heart pickup")
+    if not any(frame<int(row["frame"])<=min(first_heart,frame+30) and
+               int(row["input_bits"])&2 and int(row["x_milli"])>x
+               for row in finish):
+        raise ValueError("spring RIGHT pulse has no timely guest movement witness")
+    return True
+
 def collect(root,run_id):
     directory=root/f"nexium-emulation-evidence-run-{run_id}"
     if not directory.is_dir():
@@ -128,6 +171,7 @@ def collect(root,run_id):
     prev=verify_obstacle(obstacle)
     mid=verify_postcheck(post,obstacle)
     end=verify_finish(finish,post,obstacle)
+    spring_nudge=_verify_spring_heart_nudge(actions,finish)
     verify_live(directory/"guest-live-control.csv",
                 directory/"guest-runtime.csv",
                 directory/"guest-motion.csv")
@@ -158,6 +202,7 @@ def collect(root,run_id):
         "roof_path":arcs["roof_path"],
         "wall_recovery_arc":arcs["wall_recovery"],
         "wall_recovery_used":pulses["wall_recovery"] is not None,
+        "spring_heart_alignment_used":spring_nudge,
         "guest_frame_windows":{name:event["guest_frame_window"]
                                 for name,event in edge_events.items()},
         "jump_edge_to_landmark_frames":jump_alignment,
@@ -247,6 +292,8 @@ def compare(runs):
             any(type(x) is not int or not 7<=x<=40 for v in holds.values() for x in v) or
             bool(run.get("wall_recovery_used"))!=(len(holds["B"])==3)):
             raise ValueError("missing or unverified full B/Y button pulses")
+        if type(run.get("spring_heart_alignment_used")) is not bool:
+            raise ValueError("missing authenticated spring alignment status")
         windows=run.get("guest_frame_windows")
         if (not isinstance(windows,dict) or set(windows)!={"pit","roof","crate"} or
             any(type(v) is not int or not 1<=v<=24 for v in windows.values())):
@@ -286,6 +333,7 @@ def compare(runs):
         "roof_path_counts":{
             "direct_sky_ledge":sum(r["roof_path"]=="direct_sky_ledge" for r in runs),
             "ground_then_wall_recovery":sum(r["roof_path"]=="ground_then_wall_recovery" for r in runs)},
+        "spring_heart_alignment_runs":sum(r["spring_heart_alignment_used"] for r in runs),
         "repetitions":3,
         "status":"PASS",
         "guest_button_hold_frames_by_run":{
