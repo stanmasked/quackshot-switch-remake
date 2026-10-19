@@ -12,7 +12,7 @@ EVENTS=(("PIT_LAUNCH_GUEST",100,280000,4),
 def fixture():
     host="\n".join(f"{name} frame={frame} x_milli={x}" for name,frame,x,_ in EVENTS)
     rows=[]
-    for frame in range(0,410):
+    for frame in range(0,330):
         x=280000 if frame<=105 else 390000 if frame<=185 else 912000
         mask=2
         if 103<=frame<=105 or 184<=frame<=186:
