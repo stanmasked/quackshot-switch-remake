@@ -20,6 +20,8 @@ def three():
            input_delay_ms={1:0,2:25,3:45}[i],
            poll_interval_ms={1:85,2:90,3:95}[i],
            guest_frame_windows={"pit":1+i,"roof":3+i,"crate":2+i},
+           guest_hold_frames={"B":[22,23],"Y":[12]},
+           wall_recovery_used=False,
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
 

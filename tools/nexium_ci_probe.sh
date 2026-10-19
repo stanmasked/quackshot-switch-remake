@@ -346,6 +346,10 @@ python3 tools/verify_obstacle_route.py "$out/guest-obstacle.csv" \
 # host's immediately preceding guest-frame observation (not host time).
 python3 tools/verify_guest_edge_response.py "$out/input-injection.txt" \
     "$out/guest-obstacle.csv" "$out/guest-edge-response-summary.txt"
+# Stage 97: every B/Y rising input in the actual NRO must be followed by
+# a guest-observed release. Extra B is legal only for authenticated wall recovery.
+python3 tools/verify_guest_button_pulses.py "$out/input-injection.txt" \
+    "$out/guest-obstacle.csv" "$out/guest-button-pulse-summary.txt"
 find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
     -type f -name 'quackshot-postcheck.csv' -print > "$out/postcheck-trace-paths.txt"
 if [ -s "$out/postcheck-trace-paths.txt" ]; then

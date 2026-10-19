@@ -240,6 +240,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME nexium_guest_input_edge_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_guest_edge_response.py)
+    add_test(NAME nexium_guest_button_pulse_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_guest_button_pulses.py)
 endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)

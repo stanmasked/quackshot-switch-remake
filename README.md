@@ -265,6 +265,13 @@ This is a **guest simulation frame observation window**, NOT an
 exact cross-clock input latency in milliseconds. See
 [guest input response protocol](docs/NEXIUM_GUEST_EDGE_RESPONSE_RU.md).
 
+Stage 97 validates the **complete B/Y press-and-release lifecycle inside
+the NeXium guest**. Every real controller rising edge must have an observed
+release in 7–40 simulated frames, with exactly two B jumps and one Y shot,
+or an additional B only if a real wall-recovery command is tied to guest
+physics and host evidence. Extra, stuck, or repeated buttons fail CI.
+See [live controller button pulses](docs/NEXIUM_GUEST_BUTTON_PULSES_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

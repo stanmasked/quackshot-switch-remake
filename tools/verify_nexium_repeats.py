@@ -19,6 +19,7 @@ from tools.verify_live_control import check as verify_live, load as load_live
 from tools.verify_live_timeline import validate_timeline, read_csv, MOTION_COLUMNS
 from tools.verify_input_latency import verify_latency_profile, PROFILES
 from tools.verify_guest_edge_response import verify_edge_responses
+from tools.verify_guest_button_pulses import verify_pulses
 
 EXPECTED_IDS=(1,2,3)
 EVENT_KEYS=("pit_jump_tick","pit_cross_tick","roof_jump_tick",
@@ -59,7 +60,7 @@ def collect(root,run_id):
               "guest-live-control.csv","finish-summary.txt",
               "obstacle-summary.txt","postcheck-summary.txt",
               "input-injection.txt","result.txt","live-timeline-summary.txt",
-              "guest-edge-response-summary.txt")
+              "guest-edge-response-summary.txt","guest-button-pulse-summary.txt")
     if any(not (directory/name).is_file() for name in required):
         raise ValueError(f"incomplete evidence in independent run {run_id}")
     meta=_metadata(directory/"metadata.txt")
@@ -80,6 +81,9 @@ def collect(root,run_id):
     edge_summary=(directory/"guest-edge-response-summary.txt").read_text(encoding="utf-8")
     if not edge_summary.startswith("NEXIUM_GUEST_INPUT_EDGES_PASS "):
         raise ValueError("no verified first NRO B/Y input-recognition evidence")
+    pulses_summary=(directory/"guest-button-pulse-summary.txt").read_text(encoding="utf-8")
+    if not pulses_summary.startswith("NEXIUM_GUEST_BUTTON_PULSES_PASS "):
+        raise ValueError("missing guest B/Y releases or unexplained button repetition")
     if not (directory/"finish-summary.txt").read_text(encoding="utf-8").startswith("LIVE_FULL_CITY_GUEST_PASS "):
         raise ValueError("missing guest-generated complete-city proof")
     if not (directory/"obstacle-summary.txt").read_text(encoding="utf-8").startswith("LIVE_OBSTACLE_GUEST_PASS "):
@@ -91,6 +95,7 @@ def collect(root,run_id):
     post=load_postcheck(directory/"guest-postcheck.csv")
     finish=load_finish(directory/"guest-finish.csv",FINISH_COLUMNS)
     edges=verify_edge_responses(actions,obstacle)
+    pulses=verify_pulses(actions,obstacle)
     prev=verify_obstacle(obstacle)
     mid=verify_postcheck(post,obstacle)
     end=verify_finish(finish,post,obstacle)
@@ -114,6 +119,9 @@ def collect(root,run_id):
         "input_delay_ms":latency["input_delay_ms"],
         "poll_interval_ms":latency["poll_interval_ms"],
         "edge_elapsed_ms":latency["edge_elapsed_ms"],
+        "guest_hold_frames":{key:[p["observed_hold_frames"] for p in value]
+                              for key,value in pulses["pulses"].items()},
+        "wall_recovery_used":pulses["wall_recovery"] is not None,
         "guest_frame_windows":{name:event["guest_frame_window"]
                                 for name,event in edge_events.items()},
         "pit_jump_tick":prev["pit_jump_tick"],
@@ -161,6 +169,12 @@ def compare(runs):
             raise ValueError("finish tick outside plausible CITY TEST run")
         if not 628<=run["checkpoint_x_px"]<=660 or not 1120<=run["spring_x_px"]<=1180 or not 1164<=run["ledge_x_px"]<=1204:
             raise ValueError("physical checkpoint/spring/ledge position differs")
+        holds=run.get("guest_hold_frames")
+        if (not isinstance(holds,dict) or set(holds)!={"B","Y"} or
+            len(holds["B"]) not in (2,3) or len(holds["Y"])!=1 or
+            any(type(x) is not int or not 7<=x<=40 for v in holds.values() for x in v) or
+            bool(run.get("wall_recovery_used"))!=(len(holds["B"])==3)):
+            raise ValueError("missing or unverified full B/Y button pulses")
         windows=run.get("guest_frame_windows")
         if (not isinstance(windows,dict) or set(windows)!={"pit","roof","crate"} or
             any(type(v) is not int or not 1<=v<=24 for v in windows.values())):
@@ -177,6 +191,8 @@ def compare(runs):
     return {
         "repetitions":3,
         "status":"PASS",
+        "guest_button_hold_frames_by_run":{
+             str(r["run_id"]):r["guest_hold_frames"] for r in runs},
         "guest_input_frame_window_spreads":{
              name:max(r["guest_frame_windows"][name] for r in runs)-
                   min(r["guest_frame_windows"][name] for r in runs)
