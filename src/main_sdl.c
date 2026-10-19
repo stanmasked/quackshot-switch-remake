@@ -4323,6 +4323,8 @@ int main(int argc, char **argv) {
      * Unlike qs_route_probe_write, nothing generates QsInput here. */
     FILE *obstacle_file = NULL;
     FILE *postcheck_file = NULL; /* Stage 92: later phase of SAME live run */
+    FILE *finish_file = NULL; /* Stage 93: spring -> heart -> ledge -> clear */
+    int finish_records=0,finish_armed=0,finish_previous_heart=0,finish_previous_ledge=0;
     int postcheck_records=0;
     int postcheck_prev_crate=-1,postcheck_prev_spring=0;
     int postcheck_prev_heart=0;
@@ -4406,6 +4408,18 @@ int main(int argc, char **argv) {
         }
         if(!postcheck_file)
             fprintf(stderr,"QuackShot: post-checkpoint guest CSV unavailable (non-fatal)\n");
+        const char *finish_path=getenv("QS_FINISH_PATH");
+        if(!finish_path || !*finish_path)
+            finish_path="sdmc:/switch/quackshot-finish.csv";
+        finish_file=fopen(finish_path,"w");
+        if(finish_file) {
+            if(fputs("seq,frame,attempt,x_milli,y_milli,vy_milli,grounded,input_bits,checkpoint,crate,spring_flash,heart,ledge,cleared,mode,best,source\n",finish_file)<0 ||
+               fflush(finish_file)!=0){
+                fclose(finish_file);finish_file=NULL;
+            }
+        }
+        if(!finish_file)
+            fprintf(stderr,"QuackShot: spring-to-exit guest CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4587,7 +4601,7 @@ int main(int argc, char **argv) {
              * Record the map-return/clear boundary as well when it occurs. */
             if(postcheck_file && pad && city_entry_count==2 &&
                (game.city_checkpoint_active || postcheck_records>0) &&
-               (game.mode==QS_STAGE || old_mode==QS_STAGE) &&
+               game.mode==QS_STAGE &&
                postcheck_records<320){
                 int crate=game.city_crate_active!=0;
                 int flash=game.city_spring_flash_frames;
@@ -4611,6 +4625,40 @@ int main(int argc, char **argv) {
                         postcheck_prev_crate=crate;
                         postcheck_prev_spring=flash;
                         postcheck_prev_heart=heart;
+                    }
+                }
+            }
+            /* Stage 93: a separate, bounded, SD-backed continuation
+             * witness. It records only real read_input(pad) -> qs_step
+             * events in the SAME second stage entry; never simulated
+             * QsInput. The map clear boundary must also be recorded. */
+            if(pad && city_entry_count==2 && game.stage==0 &&
+               game.mode==QS_STAGE && game.city_checkpoint_active &&
+               game.city_spring_flash_frames>0)
+                finish_armed=1;
+            if(finish_file && pad && city_entry_count==2 &&
+               finish_armed && finish_records<250 &&
+               (game.mode==QS_STAGE || old_mode==QS_STAGE)){
+                int heart=game.city_air_reward_collected!=0;
+                int ledge=game.mode==QS_STAGE && game.hero.grounded &&
+                           game.hero.y==(QS_CITY_SKY_LEDGE_TOP-20);
+                if(finish_records==0 || game.mode==QS_MAP ||
+                   game.city_attempt_frames%3==0 ||
+                   heart!=finish_previous_heart ||
+                   ledge!=finish_previous_ledge){
+                    if(fprintf(finish_file,
+                      "%d,%d,%d,%d,%d,%d,%d,%u,%d,%d,%d,%d,%d,%d,%d,%d,live_controller_qs_step\n",
+                      finish_records,game.frames,game.city_attempt_frames,
+                      (int)(game.hero.x*1000.0f),(int)(game.hero.y*1000.0f),
+                      (int)(game.hero.vy*1000.0f),game.hero.grounded!=0,
+                      input_after,game.city_checkpoint_active!=0,
+                      game.city_crate_active!=0,game.city_spring_flash_frames,
+                      heart,ledge,game.cleared[0]!=0,
+                      (int)game.mode,game.city_best_clear_frames)>=0 &&
+                       fflush(finish_file)==0){
+                        finish_records++;
+                        finish_previous_heart=heart;
+                        finish_previous_ledge=ledge;
                     }
                 }
             }
@@ -4684,6 +4732,7 @@ int main(int argc, char **argv) {
 #ifdef __SWITCH__
     if(obstacle_file)fclose(obstacle_file);
     if(postcheck_file)fclose(postcheck_file);
+    if(finish_file)fclose(finish_file);
 #endif
     qs_trace_close(&trace);
     return 0;
