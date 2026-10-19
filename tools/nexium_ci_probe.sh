@@ -80,7 +80,7 @@ vulkaninfo --summary > "$out/vulkan.txt" 2>&1 || true
 set +e
 xvfb-run -a -s "-screen 0 1280x720x24" \
   bash -c '
-    timeout --signal=TERM --kill-after=5s 50s "$1" "$2" > "$3" 2>&1 &
+    timeout --signal=TERM --kill-after=5s 65s "$1" "$2" > "$3" 2>&1 &
     emu_pid=$!
     (
       sleep 5
@@ -140,9 +140,10 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       xdotool keydown --clearmodifiers d
       obstacle_file=""
       postcheck_file=""
+      finish_file=""
       step=0
       wall_recovery=0
-      for attempt in $(seq 1 180); do
+      for attempt in $(seq 1 300); do
         sleep 0.085
         if [ -z "$obstacle_file" ]; then
           obstacle_file="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
@@ -166,6 +167,21 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
         if [ -n "$postcheck_file" ]; then
           pc_line="$(tail -n 1 "$postcheck_file" || true)"
           IFS=, read -r pc_seq pc_frame pc_attempt pc_x pc_y pc_vy pc_ground pc_mask pc_flag pc_crate pc_flash pc_heart pc_ledge pc_clear pc_mode pc_source <<< "$pc_line"
+        fi
+        # Stage 93: the in-guest NRO writes a *third* bounded CSV
+        # starting at the spring, preserving Stage 91/92 artifacts.
+        if [ -z "$finish_file" ]; then
+          finish_file="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+            -type f -name quackshot-finish.csv -print -quit 2>/dev/null || true)"
+        fi
+        fin_heart=""
+        fin_ledge=""
+        fin_mode=""
+        fin_clear=""
+        fin_x=""
+        if [ -n "$finish_file" ]; then
+          fin_line="$(tail -n 1 "$finish_file" || true)"
+          IFS=, read -r fin_seq fin_frame fin_attempt fin_x fin_y fin_vy fin_ground fin_mask fin_checkpoint fin_crate fin_spring fin_heart fin_ledge fin_clear fin_mode fin_best fin_source <<< "$fin_line"
         fi
         if [ "$step" -eq 0 ] && [ "$mode" -eq 1 ] && \
            [ "$x_milli" -ge 276000 ] && [ "$x_milli" -le 305000 ] && \
@@ -214,6 +230,25 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           echo "SPRING_REACHED_GUEST frame=$frame x_milli=$x_milli"
           xdotool keyup d
           step=6
+        elif [ "$step" -eq 6 ] && [ "$fin_heart" = "1" ] && \
+             [ "$fin_mode" = "1" ]; then
+          echo "AIR_HEART_COLLECTED_GUEST frame=$fin_frame x_milli=$fin_x"
+          xdotool keydown --clearmodifiers d
+          step=7
+        elif [ "$step" -eq 7 ] && [[ "$fin_x" =~ ^[0-9]+$ ]] && \
+             [ "$fin_x" -ge 1180000 ] && [ "$fin_mode" = "1" ]; then
+          echo "LEDGE_ALIGN_GUEST frame=$fin_frame x_milli=$fin_x"
+          xdotool keyup d
+          step=8
+        elif [ "$step" -eq 8 ] && [ "$fin_ledge" = "1" ] && \
+             [ "$fin_mode" = "1" ]; then
+          echo "SKY_LEDGE_LANDED_GUEST frame=$fin_frame x_milli=$fin_x"
+          xdotool keydown --clearmodifiers d
+          step=9
+        elif [ "$step" -eq 9 ] && [ "$fin_clear" = "1" ] && \
+             [ "$fin_mode" = "0" ]; then
+          echo "LIVE_STAGE_CLEAR_GUEST frame=$fin_frame best=$fin_best"
+          step=10
           break
         fi
       done
@@ -284,6 +319,14 @@ if [ -s "$out/postcheck-trace-paths.txt" ]; then
 fi
 python3 tools/verify_postcheck.py "$out/guest-postcheck.csv" \
     "$out/guest-obstacle.csv" "$out/postcheck-summary.txt"
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-finish.csv' -print > "$out/finish-trace-paths.txt"
+if [ -s "$out/finish-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/finish-trace-paths.txt"
+    cp "$first" "$out/guest-finish.csv"
+fi
+python3 tools/verify_finish_route.py "$out/guest-finish.csv" \
+    "$out/guest-postcheck.csv" "$out/guest-obstacle.csv" "$out/finish-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv
