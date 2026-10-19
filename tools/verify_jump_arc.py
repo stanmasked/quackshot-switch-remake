@@ -105,7 +105,7 @@ def verify_jump_arcs(host_text,samples):
                 recovery["landing_frame"]>recovery["apex_frame"]):
             raise ValueError("recovery jump not chronologically after roof")
     if not direct and not (blocked and recovery):
-        raise ValueError("roof was blocked, but no physically verified wall recovery")
+        raise ValueError("roof landing was blocked, but no physically verified wall recovery")
     if direct and not (61<=roof["rise_px"]<=68):
         raise ValueError("roof apex height outside full jump range")
     return {
