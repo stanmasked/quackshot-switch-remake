@@ -28,6 +28,11 @@ def verify_latency_profile(metadata,actions,run_id):
     if len(configs)!=1 or tuple(map(int,configs[0].groups()))!=\
            (run_id,expected_delay,expected_poll):
         raise ValueError("missing/misrepresented host delay profile marker")
+    # A wall-clock step can produce a negative measured delay even though
+    # the virtual button and NRO completed. Never relax elapsed bounds:
+    # require the CI host to declare monotonic clock instrumentation.
+    if lines.count("INPUT_TIMER_SOURCE=python_monotonic_ns")!=1:
+        raise ValueError("missing or duplicate monotonic host clock marker")
     edge={}
     for line in lines:
         m=EDGE.fullmatch(line)
