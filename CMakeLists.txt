@@ -246,6 +246,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME nexium_live_jump_arc_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_jump_arc.py)
+    add_test(NAME nexium_blocked_roof_replay_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_blocked_roof_repeats.py)
 endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)
