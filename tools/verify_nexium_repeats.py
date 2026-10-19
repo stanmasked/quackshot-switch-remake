@@ -18,6 +18,7 @@ from tools.verify_finish_route import verify as verify_finish, load as load_fini
 from tools.verify_live_control import check as verify_live, load as load_live
 from tools.verify_live_timeline import validate_timeline, read_csv, MOTION_COLUMNS
 from tools.verify_input_latency import verify_latency_profile, PROFILES
+from tools.verify_guest_edge_response import verify_edge_responses
 
 EXPECTED_IDS=(1,2,3)
 EVENT_KEYS=("pit_jump_tick","pit_cross_tick","roof_jump_tick",
@@ -57,7 +58,8 @@ def collect(root,run_id):
               "guest-runtime.csv","guest-motion.csv",
               "guest-live-control.csv","finish-summary.txt",
               "obstacle-summary.txt","postcheck-summary.txt",
-              "input-injection.txt","result.txt","live-timeline-summary.txt")
+              "input-injection.txt","result.txt","live-timeline-summary.txt",
+              "guest-edge-response-summary.txt")
     if any(not (directory/name).is_file() for name in required):
         raise ValueError(f"incomplete evidence in independent run {run_id}")
     meta=_metadata(directory/"metadata.txt")
@@ -75,6 +77,9 @@ def collect(root,run_id):
     if "OBSTACLE_INPUT_STEP=10" not in actions or "LIVE_STAGE_CLEAR_GUEST" not in actions:
         raise ValueError("virtual controller did not independently reach map clear")
     latency=verify_latency_profile(meta,actions,run_id)
+    edge_summary=(directory/"guest-edge-response-summary.txt").read_text(encoding="utf-8")
+    if not edge_summary.startswith("NEXIUM_GUEST_INPUT_EDGES_PASS "):
+        raise ValueError("no verified first NRO B/Y input-recognition evidence")
     if not (directory/"finish-summary.txt").read_text(encoding="utf-8").startswith("LIVE_FULL_CITY_GUEST_PASS "):
         raise ValueError("missing guest-generated complete-city proof")
     if not (directory/"obstacle-summary.txt").read_text(encoding="utf-8").startswith("LIVE_OBSTACLE_GUEST_PASS "):
@@ -85,6 +90,7 @@ def collect(root,run_id):
     obstacle=_guest_rows(directory/"guest-obstacle.csv")
     post=load_postcheck(directory/"guest-postcheck.csv")
     finish=load_finish(directory/"guest-finish.csv",FINISH_COLUMNS)
+    edges=verify_edge_responses(actions,obstacle)
     prev=verify_obstacle(obstacle)
     mid=verify_postcheck(post,obstacle)
     end=verify_finish(finish,post,obstacle)
@@ -93,6 +99,11 @@ def collect(root,run_id):
                 directory/"guest-motion.csv")
     validate_timeline(read_csv(directory/"guest-motion.csv",MOTION_COLUMNS),
                       load_live(directory/"guest-live-control.csv"))
+    edge_events=edges["events"]
+    if (edge_events["pit"]["nro_stage_tick"]!=prev["pit_jump_tick"] or
+        edge_events["roof"]["nro_stage_tick"]!=prev["roof_jump_tick"] or
+        not 0<=mid["shot_tick"]-edge_events["crate"]["nro_stage_tick"]<=6):
+        raise ValueError("NRO first-button frames contradict actual world events")
     if (mid["checkpoint_tick"]!=prev["checkpoint_tick"] or
         mid["spring_tick"]!=end["spring_tick"] or
         end["heart_tick"]>=end["ledge_tick"] or
@@ -103,6 +114,8 @@ def collect(root,run_id):
         "input_delay_ms":latency["input_delay_ms"],
         "poll_interval_ms":latency["poll_interval_ms"],
         "edge_elapsed_ms":latency["edge_elapsed_ms"],
+        "guest_frame_windows":{name:event["guest_frame_window"]
+                                for name,event in edge_events.items()},
         "pit_jump_tick":prev["pit_jump_tick"],
         "pit_cross_tick":prev["pit_cross_tick"],
         "roof_jump_tick":prev["roof_jump_tick"],
@@ -148,6 +161,10 @@ def compare(runs):
             raise ValueError("finish tick outside plausible CITY TEST run")
         if not 628<=run["checkpoint_x_px"]<=660 or not 1120<=run["spring_x_px"]<=1180 or not 1164<=run["ledge_x_px"]<=1204:
             raise ValueError("physical checkpoint/spring/ledge position differs")
+        windows=run.get("guest_frame_windows")
+        if (not isinstance(windows,dict) or set(windows)!={"pit","roof","crate"} or
+            any(type(v) is not int or not 1<=v<=24 for v in windows.values())):
+            raise ValueError("missing NRO-observed button recognition frame windows")
         if run.get("source")!="live NeXium controller; independent CI guest NRO":
             raise ValueError("non-live or unverified guest source")
     spreads={}
@@ -160,6 +177,10 @@ def compare(runs):
     return {
         "repetitions":3,
         "status":"PASS",
+        "guest_input_frame_window_spreads":{
+             name:max(r["guest_frame_windows"][name] for r in runs)-
+                  min(r["guest_frame_windows"][name] for r in runs)
+             for name in ("pit","roof","crate")},
         "profiles_ms":{str(r["run_id"]):{"input_delay":r["input_delay_ms"],
                      "poll_interval":r["poll_interval_ms"]}
                        for r in runs},

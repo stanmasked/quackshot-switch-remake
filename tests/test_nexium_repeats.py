@@ -19,6 +19,7 @@ def three():
            spring_x_px=1132.125,ledge_x_px=1188.531,
            input_delay_ms={1:0,2:25,3:45}[i],
            poll_interval_ms={1:85,2:90,3:95}[i],
+           guest_frame_windows={"pit":1+i,"roof":3+i,"crate":2+i},
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
 

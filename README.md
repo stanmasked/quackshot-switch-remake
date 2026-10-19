@@ -256,6 +256,15 @@ guest-world route. This measures tolerance to controller dispatch latency,
 **not** directly a change in the emulator simulation frame rate.
 See [NeXium input latency profiles](docs/NEXIUM_INPUT_LATENCY_RU.md).
 
+Stage 96 independently matches the host's last observed NRO frame
+before each virtual B/Y key dispatch against the first subsequent
+guest `qs_step` input-bit edge. The per-run NeXium artifact and
+three-run audit now require these observed B/Y responses and world
+effects, rather than merely trusting host key-send events.
+This is a **guest simulation frame observation window**, NOT an
+exact cross-clock input latency in milliseconds. See
+[guest input response protocol](docs/NEXIUM_GUEST_EDGE_RESPONSE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

@@ -342,6 +342,10 @@ if [ -s "$out/obstacle-trace-paths.txt" ]; then
 fi
 python3 tools/verify_obstacle_route.py "$out/guest-obstacle.csv" \
     "$out/obstacle-summary.txt"
+# Stage 96 reads the guest input bits directly, aligned with the
+# host's immediately preceding guest-frame observation (not host time).
+python3 tools/verify_guest_edge_response.py "$out/input-injection.txt" \
+    "$out/guest-obstacle.csv" "$out/guest-edge-response-summary.txt"
 find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
     -type f -name 'quackshot-postcheck.csv' -print > "$out/postcheck-trace-paths.txt"
 if [ -s "$out/postcheck-trace-paths.txt" ]; then

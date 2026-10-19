@@ -14,6 +14,7 @@ on:
       - "tools/verify_finish_route.py"
       - "tools/verify_nexium_repeats.py"
       - "tools/verify_input_latency.py"
+      - "tools/verify_guest_edge_response.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -109,6 +110,7 @@ jobs:
             emulator-evidence/live-timeline-summary.txt
             emulator-evidence/guest-obstacle.csv
             emulator-evidence/obstacle-summary.txt
+            emulator-evidence/guest-edge-response-summary.txt
             emulator-evidence/guest-postcheck.csv
             emulator-evidence/postcheck-summary.txt
             emulator-evidence/guest-finish.csv
