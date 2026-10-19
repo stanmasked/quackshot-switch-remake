@@ -230,6 +230,15 @@ continuity link to the Stage 91 log and independent negative-fixture
 tests. This is distinct from the synthetic Stage 88 full-route witness.
 See [live post-checkpoint proof](docs/NEXIUM_POSTCHECK_RU.md).
 
+Stage 93 attempts a **fully live virtual-controller CITY TEST clear** in
+NeXium. It continues the same second guest stage entry past the spring,
+steers to the airborne heart, waits for a genuine one-way sky-ledge
+landing, and walks to the game exit. The NRO itself emits a separate
+bounded finish witness; CI links its first sample to Stage 92 before
+accepting a cleared map and best attempt time. This is **not** the
+independent Stage 88 in-guest synthetic QsInput route.
+See [NeXium live full CITY TEST route](docs/NEXIUM_FINISH_ROUTE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

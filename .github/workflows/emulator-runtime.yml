@@ -11,6 +11,7 @@ on:
       - "tools/verify_live_timeline.py"
       - "tools/verify_obstacle_route.py"
       - "tools/verify_postcheck.py"
+      - "tools/verify_finish_route.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -91,6 +92,8 @@ jobs:
             emulator-evidence/obstacle-summary.txt
             emulator-evidence/guest-postcheck.csv
             emulator-evidence/postcheck-summary.txt
+            emulator-evidence/guest-finish.csv
+            emulator-evidence/finish-summary.txt
             emulator-evidence/route-summary.txt
             emulator-evidence/motion-summary.txt
             emulator-evidence/parallax-summary.txt
