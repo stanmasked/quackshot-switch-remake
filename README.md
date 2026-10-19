@@ -217,6 +217,12 @@ later projectile against the seven live-input milestones. Negative-fixture
 unit tests guard the verifier; the independent scripted route is not counted.
 See [live input timeline](docs/NEXIUM_LIVE_TIMELINE_RU.md).
 
+Stage 91 performs a second **genuinely SDL-controller-driven** CITY TEST
+attempt inside NeXium. The host reads NRO-authored X/grounded data to
+time two virtual B presses while moving right toward the real pit,
+wall and checkpoint. A separate verifier refuses scripted-route evidence.
+See [live obstacle route](docs/NEXIUM_LIVE_OBSTACLE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
