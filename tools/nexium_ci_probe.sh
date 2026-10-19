@@ -127,6 +127,61 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       sleep 2
       xdotool key --clearmodifiers --delay 120 m
       echo "INPUT_PROBE_SENT: R+A reference-city, B, stick right then left, Y, Plus"
+      # Stage 91: start a second live-controller CITY TEST attempt.
+      # The host reads X/grounded from the NRO-written SD-side CSV;
+      # no scripted QsInput, state edits, or character teleportation.
+      sleep 0.55
+      xdotool keydown --clearmodifiers e
+      sleep 0.30
+      xdotool key --clearmodifiers --delay 120 c
+      sleep 0.12
+      xdotool keyup e
+      sleep 0.30
+      xdotool keydown --clearmodifiers d
+      obstacle_file=""
+      step=0
+      for attempt in $(seq 1 180); do
+        sleep 0.085
+        if [ -z "$obstacle_file" ]; then
+          obstacle_file="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+            -type f -name quackshot-obstacle.csv -print -quit 2>/dev/null || true)"
+        fi
+        if [ -z "$obstacle_file" ]; then continue; fi
+        line="$(tail -n 1 "$obstacle_file" || true)"
+        IFS=, read -r seq frame stage_tick x_milli y_milli grounded mask checkpoint mode source <<< "$line"
+        if ! [[ "$x_milli" =~ ^[0-9]+$ && "$grounded" =~ ^[01]$ && \
+               "$checkpoint" =~ ^[01]$ && "$mode" =~ ^[01]$ ]]; then
+          continue
+        fi
+        if [ "$step" -eq 0 ] && [ "$mode" -eq 1 ] && \
+           [ "$x_milli" -ge 276000 ] && [ "$x_milli" -le 305000 ] && \
+           [ "$grounded" -eq 1 ]; then
+          echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
+          xdotool keydown --clearmodifiers x
+          sleep 0.36
+          xdotool keyup x
+          step=1
+        elif [ "$step" -eq 1 ] && [ "$mode" -eq 1 ] && \
+             [ "$x_milli" -ge 394000 ] && [ "$x_milli" -le 425000 ] && \
+             [ "$grounded" -eq 1 ]; then
+          echo "ROOF_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
+          xdotool keydown --clearmodifiers x
+          sleep 0.36
+          xdotool keyup x
+          step=2
+        elif [ "$step" -eq 2 ] && [ "$mode" -eq 1 ] && \
+             [ "$checkpoint" -eq 1 ]; then
+          echo "CHECKPOINT_REACHED_GUEST frame=$frame x_milli=$x_milli"
+          xdotool keyup d
+          sleep 0.10
+          xdotool key --clearmodifiers --delay 120 m
+          step=3
+          break
+        fi
+      done
+      xdotool keyup d 2>/dev/null || true
+      xdotool keyup x 2>/dev/null || true
+      echo "OBSTACLE_INPUT_STEP=$step"
     ) > "$4" 2>&1 &
     input_pid=$!
     wait "$emu_pid"
@@ -175,6 +230,14 @@ python3 tools/verify_live_control.py "$out/guest-live-control.csv" \
 python3 tools/verify_live_timeline.py "$out/guest-motion.csv" \
     "$out/guest-live-control.csv" "$out/guest-runtime.csv" \
     "$out/live-timeline-summary.txt"
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" \
+    -type f -name 'quackshot-obstacle.csv' -print > "$out/obstacle-trace-paths.txt"
+if [ -s "$out/obstacle-trace-paths.txt" ]; then
+    IFS= read -r first < "$out/obstacle-trace-paths.txt"
+    cp "$first" "$out/guest-obstacle.csv"
+fi
+python3 tools/verify_obstacle_route.py "$out/guest-obstacle.csv" \
+    "$out/obstacle-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv
