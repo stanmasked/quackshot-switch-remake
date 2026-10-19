@@ -9,6 +9,10 @@ import json
 import pathlib
 import sys
 
+# The same module is imported by CTest and invoked directly from the
+# repo's tools/ directory by NeXium's shell probe. Resolve the sibling
+# verifier consistently in both contexts.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_live_control import check as verify_milestones
 
 MOTION_COLUMNS = ["seq", "frame", "ticks_ms", "stage", "input_bits",
