@@ -4318,6 +4318,14 @@ int main(int argc, char **argv) {
     QsTrace trace = {0};
     QsMotion motion = {0};
     QsLiveProbe live_probe = {0};
+#ifdef __SWITCH__
+    /* Stage 91: real virtual-pad telemetry for a SECOND CITY TEST run.
+     * Unlike qs_route_probe_write, nothing generates QsInput here. */
+    FILE *obstacle_file = NULL;
+    int city_entry_count=0, obstacle_records=0;
+    unsigned obstacle_previous_bits=~0u;
+    int obstacle_previous_checkpoint=0;
+#endif
     Uint64 previous, frequency;
     double accumulator = 0.0;
     int running = 1, i, shown_first_frame = 0;
@@ -4370,6 +4378,18 @@ int main(int argc, char **argv) {
             live_path="sdmc:/switch/quackshot-live-control.csv";
         if(!qs_live_probe_open(&live_probe,live_path))
             fprintf(stderr,"QuackShot: live-controller witness CSV unavailable (non-fatal)\n");
+        const char *obstacle_path=getenv("QS_OBSTACLE_PATH");
+        if(!obstacle_path || !*obstacle_path)
+            obstacle_path="sdmc:/switch/quackshot-obstacle.csv";
+        obstacle_file=fopen(obstacle_path,"w");
+        if(obstacle_file) {
+            if(fputs("seq,frame,attempt,x_milli,y_milli,grounded,input_bits,checkpoint,mode,source\n",obstacle_file)<0 ||
+               fflush(obstacle_file)!=0) {
+                fclose(obstacle_file);obstacle_file=NULL;
+            }
+        }
+        if(!obstacle_file)
+            fprintf(stderr,"QuackShot: obstacle-controller guest CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4516,15 +4536,48 @@ int main(int argc, char **argv) {
             (void)qs_live_probe_tick(&live_probe, &game, in, old_mode,
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
+#ifdef __SWITCH__
+            /* Observe ONLY the second entry of the actual SDL-controlled
+             * game session. No player positions, inputs, foes or terrain
+             * are ever changed by this logger. */
+            if(pad && old_mode==QS_MAP && game.mode==QS_STAGE &&
+               game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               in.select && in.dash)
+                city_entry_count++;
+            if(obstacle_file && pad && city_entry_count==2 &&
+               game.mode==QS_STAGE && game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               obstacle_records<350) {
+                int checkpoint=game.city_checkpoint_active!=0;
+                if(game.city_attempt_frames==0 ||
+                   game.city_attempt_frames%3==0 ||
+                   input_after!=obstacle_previous_bits ||
+                   checkpoint!=obstacle_previous_checkpoint) {
+                    if(fprintf(obstacle_file,
+                         "%d,%d,%d,%d,%d,%d,%u,%d,1,live_controller_qs_step\n",
+                         obstacle_records,game.frames,game.city_attempt_frames,
+                         (int)(game.hero.x*1000.0f),(int)(game.hero.y*1000.0f),
+                         game.hero.grounded!=0,input_after,checkpoint)>=0 &&
+                       fflush(obstacle_file)==0) {
+                        obstacle_records++;
+                        obstacle_previous_bits=input_after;
+                        obstacle_previous_checkpoint=checkpoint;
+                    }
+                }
+            }
+#endif
             accumulator -= 1.0 / 60.0;
             if (game.mode == QS_STAGE &&
+                (!live_probe.file || live_probe.phase<7) &&
                 ((game.frames % 5) == 0 || old_mode != game.mode ||
                  input_before != input_after))
                 (void)qs_motion_emit(&motion, &game, (unsigned)SDL_GetTicks(), in);
             if (old_mode != game.mode || old_stage != game.stage)
                 runtime_event(&trace, &game, QS_TRACE_STAGE_CHANGE, pad != NULL,
                               (int)game.physics_profile);
-            if (qs_parallax_is_reference_city(&game)) {
+            if ((!live_probe.file || live_probe.phase<7) &&
+                qs_parallax_is_reference_city(&game)) {
                 if (!burst_forward_seen && game.camera_x > camera_before) {
                     burst_forward_seen = 1;
                     burst_forward_left = 24;
@@ -4544,7 +4597,8 @@ int main(int argc, char **argv) {
                     else --burst_reverse_left;
                 }
             }
-            if (qs_parallax_is_reference_city(&game) &&
+            if ((!live_probe.file || live_probe.phase<7) &&
+                qs_parallax_is_reference_city(&game) &&
                 ((game.frames % 15u) == 0)) {
                 QsParallax p = qs_parallax_offsets(&game);
                 /* Guest evidence: simulation position before presentation.
@@ -4579,6 +4633,9 @@ int main(int argc, char **argv) {
     SDL_Quit();
     qs_motion_close(&motion);
     qs_live_probe_close(&live_probe);
+#ifdef __SWITCH__
+    if(obstacle_file)fclose(obstacle_file);
+#endif
     qs_trace_close(&trace);
     return 0;
 }
