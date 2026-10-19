@@ -161,16 +161,23 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       # CI, yielding a false negative elapsed time (-765ms in run #3).
       # CLOCK_MONOTONIC has a system-wide epoch shared by processes.
       echo "INPUT_TIMER_SOURCE=perl_clock_monotonic"
-      monotonic_ms() {
-        perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e "print int(clock_gettime(CLOCK_MONOTONIC) * 1000)"
+      echo "INPUT_TIMER_SCOPE=single_process_sleep"
+      # A single subprocess sleeps and measures with CLOCK_MONOTONIC.
+      # Separate clock subprocesses added unbounded scheduling noise to
+      # short (25/45ms) virtual button delays on a loaded CI runner.
+      delayed_edge_ms() {
+        perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,usleep -e '
+          my $delay=shift;
+          my $begin=clock_gettime(CLOCK_MONOTONIC);
+          usleep($delay*1000);
+          my $elapsed=(clock_gettime(CLOCK_MONOTONIC)-$begin)*1000;
+          print int($elapsed+0.999);
+        ' "$1"
       }
       delayed_keydown() {
-        local event="$1" key="$2" begun finished actual
+        local event="$1" key="$2" actual
         if [ "$input_delay_ms" -gt 0 ]; then
-          begun="$(monotonic_ms)"
-          sleep "0.$(printf "%03d" "$input_delay_ms")"
-          finished="$(monotonic_ms)"
-          actual=$((finished-begun))
+          actual="$(delayed_edge_ms "$input_delay_ms")"
         else
           actual=0
         fi

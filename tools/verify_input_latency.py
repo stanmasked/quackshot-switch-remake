@@ -33,6 +33,8 @@ def verify_latency_profile(metadata,actions,run_id):
     # require the CI host to declare monotonic clock instrumentation.
     if lines.count("INPUT_TIMER_SOURCE=perl_clock_monotonic")!=1:
         raise ValueError("missing or duplicate monotonic host clock marker")
+    if lines.count("INPUT_TIMER_SCOPE=single_process_sleep")!=1:
+        raise ValueError("missing or duplicate single-process latency marker")
     edge={}
     for line in lines:
         m=EDGE.fullmatch(line)

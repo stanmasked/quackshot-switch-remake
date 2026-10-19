@@ -11,7 +11,8 @@ def make(run_id):
               "ci_input_edge_delay_ms":str(delay),
               "ci_poll_ms":str(poll)}
     lines=[f"INPUT_TIMING_PROFILE profile={run_id} edge_delay_ms={delay} poll_ms={poll}",
-           "INPUT_TIMER_SOURCE=perl_clock_monotonic"]
+           "INPUT_TIMER_SOURCE=perl_clock_monotonic",
+           "INPUT_TIMER_SCOPE=single_process_sleep"]
     for event,proof in (("pit","PIT_LAUNCH_GUEST"),
                         ("roof","ROOF_LAUNCH_GUEST"),
                         ("crate","CRATE_FIRE_GUEST")):
@@ -37,6 +38,17 @@ class InputLatencyTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"monotonic host clock"):
                     verify_latency_profile(meta,altered,3)
 
+    def test_single_process_scope_required(self):
+        meta,log=make(3)
+        for altered in (
+                log.replace("INPUT_TIMER_SCOPE=single_process_sleep",""),
+                log.replace("INPUT_TIMER_SCOPE=single_process_sleep",
+                            "INPUT_TIMER_SCOPE=two_clock_subprocesses"),
+                log+"\nINPUT_TIMER_SCOPE=single_process_sleep"):
+            with self.subTest(altered=altered[-60:]):
+                with self.assertRaisesRegex(ValueError,"single-process latency"):
+                    verify_latency_profile(meta,altered,3)
+
     def test_stage111_backward_wall_clock_evidence_rejected(self):
         meta,log=make(3)
         # Archived run 39337903710/#3 recorded -765ms for pit B.
@@ -46,21 +58,25 @@ class InputLatencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"missing measured"):
             verify_latency_profile(meta,log,3)
 
-    def test_shell_clock_is_monotonic_in_real_subprocesses(self):
+    def test_shell_clock_is_monotonic_in_single_sleep_process(self):
         import re
         import subprocess
         script=(Path(__file__).resolve().parents[1] /
                 "tools" / "nexium_ci_probe.sh").read_text(encoding="utf-8")
-        helper=re.search(r"(?m)^      monotonic_ms\(\) \{\n(?:.*\n)*?      \}",script)
+        helper=re.search(r"(?m)^      delayed_edge_ms\(\) \{\n(?:.*\n)*?      \}",script)
         self.assertIsNotNone(helper)
         self.assertIn("clock_gettime(CLOCK_MONOTONIC)",helper.group(0))
+        self.assertIn("usleep($delay*1000)",helper.group(0))
         self.assertNotIn("date +%s%3N",script)
+        self.assertNotIn("monotonic_ms()",script)
         command=(helper.group(0)+
-                 "\nfirst=$(monotonic_ms); sleep 0.05; second=$(monotonic_ms); "+
-                 "echo $((second-first))")
+                 '\nprintf "%s %s" "$(delayed_edge_ms 25)" "$(delayed_edge_ms 45)"')
         result=subprocess.run(["bash","-c",command],check=True,
                               text=True,capture_output=True)
-        self.assertGreaterEqual(int(result.stdout.strip()),50)
+        measured=list(map(int,result.stdout.strip().split()))
+        self.assertEqual(len(measured),2)
+        self.assertTrue(25<=measured[0]<=775,measured)
+        self.assertTrue(45<=measured[1]<=795,measured)
 
     def test_no_real_sleep_rejected(self):
         meta,log=make(3)
