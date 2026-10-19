@@ -97,6 +97,54 @@ class RepeatedLiveRunsTests(unittest.TestCase):
         self.runs[1]["roof_path"]="ground_then_wall_recovery"
         with self.assertRaisesRegex(ValueError,"blocked roof"):
             compare(self.runs)
+    def test_archived_stage98_physics_routes(self):
+        # Reduced, non-proprietary landmarks from three real NeXium
+        # guest-obstacle CSVs. Two runs took the direct roof; the
+        # delayed-input run was blocked and jumped again at the wall.
+        actual=[
+          {"pit":(64.258,57,376.843),
+           "roof":(64.258,33,423.187)},
+          {"pit":(64.258,57,380.093),
+           "roof":(27.149,28,453.218)},
+          {"pit":(64.454,55,378.468),
+           "roof":(64.258,33,423.187)},
+        ]
+        for run,record in zip(self.runs,actual):
+            pit_height,pit_frames,pit_x=record["pit"]
+            roof_height,roof_frames,roof_x=record["roof"]
+            run["guest_jump_arcs"]["pit"].update(
+                rise_px=pit_height,flight_frames=pit_frames,
+                landing_x_px=pit_x,landing_y_px=188.0)
+            run["guest_jump_arcs"]["roof"].update(
+                rise_px=roof_height,flight_frames=roof_frames,
+                landing_x_px=roof_x,landing_y_px=124.0)
+        delayed=self.runs[1]
+        delayed["roof_path"]="ground_then_wall_recovery"
+        delayed["guest_jump_arcs"]["roof"].update(
+            landing_y_px=188.0,landing_frame=1111)
+        delayed["wall_recovery_arc"]={
+            "rise_px":64.454,"flight_frames":56,
+            "landing_x_px":605.281,"landing_y_px":188.0,
+            "pressed_frame":1181}
+        delayed["wall_recovery_used"]=True
+        delayed["guest_hold_frames"]["B"].append(24)
+        report=compare(self.runs)
+        self.assertEqual(report["roof_path_counts"],
+                         {"direct_sky_ledge":2,
+                          "ground_then_wall_recovery":1})
+        self.assertEqual(report["guest_jump_arc_spreads"]["pit"]["rise_px"],0.196)
+        self.assertEqual(report["guest_jump_arc_spreads"]["roof_direct"]["rise_px"],0)
+        self.assertEqual(report["guest_jump_arc_spreads"]["roof_blocked"]["flight_frames"],0)
+
+    def test_archived_blocked_roof_cannot_claim_direct_route(self):
+        self.runs[1]["guest_jump_arcs"]["roof"].update(
+            rise_px=27.149,flight_frames=28,
+            landing_x_px=453.218,landing_y_px=188.0)
+        # Without the authenticated recovery this must fail closed:
+        # merely completing the level cannot substitute for a jump.
+        with self.assertRaisesRegex(ValueError,"direct roof landing"):
+            compare(self.runs)
+
     def test_checkpoint_teleport(self):
         self.runs[1]["checkpoint_x_px"]=920
         with self.assertRaisesRegex(ValueError,"position"):
