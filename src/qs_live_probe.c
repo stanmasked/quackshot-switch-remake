@@ -52,7 +52,8 @@ int qs_live_probe_open(QsLiveProbe *p,const char *path){
 }
 int qs_live_probe_tick(QsLiveProbe *p,const QsGame *g,QsInput in,
                        QsMode old_mode,float old_x,float old_y,
-                       int controller_present,unsigned previous_input_bits) {
+                       int controller_present,unsigned previous_input_bits,
+                       unsigned shots_before) {
     if(!p || !p->file || p->error || !g || !controller_present ||
        p->phase>=7)return 0;
     if(p->phase==0) {
@@ -86,10 +87,23 @@ int qs_live_probe_tick(QsLiveProbe *p,const QsGame *g,QsInput in,
             return record(p,g,in,"REVERSE_LEFT",active_shots,
                           (int)(p->right_highwater*1000.0f));
     }
-    if(p->phase==4 && in.fire && !(previous_input_bits & 8u))
-        return record(p,g,in,"FIRE_INPUT",active_shots,1);
-    if(p->phase==5 && active_shots>0)
-        return record(p,g,in,"SHOT_ACTIVE",active_shots,1);
+    if(p->phase==4 && in.fire && !(previous_input_bits & 8u)) {
+        if(record(p,g,in,"FIRE_INPUT",active_shots,1)) {
+            p->fire_frame=g->frames;
+            p->shots_on_fire=active_shots;
+            return 1;
+        }
+        return 0;
+    }
+    /* Require an actual *new* projectile in the next four simulation
+     * ticks. An unrelated projectile already present before Y cannot
+     * satisfy SHOT_ACTIVE. The witness uses pre-step slot counts from
+     * the live frame, not the Stage 88 scripted route. */
+    if(p->phase==5 && g->frames>p->fire_frame &&
+       g->frames-p->fire_frame<=4 &&
+       active_shots>(int)shots_before &&
+       active_shots>p->shots_on_fire)
+        return record(p,g,in,"SHOT_ACTIVE",active_shots,active_shots);
     return 0;
 }
 void qs_live_probe_close(QsLiveProbe *p){

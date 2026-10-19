@@ -4509,10 +4509,13 @@ int main(int argc, char **argv) {
             float hero_y_before = game.hero.y;
             unsigned input_before = qs_motion_input_bits(game.previous);
             unsigned input_after = qs_motion_input_bits(in);
+            unsigned shots_before = 0;
+            for (int slot=0; slot<QS_MAX_SHOTS; ++slot)
+                shots_before += game.shots[slot].active != 0;
             qs_step(&game, in);
             (void)qs_live_probe_tick(&live_probe, &game, in, old_mode,
                                      hero_x_before,hero_y_before,
-                                     pad!=NULL,input_before);
+                                     pad!=NULL,input_before,shots_before);
             accumulator -= 1.0 / 60.0;
             if (game.mode == QS_STAGE &&
                 ((game.frames % 5) == 0 || old_mode != game.mode ||

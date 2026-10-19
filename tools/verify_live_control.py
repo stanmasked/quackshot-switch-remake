@@ -42,6 +42,10 @@ def check(live_file,runtime_file,motion_file):
     frames=[q["frame"] for q in v]
     if frames!=sorted(frames) or len(set(frames))!=7:
         raise ValueError("duplicate or nonmonotonic input frames")
+    if not 1 <= frames[5]-frames[4] <= 4:
+        raise ValueError("shot activation not causally close to Y edge")
+    if (v[5]["detail"]!=v[5]["shots"] or v[5]["shots"]<1):
+        raise ValueError("new shot count witness invalid")
     if (v[0]["detail"]!=1 or v[0]["x_milli"]!=40000 or
         v[0]["y_milli"]!=188000 or
         v[1]["y_milli"]>=v[0]["y_milli"]-1000 or
@@ -67,8 +71,9 @@ def check(live_file,runtime_file,motion_file):
           int(row["input_bits"])&mask==mask]
         if not candidates:
             raise ValueError(f"numeric motion trace cannot corroborate {EVENTS[idx]}")
-    if max(int(row["active_shots"]) for row in motion)<1:
-        raise ValueError("numeric trace never observed real shot")
+    if not any(abs(int(row["frame"])-frames[5])<=5 and
+               int(row["active_shots"])>=v[5]["shots"] for row in motion):
+        raise ValueError("independent numeric trace cannot corroborate new shot")
     return {"milestones":len(v),"entry_frame":frames[0],
             "jump_frame":frames[1],"right_frame":frames[2],
             "left_reversal_frame":frames[3],"fire_frame":frames[4],
