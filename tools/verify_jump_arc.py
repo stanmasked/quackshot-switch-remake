@@ -57,7 +57,17 @@ def _measure(rows,pulse,name):
     descent=sum(b["y_milli"]>a["y_milli"] for a,b in
                 zip(segment[index_apex:],segment[index_apex+1:]))
     height=188000-apex["y_milli"]
-    if (ascent<4 or not 8<=apex["frame"]-start<=40 or
+    # Stage 108: real NeXium blocked-roof runs at 25/45 ms produced
+    # three/four separately sampled ascent steps before the overhead tile
+    # halted upward motion (27.149 / 27.344 px rise). A physically
+    # confirmed short, ground-landing roof jump can have only three
+    # increasing samples at the regular 3-frame telemetry cadence.
+    # Keep the four-step requirement for pit, recovery and direct roof.
+    short_blocked_roof=(name=="roof" and
+        18000<=height<=45000 and
+        182000<=landing["y_milli"]<=193000 and descent>=3)
+    minimum_ascent=3 if short_blocked_roof else 4
+    if (ascent<minimum_ascent or not 8<=apex["frame"]-start<=40 or
         not 20<=landing["frame"]-start<=80):
         raise ValueError(f"{name} ascent, apex or flight duration invalid")
     if landing["frame"]<=released:

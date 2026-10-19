@@ -91,6 +91,30 @@ class GuestArcTests(unittest.TestCase):
         self.assertEqual(result["roof_path"],"ground_then_wall_recovery")
         self.assertAlmostEqual(result["arcs"]["roof"]["rise_px"],27.43,places=2)
         self.assertGreater(result["wall_recovery"]["rise_px"],64)
+
+    def test_sparse_telemetry_still_proves_blocked_roof(self):
+        # Real Stage 107 run 5 reached Y≈160.656 from Y=188, but
+        # three-frame guest telemetry showed just three ascent steps.
+        # Downsample only the synthetic blocked ascent while retaining
+        # the authenticated B press and genuine wall-recovery arc.
+        host,rows=blocked_roof_fixture()
+        skipped={185,186,188,189,191,192,193}
+        rows=[r for r in rows if int(r["frame"]) not in skipped]
+        for i,r in enumerate(rows):
+            r["seq"]=str(i)
+        result=verify_jump_arcs(host,rows)
+        self.assertEqual(result["roof_path"],"ground_then_wall_recovery")
+        self.assertEqual(result["arcs"]["roof"]["ascent_samples"],3)
+        self.assertGreaterEqual(result["arcs"]["roof"]["descent_samples"],3)
+    def test_sparse_blocked_roof_requires_real_wall_recovery(self):
+        host,rows=blocked_roof_fixture()
+        skipped={185,186,188,189,191,192,193}
+        rows=[r for r in rows if int(r["frame"]) not in skipped]
+        for i,r in enumerate(rows):
+            r["seq"]=str(i)
+        host=host.replace("WALL_RECOVERY_GUEST","UNVERIFIED_RECOVERY")
+        with self.assertRaises(ValueError):
+            verify_jump_arcs(host,rows)
     def test_direct_roof_rejects_extra_recovery_B(self):
         # Preserve the authenticated third B at the wall while replacing
         # only the roof flight with the already-proven direct flight.
