@@ -172,6 +172,9 @@ fi
 python3 tools/verify_live_control.py "$out/guest-live-control.csv" \
     "$out/guest-runtime.csv" "$out/guest-motion.csv" \
     "$out/live-control-summary.txt"
+python3 tools/verify_live_timeline.py "$out/guest-motion.csv" \
+    "$out/guest-live-control.csv" "$out/guest-runtime.csv" \
+    "$out/live-timeline-summary.txt"
 
 python3 - "$out" <<'PY'
 import csv

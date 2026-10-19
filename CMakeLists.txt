@@ -219,6 +219,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME camera_burst_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_camera_burst.py)
+    add_test(NAME live_controller_timeline_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_live_timeline.py)
 endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)

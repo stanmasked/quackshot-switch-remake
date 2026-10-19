@@ -209,6 +209,14 @@ motion traces. This live evidence is not a completed route and is never
 mixed with the Stage 88 simulated full-route witness. See
 [live-controller witness](docs/NEXIUM_LIVE_INPUT_WITNESS_RU.md).
 
+Stage 90 verifies the **duration and causal order of live controller input**
+from the *guest-written* motion CSV. It rejects a single synthetic directional
+sample posing as a sustained control run, demands meaningful right/left
+movement and a full-size jump, and cross-checks Y's rising edge and a
+later projectile against the seven live-input milestones. Negative-fixture
+unit tests guard the verifier; the independent scripted route is not counted.
+See [live input timeline](docs/NEXIUM_LIVE_TIMELINE_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
