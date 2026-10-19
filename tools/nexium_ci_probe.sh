@@ -24,6 +24,7 @@ expected="0ec2da5d58b6b362a9f0a4c927af0e55d36a0b50d1ab3f035dd075ea12d76761"
     echo "emulator_sha256_expected=$expected"
     echo "nro_sha256=$(sha256sum "$nro" | cut -d ' ' -f 1)"
     echo "host_arch=$(uname -m)"
+    echo "ci_repeat_id=${QS_REPEAT_ID:-single}"
 } > "$out/metadata.txt"
 
 # Verify a pinned release hash before executing a downloaded binary. Fail closed.

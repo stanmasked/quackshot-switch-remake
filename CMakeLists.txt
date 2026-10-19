@@ -231,6 +231,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME live_full_city_controller_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_finish_route.py)
+    add_test(NAME nexium_independent_replay_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_nexium_repeats.py)
 endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)

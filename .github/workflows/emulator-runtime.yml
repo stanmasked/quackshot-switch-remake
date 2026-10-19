@@ -12,6 +12,7 @@ on:
       - "tools/verify_obstacle_route.py"
       - "tools/verify_postcheck.py"
       - "tools/verify_finish_route.py"
+      - "tools/verify_nexium_repeats.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -55,6 +56,12 @@ jobs:
     needs: cross-build
     runs-on: ubuntu-26.04
     timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2, 3]
+    env:
+      QS_REPEAT_ID: ${{ matrix.repeat }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -77,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nexium-emulation-evidence
+          name: nexium-emulation-evidence-run-${{ matrix.repeat }}
           path: |
             emulator-evidence/*.txt
             emulator-evidence/*.log
@@ -97,5 +104,28 @@ jobs:
             emulator-evidence/route-summary.txt
             emulator-evidence/motion-summary.txt
             emulator-evidence/parallax-summary.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+  compare-independent-runs:
+    needs: emulate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nexium-emulation-evidence-run-*
+          path: repeat-evidence
+          merge-multiple: false
+      - name: Verify three independent guest-controller clears
+        run: |
+          python3 tools/verify_nexium_repeats.py repeat-evidence repeat-summary.txt
+      - name: Preserve cross-run stability analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexium-three-run-reproducibility
+          path: repeat-summary.txt
           retention-days: 7
           if-no-files-found: warn

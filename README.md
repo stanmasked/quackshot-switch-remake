@@ -239,6 +239,14 @@ accepting a cleared map and best attempt time. This is **not** the
 independent Stage 88 in-guest synthetic QsInput route.
 See [NeXium live full CITY TEST route](docs/NEXIUM_FINISH_ROUTE_RU.md).
 
+Stage 94 repeats the **same live virtual-controller NRO run in three
+separate NeXium CI jobs**. Every job has its own emulator process and
+isolated SD/config files; the post-job comparison revalidates all
+checkpoint, crate, spring, heart, ledge and game-clear guest logs and
+checks stage-local completion-time and milestone stability. The
+independent Stage 88 scripted route does not count as a controller run.
+See [three-run reproducibility](docs/NEXIUM_REPLAY_STABILITY_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;
