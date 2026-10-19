@@ -45,16 +45,6 @@ def _measure(rows,pulse,name):
     descent=sum(b["y_milli"]>a["y_milli"] for a,b in
                 zip(segment[index_apex:],segment[index_apex+1:]))
     height=188000-apex["y_milli"]
-    # A real jump has one ascent followed by one descent. Bounding only
-    # jump height and speed would still allow fabricated sawtooth paths
-    # that reverse direction in midair. Ignore sub-2-pixel sampling noise,
-    # but reject material direction reversals on either side of the apex.
-    if any(b["y_milli"]>a["y_milli"]+2000 for a,b in
-           zip(segment[:index_apex],segment[1:index_apex+1])):
-        raise ValueError(f"{name} reverses downward before jump apex")
-    if any(b["y_milli"]<a["y_milli"]-2000 for a,b in
-           zip(segment[index_apex:],segment[index_apex+1:])):
-        raise ValueError(f"{name} reverses upward after jump apex")
     if (ascent<4 or not 8<=apex["frame"]-start<=40 or
         not 20<=landing["frame"]-start<=80):
         raise ValueError(f"{name} ascent, apex or flight duration invalid")
@@ -78,6 +68,16 @@ def _measure(rows,pulse,name):
         # the final grounded sample (which is not part of segment).
         if abs(b["y_milli"]-a["y_milli"]) > 12000*(b["frame"]-a["frame"])+3000:
             raise ValueError(f"{name} jump landing/trajectory hides vertical teleport")
+    # A real jump has one ascent followed by one descent. Bounding only
+    # jump height and speed would still allow fabricated sawtooth paths
+    # that reverse direction in midair. Ignore sub-2-pixel sampling noise,
+    # but reject material direction reversals on either side of the apex.
+    if any(b["y_milli"]>a["y_milli"]+2000 for a,b in
+           zip(segment[:index_apex],segment[1:index_apex+1])):
+        raise ValueError(f"{name} reverses downward before jump apex")
+    if any(b["y_milli"]<a["y_milli"]-2000 for a,b in
+           zip(segment[index_apex:],segment[index_apex+1:])):
+        raise ValueError(f"{name} reverses upward after jump apex")
     if landing["x_milli"]-departure["x_milli"]<=12000:
         raise ValueError(f"{name} jump landing lacks horizontal progress")
     return {
