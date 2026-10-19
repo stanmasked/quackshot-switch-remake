@@ -20,6 +20,7 @@ from tools.verify_live_timeline import validate_timeline, read_csv, MOTION_COLUM
 from tools.verify_input_latency import verify_latency_profile, PROFILES
 from tools.verify_guest_edge_response import verify_edge_responses
 from tools.verify_guest_button_pulses import verify_pulses
+from tools.verify_jump_arc import verify_jump_arcs
 
 EXPECTED_IDS=(1,2,3)
 EVENT_KEYS=("pit_jump_tick","pit_cross_tick","roof_jump_tick",
@@ -60,7 +61,8 @@ def collect(root,run_id):
               "guest-live-control.csv","finish-summary.txt",
               "obstacle-summary.txt","postcheck-summary.txt",
               "input-injection.txt","result.txt","live-timeline-summary.txt",
-              "guest-edge-response-summary.txt","guest-button-pulse-summary.txt")
+              "guest-edge-response-summary.txt","guest-button-pulse-summary.txt",
+              "guest-jump-arc-summary.txt")
     if any(not (directory/name).is_file() for name in required):
         raise ValueError(f"incomplete evidence in independent run {run_id}")
     meta=_metadata(directory/"metadata.txt")
@@ -84,6 +86,9 @@ def collect(root,run_id):
     pulses_summary=(directory/"guest-button-pulse-summary.txt").read_text(encoding="utf-8")
     if not pulses_summary.startswith("NEXIUM_GUEST_BUTTON_PULSES_PASS "):
         raise ValueError("missing guest B/Y releases or unexplained button repetition")
+    arcs_summary=(directory/"guest-jump-arc-summary.txt").read_text(encoding="utf-8")
+    if not arcs_summary.startswith("NEXIUM_LIVE_JUMP_ARCS_PASS "):
+        raise ValueError("no measured B jump ascent/apex/landing witness")
     if not (directory/"finish-summary.txt").read_text(encoding="utf-8").startswith("LIVE_FULL_CITY_GUEST_PASS "):
         raise ValueError("missing guest-generated complete-city proof")
     if not (directory/"obstacle-summary.txt").read_text(encoding="utf-8").startswith("LIVE_OBSTACLE_GUEST_PASS "):
@@ -96,6 +101,7 @@ def collect(root,run_id):
     finish=load_finish(directory/"guest-finish.csv",FINISH_COLUMNS)
     edges=verify_edge_responses(actions,obstacle)
     pulses=verify_pulses(actions,obstacle)
+    arcs=verify_jump_arcs(actions,obstacle)
     prev=verify_obstacle(obstacle)
     mid=verify_postcheck(post,obstacle)
     end=verify_finish(finish,post,obstacle)
@@ -121,6 +127,7 @@ def collect(root,run_id):
         "edge_elapsed_ms":latency["edge_elapsed_ms"],
         "guest_hold_frames":{key:[p["observed_hold_frames"] for p in value]
                               for key,value in pulses["pulses"].items()},
+        "guest_jump_arcs":arcs["arcs"],
         "wall_recovery_used":pulses["wall_recovery"] is not None,
         "guest_frame_windows":{name:event["guest_frame_window"]
                                 for name,event in edge_events.items()},
@@ -169,6 +176,20 @@ def compare(runs):
             raise ValueError("finish tick outside plausible CITY TEST run")
         if not 628<=run["checkpoint_x_px"]<=660 or not 1120<=run["spring_x_px"]<=1180 or not 1164<=run["ledge_x_px"]<=1204:
             raise ValueError("physical checkpoint/spring/ledge position differs")
+        arcs=run.get("guest_jump_arcs")
+        if not isinstance(arcs,dict) or set(arcs)!={"pit","roof"}:
+            raise ValueError("missing complete guest jump arcs")
+        for name in ("pit","roof"):
+            item=arcs[name]
+            if (not isinstance(item,dict) or
+                type(item.get("rise_px")) not in (int,float) or
+                type(item.get("flight_frames")) is not int or
+                type(item.get("landing_x_px")) not in (int,float) or
+                not 61<=item["rise_px"]<=68 or
+                not 24<=item["flight_frames"]<=76 or
+                not ((365<=item["landing_x_px"]<=415) if name=="pit"
+                     else (415<=item["landing_x_px"]<=475))):
+                raise ValueError("invalid measured B flight or landing")
         holds=run.get("guest_hold_frames")
         if (not isinstance(holds,dict) or set(holds)!={"B","Y"} or
             len(holds["B"]) not in (2,3) or len(holds["Y"])!=1 or
@@ -188,7 +209,18 @@ def compare(runs):
         if spread>LIMITS[key]:
             raise ValueError(f"unstable {key}: spread={spread} frames, max={LIMITS[key]}")
         spreads[key]=spread
+    jump_spreads={}
+    for jump in ("pit","roof"):
+        jump_spreads[jump]={}
+        for key,bound in (("rise_px",2.0),("flight_frames",12),
+                          ("landing_x_px",20.0)):
+            values=[r["guest_jump_arcs"][jump][key] for r in runs]
+            spread=round(max(values)-min(values),3)
+            if spread>bound:
+                raise ValueError(f"unstable {jump} {key}: spread={spread}, max={bound}")
+            jump_spreads[jump][key]=spread
     return {
+        "guest_jump_arc_spreads":jump_spreads,
         "repetitions":3,
         "status":"PASS",
         "guest_button_hold_frames_by_run":{

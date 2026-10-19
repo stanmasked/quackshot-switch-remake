@@ -272,6 +272,14 @@ or an additional B only if a real wall-recovery command is tied to guest
 physics and host evidence. Extra, stuck, or repeated buttons fail CI.
 See [live controller button pulses](docs/NEXIUM_GUEST_BUTTON_PULSES_RU.md).
 
+Stage 98 verifies the COMPLETE physical trajectories of the two
+virtual B jumps, requiring a guest-observed ascent, 61–68px apex,
+continuous flight and grounded landing on the far pit bank and the
+upper roof. The short roof descent (landing near the apex) is accepted
+only with genuine grounded contact. Separate negative-fixture tests
+and three-run revalidation reject teleports or invented landings.
+See [live guest jump arcs](docs/NEXIUM_GUEST_JUMP_ARCS_RU.md).
+
 Stage 81 adds a **single-use airborne heart** above the spring pad.
 The fixed spring launch reaches it without steering; the ordinary city
 jump from the floor does not. Collecting it heals at most one heart;

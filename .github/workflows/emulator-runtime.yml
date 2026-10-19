@@ -16,6 +16,7 @@ on:
       - "tools/verify_input_latency.py"
       - "tools/verify_guest_edge_response.py"
       - "tools/verify_guest_button_pulses.py"
+      - "tools/verify_jump_arc.py"
       - "tools/verify_nro.py"
       - ".github/workflows/emulator-runtime.yml"
   workflow_dispatch:
@@ -113,6 +114,7 @@ jobs:
             emulator-evidence/obstacle-summary.txt
             emulator-evidence/guest-edge-response-summary.txt
             emulator-evidence/guest-button-pulse-summary.txt
+            emulator-evidence/guest-jump-arc-summary.txt
             emulator-evidence/guest-postcheck.csv
             emulator-evidence/postcheck-summary.txt
             emulator-evidence/guest-finish.csv

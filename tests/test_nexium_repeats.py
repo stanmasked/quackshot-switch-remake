@@ -21,6 +21,9 @@ def three():
            poll_interval_ms={1:85,2:90,3:95}[i],
            guest_frame_windows={"pit":1+i,"roof":3+i,"crate":2+i},
            guest_hold_frames={"B":[22,23],"Y":[12]},
+           guest_jump_arcs={
+             "pit":{"rise_px":64.258,"flight_frames":57,"landing_x_px":383.0},
+             "roof":{"rise_px":64.258,"flight_frames":32,"landing_x_px":423.0}},
            wall_recovery_used=False,
            source="live NeXium controller; independent CI guest NRO")
       for i in (1,2,3)]
@@ -63,6 +66,14 @@ class RepeatedLiveRunsTests(unittest.TestCase):
     def test_non_numeric_tick(self):
         self.runs[2]["spring_tick"]="727"
         with self.assertRaisesRegex(ValueError,"numeric"):
+            compare(self.runs)
+    def test_missing_jump_arcs(self):
+        self.runs[1]["guest_jump_arcs"]={}
+        with self.assertRaisesRegex(ValueError,"jump arcs"):
+            compare(self.runs)
+    def test_large_jump_height_disagreement(self):
+        self.runs[2]["guest_jump_arcs"]["roof"]["rise_px"]=67.4
+        with self.assertRaisesRegex(ValueError,"unstable roof rise"):
             compare(self.runs)
     def test_checkpoint_teleport(self):
         self.runs[1]["checkpoint_x_px"]=920
