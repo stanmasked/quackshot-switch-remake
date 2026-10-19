@@ -157,12 +157,12 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       input_delay_ms="${QS_INPUT_DELAY_MS:-0}"
       poll_interval_ms="${QS_POLL_MS:-85}"
       echo "INPUT_TIMING_PROFILE profile=${QS_REPEAT_ID:-0} edge_delay_ms=$input_delay_ms poll_ms=$poll_interval_ms"
-      # Stage 112: wall-clock 'date' can jump backwards under virtualized
+      # Stage 112: wall-clock date can jump backwards under virtualized
       # CI, yielding a false negative elapsed time (-765ms in run #3).
-      # CLOCK_MONOTONIC has a system-wide epoch shared by subprocesses.
-      echo "INPUT_TIMER_SOURCE=python_monotonic_ns"
+      # CLOCK_MONOTONIC has a system-wide epoch shared by processes.
+      echo "INPUT_TIMER_SOURCE=perl_clock_monotonic"
       monotonic_ms() {
-        python3 -c "import time; print(time.monotonic_ns() // 1000000)"
+        perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e "print int(clock_gettime(CLOCK_MONOTONIC) * 1000)"
       }
       delayed_keydown() {
         local event="$1" key="$2" begun finished actual

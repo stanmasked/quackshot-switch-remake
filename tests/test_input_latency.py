@@ -11,7 +11,7 @@ def make(run_id):
               "ci_input_edge_delay_ms":str(delay),
               "ci_poll_ms":str(poll)}
     lines=[f"INPUT_TIMING_PROFILE profile={run_id} edge_delay_ms={delay} poll_ms={poll}",
-           "INPUT_TIMER_SOURCE=python_monotonic_ns"]
+           "INPUT_TIMER_SOURCE=perl_clock_monotonic"]
     for event,proof in (("pit","PIT_LAUNCH_GUEST"),
                         ("roof","ROOF_LAUNCH_GUEST"),
                         ("crate","CRATE_FIRE_GUEST")):
@@ -29,10 +29,10 @@ class InputLatencyTests(unittest.TestCase):
     def test_monotonic_marker_required(self):
         meta,log=make(3)
         for altered in (
-                log.replace("INPUT_TIMER_SOURCE=python_monotonic_ns", ""),
-                log.replace("INPUT_TIMER_SOURCE=python_monotonic_ns",
+                log.replace("INPUT_TIMER_SOURCE=perl_clock_monotonic", ""),
+                log.replace("INPUT_TIMER_SOURCE=perl_clock_monotonic",
                             "INPUT_TIMER_SOURCE=wall_clock_date"),
-                log + "\nINPUT_TIMER_SOURCE=python_monotonic_ns"):
+                log + "\nINPUT_TIMER_SOURCE=perl_clock_monotonic"):
             with self.subTest(altered=altered[-55:]):
                 with self.assertRaisesRegex(ValueError,"monotonic host clock"):
                     verify_latency_profile(meta,altered,3)
@@ -53,7 +53,7 @@ class InputLatencyTests(unittest.TestCase):
                 "tools" / "nexium_ci_probe.sh").read_text(encoding="utf-8")
         helper=re.search(r"(?m)^      monotonic_ms\(\) \{\n(?:.*\n)*?      \}",script)
         self.assertIsNotNone(helper)
-        self.assertIn("time.monotonic_ns()",helper.group(0))
+        self.assertIn("clock_gettime(CLOCK_MONOTONIC)",helper.group(0))
         self.assertNotIn("date +%s%3N",script)
         command=(helper.group(0)+
                  "\nfirst=$(monotonic_ms); sleep 0.05; second=$(monotonic_ms); "+

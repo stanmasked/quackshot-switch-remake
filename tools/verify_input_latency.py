@@ -31,7 +31,7 @@ def verify_latency_profile(metadata,actions,run_id):
     # A wall-clock step can produce a negative measured delay even though
     # the virtual button and NRO completed. Never relax elapsed bounds:
     # require the CI host to declare monotonic clock instrumentation.
-    if lines.count("INPUT_TIMER_SOURCE=python_monotonic_ns")!=1:
+    if lines.count("INPUT_TIMER_SOURCE=perl_clock_monotonic")!=1:
         raise ValueError("missing or duplicate monotonic host clock marker")
     edge={}
     for line in lines:
