@@ -270,6 +270,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
     g->ruins_gate_open = 0; /* every new test scene closes its own gate */
+    g->ruins_relic_collected = 0; /* only local relic resets on new entry */
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
     g->city_crate_active =
@@ -765,6 +766,27 @@ static void update_ruins_plate(QsGame *g, QsInput in) {
     for (row=QS_RUINS_GATE_ROW_FIRST; row<=QS_RUINS_GATE_ROW_LAST; ++row)
         g->terrain[row][QS_RUINS_GATE_COL]='.';
     g->ruins_gate_open=1;
+}
+
+/*
+ * Stage 136: a visible relic behind the RUINS stone gate, awarded only
+ * on real nonlethal hero overlap after the player has opened the gate.
+ * Stage-local visibility resets when the player leaves/reenters RUINS;
+ * the map's earned badge is session progress, not a temporary pickup.
+ * No original game objects/assets and no global physics alterations.
+ */
+static void update_ruins_relic(QsGame *g) {
+    if (g->mode != QS_STAGE || g->stage != 1 ||
+        g->physics_profile != QS_PHYSICS_PROTOTYPE ||
+        g->ruins_gate_open != 1 || g->ruins_relic_collected != 0 ||
+        !isfinite(g->hero.x) || !isfinite(g->hero.y))
+        return;
+    if (overlaps(g->hero.x,g->hero.y,12.0f,20.0f,
+                 QS_RUINS_RELIC_X,QS_RUINS_RELIC_Y,
+                 QS_RUINS_RELIC_SIZE,QS_RUINS_RELIC_SIZE)) {
+        g->ruins_relic_collected=1;
+        g->ruins_relic_earned=1;
+    }
 }
 
 static void update_city_checkpoint(QsGame *g) {
@@ -1586,6 +1608,7 @@ void qs_step(QsGame *g, QsInput input) {
                  * Nonfatal contact still allows the usual same-tick item. */
                 if (!lethal_retry && !numeric_retry) {
                     update_pickups(g);
+                    update_ruins_relic(g);
                     update_city_checkpoint(g);
                     update_city_bonus(g);
                     update_city_air_reward(g);

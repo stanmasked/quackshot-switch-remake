@@ -82,6 +82,7 @@ jobs:
         run: |
           ./build-desktop/quackshot-prototype --smoke | tee smoke.log
           grep -q '^RUINS_GATE_SDL_PASS:' smoke.log
+          grep -q '^RUINS_RELIC_SDL_PASS:' smoke.log
           grep -q '^SDL_SMOKE_PASS ' smoke.log
           grep -q '^PROGRESS_MAP_SDL_PASS ' smoke.log
           grep -q '^MULTISTAGE_MAP_SDL_PASS:' smoke.log

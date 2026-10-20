@@ -16,6 +16,10 @@
 #define QS_RUINS_GATE_COL 53
 #define QS_RUINS_GATE_ROW_FIRST 8
 #define QS_RUINS_GATE_ROW_LAST 12
+/* Stage 136: hand-authored relic, reachable beyond the opened RUINS gate. */
+#define QS_RUINS_RELIC_X 895.0f
+#define QS_RUINS_RELIC_Y 188.0f
+#define QS_RUINS_RELIC_SIZE 10.0f
 /* Original-free checkpoint authored for opt-in CITY TEST only. */
 #define QS_CITY_CHECKPOINT_X 640.0f
 #define QS_CITY_CHECKPOINT_Y 188.0f
@@ -71,6 +75,8 @@ typedef struct {
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
     int ruins_gate_open; /* RUINS TEST per-entry switch, 0 closed / 1 open */
+    int ruins_relic_collected; /* current RUINS attempt: 0 or 1 */
+    int ruins_relic_earned; /* session achievement, retained on map/reentry */
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int city_crate_active; /* city-only breakable box, reset on new attempt */
