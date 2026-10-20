@@ -75,7 +75,11 @@ class RedToYellowProtocol(unittest.TestCase):
     def test_no_weapon_log(self):self.bad(lambda c,r,e,w,h:w.clear())
     def test_weapon_source_fake(self):self.bad(lambda c,r,e,w,h:w[360].update(source="host"))
     def test_guest_seq_mismatch(self):self.bad(lambda c,r,e,w,h:w[360].update(seq="0"))
-    def test_duplicate_change_button(self):self.bad(lambda c,r,e,w,h:w[361].update(change_pressed="1"))
+    def test_duplicate_change_button(self):
+        # Frame 360 is the first press; frame 361 is merely a hold.
+        # After a released frame 361/362, a NEW rising edge at 363
+        # would be a second button press, not a continuation.
+        self.bad(lambda c,r,e,w,h:w[363].update(change_pressed="1"))
     def test_weapon_stays_red(self):self.bad(lambda c,r,e,w,h:w[360].update(weapon_after="1"))
     def test_unauthorized_weapon_change(self):self.bad(lambda c,r,e,w,h:w[350].update(weapon_after="0"))
     def test_fake_yellow_red_projectile(self):self.bad(lambda c,r,e,w,h:r[368].update(shot_red_before="1"))
