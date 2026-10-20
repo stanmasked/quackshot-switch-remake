@@ -39,15 +39,17 @@ def fixture():
              input_bits="8" if i==12 else "0",x_milli=base["x_milli"],
              shot_active_before="0",shot_active_after="1" if i==12 else "0",
              shot_red_before="0",shot_x_before_milli="-1",shot_vx_before_milli="0",
-             bridge_before="1" if i>=22 else "0",
-             bridge_after="1" if i>=21 else "0",
-             bridge_cells="6" if i>=21 else "0")
-        if 13<=i<=21:
+             bridge_before="1" if i>=21 else "0",
+             bridge_after="1" if i>=20 else "0",
+             bridge_cells="6" if i>=20 else "0")
+        if 13<=i<=20:
             r.update(shot_active_before="1",
-                     shot_active_after="1" if i<21 else "0",
-                     # Hit frame i=21 advances 699000 -> 704500 milli-pixels,
-                     # overlapping the real switch start at 704000.
-                     shot_x_before_milli=str(655000+5500*(i-13)),
+                     shot_active_after="1" if i<20 else "0",
+                     # Native shot: x640 hero + 12px muzzle + 5.5px on
+                     # FIRE tick = 657500 on the following NRO sample.
+                     # First contact at i=20: 696000 -> 701500, whose
+                     # 7px projectile body overlaps x704000 switch.
+                     shot_x_before_milli=str(657500+5500*(i-13)),
                      shot_vx_before_milli="5500")
         roof.append(r)
         weapon.append(dict(seq=r["seq"],frame=r["frame"],mode="1",stage="2",
@@ -56,7 +58,7 @@ def fixture():
     host+=("ROOFTOP_YELLOW_REARM_APPROACH_GUEST frame=2097 x_milli=640000\n"
            "ROOFTOP_YELLOW_REARM_FIRE_SENT\n"
            "ROOFTOP_YELLOW_REARM_FIRE_GUEST frame=2103\n"
-           "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST frame=2112\n"
+           "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST frame=2111\n"
            "ROOFTOP_YELLOW_REARM_STABLE_GUEST frame=2160\n")
     return city,roof,edges,weapon,host
 
@@ -66,13 +68,13 @@ class YellowRearmProtocol(unittest.TestCase):
         self.assertEqual(report["status"],"PASS")
         self.assertEqual(report["bridge_solid_cells_after_rearm"],6)
         self.assertEqual(report["yellow_rearm_fire_frame"],2103)
-        self.assertEqual(report["yellow_rearm_open_frame"],2112)
+        self.assertEqual(report["yellow_rearm_open_frame"],2111)
     def test_real_7px_projectile_edge_overlap_is_valid(self):
         # A 2.5px right-edge overlap is a genuine physical hit, even
         # when the projectile's left-side coordinate stops before x704.
         c,r,e,w,h=fixture()
-        for i in range(793,802):
-            r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-5000)
+        for i in range(793,801):
+            r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-2000)
         report=verify_rearm(c,r,e,w,h)
         self.assertEqual(report["bridge_solid_cells_after_rearm"],6)
     def bad(self,fn):
@@ -117,8 +119,8 @@ class YellowRearmProtocol(unittest.TestCase):
         # A continuous 5.5 px/frame flight is insufficient: the second
         # switch impact must actually overlap physical x=704..716.
         def miss(c,r,e,w,h):
-            for i in range(793,802):
-                r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-8000)
+            for i in range(793,801):
+                r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-5000)
         self.bad(miss)
     def test_yellow_shot_teleports(self):
         self.bad(lambda c,r,e,w,h:r[799].update(shot_x_before_milli="699999"))
@@ -126,7 +128,19 @@ class YellowRearmProtocol(unittest.TestCase):
         # Before this guard, 4.8px/tick passed the wide 0..12px speed
         # envelope and the 2.5px continuity tolerance.
         self.bad(lambda c,r,e,w,h:[
-            r[i].update(shot_vx_before_milli="4800") for i in range(793,802)])
+            r[i].update(shot_vx_before_milli="4800") for i in range(793,801)])
+    def test_spawn_position_must_match_real_hero_and_firing_tick(self):
+        # A smooth 1px offset changes no velocity and preserves a real
+        # switch intersection; only an authentic muzzle-spawn check rejects it.
+        def fake_birth(c,r,e,w,h):
+            for i in range(793,801):
+                r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-1000)
+        self.bad(fake_birth)
+    def test_switch_contact_cannot_precede_recorded_opening(self):
+        # 1.2px drift for one intermediate frame stays within the former
+        # 2.5px motion tolerance but crosses the physical 7px hitbox.
+        self.bad(lambda c,r,e,w,h:r[799].update(
+            shot_x_before_milli=str(int(r[799]["shot_x_before_milli"])+1200)))
     def test_projectile_vanishes_and_resurrects_midflight(self):
         self.bad(lambda c,r,e,w,h:r[797].update(shot_active_after="0"))
     def test_extra_projectile_after_second_yellow_impact(self):
@@ -148,17 +162,17 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:r[795].update(bridge_after="1",bridge_cells="6"))
     def test_second_yellow_impact_keeps_projectile_alive(self):
         # Both real Stage158 NRO guests consumed their shot on the hit tick.
-        self.bad(lambda c,r,e,w,h:r[801].update(shot_active_after="1"))
+        self.bad(lambda c,r,e,w,h:r[800].update(shot_active_after="1"))
     def test_bridge_did_not_open(self):
-        self.bad(lambda c,r,e,w,h:r[801].update(bridge_after="0",bridge_cells="0"))
+        self.bad(lambda c,r,e,w,h:r[800].update(bridge_after="0",bridge_cells="0"))
     def test_bridge_not_stable(self):
         self.bad(lambda c,r,e,w,h:r[825].update(bridge_after="0",bridge_cells="0"))
     def test_switch_not_overlapped(self):
-        self.bad(lambda c,r,e,w,h:r[801].update(shot_x_before_milli="300000"))
+        self.bad(lambda c,r,e,w,h:r[800].update(shot_x_before_milli="300000"))
     def test_fake_controller_fire_frame(self):
         self.bad(lambda c,r,e,w,h:h.replace("REARM_FIRE_GUEST frame=2103","REARM_FIRE_GUEST frame=2102"))
     def test_fake_controller_open_frame(self):
-        self.bad(lambda c,r,e,w,h:h.replace("REARM_BRIDGE_OPEN_GUEST frame=2112","REARM_BRIDGE_OPEN_GUEST frame=2111"))
+        self.bad(lambda c,r,e,w,h:h.replace("REARM_BRIDGE_OPEN_GUEST frame=2111","REARM_BRIDGE_OPEN_GUEST frame=2110"))
     def test_host_fake_approach_position(self):
         self.bad(lambda c,r,e,w,h:h.replace("x_milli=640000","x_milli=710000"))
     def test_host_too_early_stable(self):
