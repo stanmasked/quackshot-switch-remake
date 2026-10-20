@@ -57,7 +57,11 @@ def verify_second_red(city_rows, roof_rows, edge_rows):
         raise SecondRedGuestError("second visit not attached to actual map reentry")
     if len(first)+len(second) != len(roof_rows) or len(first)+len(second) > 1400:
         raise SecondRedGuestError("ROOFTOP trace exceeds original bounded guest logger")
-    if not 85 <= len(second) <= 1100:
+    # The NRO intentionally logs up to 1,400 ROOFTOP frames across
+    # BOTH visits. A fast first shot can leave >1,100 genuine second-
+    # visit frames before the emulator's timeout. Bound the *total*
+    # strictly above, not a made-up shorter per-visit upper limit.
+    if not 85 <= len(second) <= 1400:
         raise SecondRedGuestError("no complete second ROOFTOP firing sequence")
     # Stage154's full authenticated acquisition/shot/closed bridge proof
     # remains in force on the first visit, including exact pad input.
