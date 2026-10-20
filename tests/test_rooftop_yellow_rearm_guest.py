@@ -23,7 +23,9 @@ def fixture():
         if 13<=i<=21:
             r.update(shot_active_before="1",
                      shot_active_after="1" if i<21 else "0",
-                     shot_x_before_milli=str(650000+5500*(i-13)),
+                     # Hit frame i=21 advances 699000 -> 704500 milli-pixels,
+                     # overlapping the real switch start at 704000.
+                     shot_x_before_milli=str(655000+5500*(i-13)),
                      shot_vx_before_milli="5500")
         roof.append(r)
         weapon.append(dict(seq=r["seq"],frame=r["frame"],mode="1",stage="2",
