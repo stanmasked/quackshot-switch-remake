@@ -73,6 +73,15 @@ class YellowRearmProtocol(unittest.TestCase):
         # A 2.5px right-edge overlap is a genuine physical hit, even
         # when the projectile's left-side coordinate stops before x704.
         c,r,e,w,h=fixture()
+        # Reach x638 instead of x640 on the final movement tick;
+        # every later stationary actor sample and the witness agree.
+        # This gives a true projectile origin 2px left of the default,
+        # not an impossible free-floating 2px bullet displacement.
+        r[779]["x_milli"]="638000"
+        for i in range(780,len(r)):
+            r[i]["x_milli"]="638000"
+        h=h.replace("REARM_APPROACH_GUEST frame=2097 x_milli=640000",
+                    "REARM_APPROACH_GUEST frame=2097 x_milli=638000")
         for i in range(793,801):
             r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-2000)
         report=verify_rearm(c,r,e,w,h)
