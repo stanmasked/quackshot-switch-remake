@@ -100,7 +100,12 @@ def verify_reentry(roof_rows, edges):
     if after[0]["frame"] != second["frame"] + 1:
         raise ReentryError("second rooftop segment not tied to entry")
     first_report = verify(before)  # full guest yellow-shot flight AND grounded crossing
-    if not 45 <= len(after) <= 400:
+    # The guest logger deliberately keeps recording for up to 1400
+    # frames in total, including a long idle second visit. An upper
+    # limit of 400 falsely rejected two real closed-bridge witnesses.
+    # All later samples still undergo full no-FIRE/no-shot/empty-floor
+    # checks; a long valid observation cannot bypass any safety guard.
+    if len(after) < 45:
         raise ReentryError("insufficient closed bridge observation after reentry")
     for i, p in enumerate(after):
         if p["frame"] != after[0]["frame"] + i:
