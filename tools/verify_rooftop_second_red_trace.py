@@ -26,8 +26,16 @@ def verify_second_red(city_rows, roof_rows, edge_rows):
     for i,e in enumerate(edges):
         if e["seq"] != i or e["frame"] < 1 or (i and e["frame"] <= edges[i-1]["frame"]):
             raise SecondRedGuestError("invalid four-edge frame/sequence")
-        if e["red_unlocked"] != 1 or e["weapon"] != 1 or e["bridge_cells"] != 0 or e["bridge_after"] != 0:
+        if e["red_unlocked"] != 1 or e["weapon"] != 1 or e["bridge_after"] != 0:
             raise SecondRedGuestError("lost red or opened bridge on stage boundary")
+        # CITY has normal solid terrain at ROOF bridge tile coordinates.
+        # For CITY->MAP the sampled cells are 6/6, not a ROOFTOP bridge.
+        # The remaining three edges refer to the ROOFTOP gap (0/6).
+        if i == 0:
+            if e["bridge_cells"] != 6:
+                raise SecondRedGuestError("CITY exit terrain not physically witnessed")
+        elif e["bridge_cells"] != 0:
+            raise SecondRedGuestError("ROOFTOP switch bridge opened on boundary")
     leave, reenter = edges[2], edges[3]
     if (leave["old_mode"],leave["old_stage"],leave["mode"],leave["stage"]) != (1,2,0,2) or not leave["input_bits"] & 64:
         raise SecondRedGuestError("no real START exit from first ROOFTOP")
