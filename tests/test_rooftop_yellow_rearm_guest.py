@@ -82,6 +82,9 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:r[598].update(shot_active_before="0"))
     def test_bridge_opened_before_yellow(self):
         self.bad(lambda c,r,e,w,h:r[595].update(bridge_after="1",bridge_cells="6"))
+    def test_second_yellow_impact_keeps_projectile_alive(self):
+        # Both real Stage158 NRO guests consumed their shot on the hit tick.
+        self.bad(lambda c,r,e,w,h:r[601].update(shot_active_after="1"))
     def test_bridge_did_not_open(self):
         self.bad(lambda c,r,e,w,h:r[601].update(bridge_after="0",bridge_cells="0"))
     def test_bridge_not_stable(self):
