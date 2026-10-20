@@ -4510,6 +4510,9 @@ int main(int argc, char **argv) {
     FILE *rooftop_guest_file = NULL;
     /* Stage 153: guest-owned proof of map exit and fresh ROOFTOP entry. */
     FILE *rooftop_transition_file = NULL;
+    /* Stage 154: independent, guest-only witnessed CITY red pickup. */
+    FILE *rooftop_red_acquire_file = NULL;
+    unsigned rooftop_red_acquire_records=0;
     unsigned rooftop_transition_records=0;
     unsigned rooftop_guest_records=0;
     int finish_records=0,finish_armed=0,finish_previous_heart=0,finish_previous_ledge=0;
@@ -4631,6 +4634,15 @@ int main(int argc, char **argv) {
         }
         if(!rooftop_transition_file)
             fprintf(stderr,"QuackShot: ROOFTOP transition CSV unavailable (non-fatal)\n");
+        rooftop_red_acquire_file=fopen("sdmc:/switch/quackshot-red-acquire.csv","w");
+        if(rooftop_red_acquire_file) {
+            if(fputs("seq,frame,mode,stage,x_milli,y_milli,grounded,input_bits,red_before,red_after,weapon,pickup_before,pickup_after,source\n",rooftop_red_acquire_file)<0 ||
+               fflush(rooftop_red_acquire_file)!=0) {
+                fclose(rooftop_red_acquire_file);rooftop_red_acquire_file=NULL;
+            }
+        }
+        if(!rooftop_red_acquire_file)
+            fprintf(stderr,"QuackShot: red pickup guest CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4775,6 +4787,9 @@ int main(int argc, char **argv) {
             int roof_shot_before_x=-1,roof_shot_before_vx=0;
             int roof_shot_before_red=0,roof_shot_before_active=0;
             int roof_bridge_before=game.rooftop_bridge_open;
+            int red_before=game.red_unlocked;
+            int red_pickup_before=game.pickups[0].active &&
+                game.pickups[0].kind==QS_PICKUP_RED;
 #endif
             for (int slot=0; slot<QS_MAX_SHOTS; ++slot) {
                 shots_before += game.shots[slot].active != 0;
@@ -4793,6 +4808,29 @@ int main(int argc, char **argv) {
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
 #ifdef __SWITCH__
+            /* Stage 154: only samples from the actual CITY level entered
+             * via pad. Observe the real pickup before and after qs_step:
+             * logging cannot manufacture an unlocked weapon or a pickup.
+             * Every CITY tick is retained until the unlock so the host
+             * cannot replace a real jump with a synthetic pickup event. */
+            if(rooftop_red_acquire_file && pad && old_mode==QS_STAGE &&
+               old_stage==0 && game.mode==QS_STAGE && game.stage==0 &&
+               rooftop_red_acquire_records<500u) {
+                int red_pickup_after=game.pickups[0].active &&
+                    game.pickups[0].kind==QS_PICKUP_RED;
+                if(fprintf(rooftop_red_acquire_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%u,%d,%d,%d,%d,%d,live_city_red_pad_qs_step\n",
+                   rooftop_red_acquire_records,game.frames,(int)game.mode,
+                   game.stage,(int)(game.hero.x*1000.0f),
+                   (int)(game.hero.y*1000.0f),game.hero.grounded!=0,
+                   input_after,red_before,game.red_unlocked,(int)game.weapon,
+                   red_pickup_before!=0,red_pickup_after!=0)>=0 &&
+                   fflush(rooftop_red_acquire_file)==0) {
+                    ++rooftop_red_acquire_records;
+                } else {
+                    fclose(rooftop_red_acquire_file);rooftop_red_acquire_file=NULL;
+                }
+            }
             /* Stage 153: a boundary is observed after a real controller
              * input and qs_step, never manufactured by a host-side script.
              * Record exactly the MAP->ROOFTOP and ROOFTOP->MAP edges.
@@ -5018,6 +5056,7 @@ int main(int argc, char **argv) {
     if(finish_file)fclose(finish_file);
     if(rooftop_guest_file)fclose(rooftop_guest_file);
     if(rooftop_transition_file)fclose(rooftop_transition_file);
+    if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
 #endif
     qs_trace_close(&trace);
     return 0;
