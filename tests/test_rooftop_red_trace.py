@@ -45,10 +45,13 @@ def scenario():
                     shot_active_after=int(9<=i<42),
                     bridge_before=0,bridge_after=0,bridge_cells=0,source=SOURCE)
         roof.append({k:str(values[k]) for k in COLUMNS})
-    edge=dict(seq=0,frame=1199,old_mode=0,old_stage=0,mode=1,stage=2,
-              input_bits=0,bridge_before=0,bridge_after=0,bridge_cells=0,
-              ruins_relic_earned=0,red_unlocked=1,weapon=1,source=EDGE_SOURCE)
-    return city,roof,[{k:str(edge[k]) for k in EDGE_COLUMNS}]
+    exit_edge=dict(seq=0,frame=1100,old_mode=1,old_stage=0,mode=0,stage=0,
+                   input_bits=64,bridge_before=0,bridge_after=0,bridge_cells=6,
+                   ruins_relic_earned=0,red_unlocked=1,weapon=1,source=EDGE_SOURCE)
+    roof_entry=dict(seq=1,frame=1199,old_mode=0,old_stage=0,mode=1,stage=2,
+                    input_bits=0,bridge_before=0,bridge_after=0,bridge_cells=0,
+                    ruins_relic_earned=0,red_unlocked=1,weapon=1,source=EDGE_SOURCE)
+    return city,roof,[{k:str(edge[k]) for k in EDGE_COLUMNS} for edge in (exit_edge,roof_entry)]
 
 
 class RedGuestProtocol(unittest.TestCase):
@@ -92,10 +95,31 @@ class RedGuestProtocol(unittest.TestCase):
         self.bad(lambda c,r,e: c[72].update(pickup_before="1"))
 
     def test_red_lost_at_rooftop_entry(self):
-        self.bad(lambda c,r,e: e[0].update(red_unlocked="0"))
+        self.bad(lambda c,r,e: e[1].update(red_unlocked="0"))
 
     def test_wrong_selected_weapon_at_entry(self):
-        self.bad(lambda c,r,e: e[0].update(weapon="0"))
+        self.bad(lambda c,r,e: e[1].update(weapon="0"))
+
+    def test_no_authenticated_city_exit(self):
+        self.bad(lambda c,r,e: e.pop(0))
+
+    def test_city_exit_wrong_source(self):
+        self.bad(lambda c,r,e: e[0].update(source="host_generated"))
+
+    def test_city_exit_was_not_map(self):
+        self.bad(lambda c,r,e: e[0].update(mode="1"))
+
+    def test_city_exit_unlocked_state_lost(self):
+        self.bad(lambda c,r,e: e[0].update(red_unlocked="0"))
+
+    def test_city_exit_not_connected_to_last_city_tick(self):
+        self.bad(lambda c,r,e: e[0].update(frame="1140"))
+
+    def test_bad_map_transition_order(self):
+        self.bad(lambda c,r,e: e[1].update(frame="1101"))
+
+    def test_rooftop_frame_gap_after_entry(self):
+        self.bad(lambda c,r,e: e[1].update(frame="1197"))
 
     def test_missing_real_fire(self):
         self.bad(lambda c,r,e: r[8].update(input_bits="0"))
