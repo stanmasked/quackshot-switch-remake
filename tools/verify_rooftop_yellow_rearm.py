@@ -82,8 +82,8 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
         raise YellowRearmError("second YELLOW projectile flight skipped NRO frames")
     for i in flight:
         p=rows[i]
-        if p["shot_red_before"]!=0 or not 0<p["shot_vx_before_milli"]<=12000 or
-           not 0<=p["shot_x_before_milli"]<=1400000:
+        if (p["shot_red_before"]!=0 or not 0<p["shot_vx_before_milli"]<=12000 or
+            not 0<=p["shot_x_before_milli"]<=1400000):
             raise YellowRearmError("wrong color/direction/coordinate of third-visit projectile")
         if i>fire+1:
             previous_shot=rows[i-1]
