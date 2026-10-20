@@ -65,8 +65,8 @@ class YellowRearmProtocol(unittest.TestCase):
         report=verify_rearm(*fixture())
         self.assertEqual(report["status"],"PASS")
         self.assertEqual(report["bridge_solid_cells_after_rearm"],6)
-        self.assertEqual(report["yellow_rearm_fire_frame"],1903)
-        self.assertEqual(report["yellow_rearm_open_frame"],1912)
+        self.assertEqual(report["yellow_rearm_fire_frame"],2103)
+        self.assertEqual(report["yellow_rearm_open_frame"],2112)
     def test_real_7px_projectile_edge_overlap_is_valid(self):
         # A 2.5px right-edge overlap is a genuine physical hit, even
         # when the projectile's left-side coordinate stops before x704.
@@ -81,6 +81,14 @@ class YellowRearmProtocol(unittest.TestCase):
         if isinstance(new,str):h=new
         with self.assertRaises((ValueError,YellowRearmError)):
             verify_rearm(c,r,e,w,h)
+    def test_spawning_at_prepositioned_x640_is_not_new_movement(self):
+        self.bad(lambda c,r,e,w,h:r[440].update(x_milli="640000"))
+    def test_no_actual_right_movement(self):
+        self.bad(lambda c,r,e,w,h:[row.update(input_bits="0") for row in r[580:780]])
+    def test_missing_dash_during_approach(self):
+        self.bad(lambda c,r,e,w,h:[row.update(input_bits="2") for row in r[580:780]])
+    def test_right_button_used_before_reset_observation(self):
+        self.bad(lambda c,r,e,w,h:r[460].update(input_bits="18"))
     def test_missing_second_fire(self):
         self.bad(lambda c,r,e,w,h:r[792].update(input_bits="0"))
     def test_rearm_weapon_red(self):
