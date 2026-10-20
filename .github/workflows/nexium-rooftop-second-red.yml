@@ -11,7 +11,7 @@ on:
       - ".github/workflows/nexium-rooftop-second-red.yml"
       - "src/main_sdl.c"
       - "tests/test_rooftop_second_red_trace.py"
-      - "tools/verify_rooftop_second_red_trace.py"
+      - "CMakeLists.txt"
       - "src/qs_game.c"
       - "include/**"
   workflow_dispatch:
