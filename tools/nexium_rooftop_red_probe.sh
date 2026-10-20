@@ -118,9 +118,9 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   intersect=0
   for i in $(seq 1 180); do
    sleep 0.05
-   witness="$(awk -F, 'NR>1 && $4==2 && $11==1 && $12==1 &&
-       $9>=697000 && $9<=716000 && $14==0 && $15==0 && $16==0
-       {print $2 " " $9;exit}' "$guest")"
+   witness="$(awk -F, "NR>1 && \$4==2 && \$11==1 && \$12==1 &&
+       \$9>=697000 && \$9<=716000 && \$14==0 && \$15==0 && \$16==0
+       {print \$2 \" \" \$9;exit}" "$guest")"
    if [ -n "$witness" ]; then
     read -r frame sx <<< "$witness"
     echo "ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame=$frame x_milli=$sx"
