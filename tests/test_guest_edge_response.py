@@ -104,6 +104,25 @@ class GuestButtonEdgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"brake anchor"):
             verify_edge_responses(self.host,self.rows)
 
+    def test_brake_must_appear_before_pit_launch(self):
+        # Stage 127 regression: a brake line placed between the host
+        # PIT_LAUNCH marker and INPUT_EDGE_DELAY breaks the independent
+        # latency comparator even if the guest legitimately clears.
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   self.host.replace(
+                       "PIT_LAUNCH_GUEST frame=100 x_milli=280000",
+                       "PIT_LAUNCH_GUEST frame=100 x_milli=280000\n"
+                       "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000",1))
+        with self.assertRaisesRegex(ValueError,"must precede launch"):
+            verify_edge_responses(self.host,self.rows)
+
+    def test_brake_must_be_immediately_before_pit_launch(self):
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000\n"
+                   "UNRELATED_HOST_MARKER\n"+self.host)
+        with self.assertRaisesRegex(ValueError,"must precede launch"):
+            verify_edge_responses(self.host,self.rows)
+
     def test_host_anchor_absent(self):
         self.host=self.host.replace("PIT_LAUNCH_GUEST","MISSING_PIT")
         with self.assertRaisesRegex(ValueError,"anchor"):

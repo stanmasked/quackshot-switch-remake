@@ -263,13 +263,14 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
            [ "$x_milli" -ge "$pit_min_x_milli" ] && \
            [ "$x_milli" -le "$pit_max_x_milli" ] && \
            [ "$grounded" -eq 1 ]; then
-          echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
           if [ "${QS_REPEAT_ID:-0}" = "2" ]; then
-            # Stage 124: physical controller brake before the delayed B.
-            # No game-state injection, only a temporary release of RIGHT.
+            # Stage 127: log verified approach braking FIRST. The normal
+            # PIT_LAUNCH_GUEST marker must still immediately precede
+            # INPUT_EDGE_DELAY, preserving its independent timing proof.
             echo "PIT_APPROACH_BRAKE_GUEST frame=$frame x_milli=$x_milli"
             xdotool keyup d
           fi
+          echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
           delayed_keydown pit x
           sleep 0.36
           xdotool keyup x

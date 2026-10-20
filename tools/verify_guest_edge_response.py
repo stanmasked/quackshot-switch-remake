@@ -68,6 +68,16 @@ def verify_edge_responses(host_text, samples):
         if (len(brake)!=1 or brake[0] is None or
             tuple(map(int,brake[0].groups()))!=launches["PIT_LAUNCH_GUEST"]):
             raise ValueError("profile 2 requires authenticated PIT brake anchor")
+        # PIT brake is recorded before the standard launch+input-delay
+        # pair, never between them. The unmodified input-latency
+        # verifier still requires the pair to be consecutive log lines.
+        lines=host_text.splitlines()
+        idx=[i for i,line in enumerate(lines)
+             if line.startswith("PIT_APPROACH_BRAKE_GUEST")]
+        expected=("PIT_LAUNCH_GUEST frame=%d x_milli=%d" %
+                  launches["PIT_LAUNCH_GUEST"])
+        if len(idx)!=1 or idx[0]+1>=len(lines) or lines[idx[0]+1]!=expected:
+            raise ValueError("PIT brake must precede launch evidence")
     elif brake:
         raise ValueError("unexpected profile-specific PIT brake")
     details={}
