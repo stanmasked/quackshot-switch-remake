@@ -128,8 +128,19 @@ class YellowRearmProtocol(unittest.TestCase):
         # A continuous 5.5 px/frame flight is insufficient: the second
         # switch impact must actually overlap physical x=704..716.
         def miss(c,r,e,w,h):
+            # Physically consistent 5px earlier FIRE position, approached
+            # through 200 continuous right-input ticks (first five 2px).
+            # The projectile starts at hero.x+12+5.5, then moves +5.5/tick.
+            for i in range(580,780):
+                offset=min(5000,1000*(i-579))
+                r[i]["x_milli"]=str(int(r[i]["x_milli"])-offset)
+            for i in range(780,len(r)):
+                r[i]["x_milli"]="635000"
+            h=h.replace("REARM_APPROACH_GUEST frame=2097 x_milli=640000",
+                        "REARM_APPROACH_GUEST frame=2097 x_milli=635000")
             for i in range(793,801):
                 r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-5000)
+            return h
         self.bad(miss)
     def test_yellow_shot_teleports(self):
         self.bad(lambda c,r,e,w,h:r[799].update(shot_x_before_milli="699999"))
@@ -159,6 +170,15 @@ class YellowRearmProtocol(unittest.TestCase):
             shot_vx_before_milli="5500"))
     def test_player_teleport_in_third_visit(self):
         self.bad(lambda c,r,e,w,h:r[801].update(x_milli="780000"))
+    def test_post_fire_fast_motion_under_old_16px_allowance(self):
+        self.bad(lambda c,r,e,w,h:r[820].update(x_milli="648000"))
+    def test_smooth_post_fire_drift_without_right_button(self):
+        def fake_drift(c,r,e,w,h):
+            for i in range(820,830):
+                r[i]["x_milli"]=str(640000+2000*(i-819))
+            for i in range(830,len(r)):
+                r[i]["x_milli"]="660000"
+        self.bad(fake_drift)
     def test_wrong_rooftop_stage_after_rearm(self):
         self.bad(lambda c,r,e,w,h:r[820].update(stage="0"))
     def test_out_of_range_controller_bits(self):
