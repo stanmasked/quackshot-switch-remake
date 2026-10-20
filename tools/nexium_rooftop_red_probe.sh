@@ -112,13 +112,17 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   [ "$arrived" = 1 ] || { echo "BLOCKED: failed red switch approach"; exit 1; }
   sleep 0.12; xdotool keydown z; sleep 0.18; xdotool keyup z
   echo ROOFTOP_RED_FIRE_SENT
+  # A real 5.5px/frame shot stays inside the 19px overlap window
+  # only ~3 simulation ticks. Sampling only tail -n1 every 50ms can
+  # skip the authentic event. Search all untouched guest rows instead.
   intersect=0
   for i in $(seq 1 180); do
    sleep 0.05
-   IFS=, read -r seq frame mode stage x y grounded input sx vx red sb sa g0 g1 tiles origin <<< "$(tail -n1 "$guest")"
-   if [ "$stage" = 2 ] && [ "$red" = 1 ] && [ "$sb" = 1 ] &&
-      [[ "$sx" =~ ^[0-9]+$ ]] && [ "$sx" -ge 697000 ] &&
-      [ "$sx" -le 716000 ] && [ "$g0" = 0 ] && [ "$g1" = 0 ] && [ "$tiles" = 0 ]; then
+   witness="$(awk -F, 'NR>1 && $4==2 && $11==1 && $12==1 &&
+       $9>=697000 && $9<=716000 && $14==0 && $15==0 && $16==0
+       {print $2 " " $9;exit}' "$guest")"
+   if [ -n "$witness" ]; then
+    read -r frame sx <<< "$witness"
     echo "ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame=$frame x_milli=$sx"
     intersect=1; break
    fi
