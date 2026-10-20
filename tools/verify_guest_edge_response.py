@@ -49,10 +49,21 @@ def verify_edge_responses(host_text, samples):
                      r["attempt"]<=rows[-1]["attempt"]):
             raise ValueError("discontinuous input frame observations")
         rows.append(r)
+    # Stage 122: the delayed 25ms/90ms probe starts the PIT button
+    # earlier. Match the real host profile marker, then require the
+    # authentic guest first B in the ORIGINAL 275..309px range.
+    profile=re.findall(
+        r"^INPUT_TIMING_PROFILE profile=(\\d+) edge_delay_ms=(\\d+) poll_ms=(\\d+)$",
+        host_text,re.M)
+    if len(profile)>1:
+        raise ValueError("duplicate host input timing profile")
+    early=(len(profile)==1 and profile[0]==("2","25","90"))
     details={}
     preceding_frame=-1
     response_frame=-1
     for name,marker,bit,xlow,xhigh in EVENTS:
+        if name=="pit" and early:
+            xlow,xhigh=263000,276000
         start,x=launches[marker]
         if start<=preceding_frame:
             raise ValueError("host button actions reordered")

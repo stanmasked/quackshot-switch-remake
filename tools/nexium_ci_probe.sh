@@ -192,6 +192,16 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       step=0
       wall_recovery=0
       heart_nudge_done=0
+      pit_min_x_milli=276000
+      pit_max_x_milli=305000
+      if [ "${QS_REPEAT_ID:-0}" = "2" ]; then
+        # Stage 122: one delayed-pit CI run saw B first arrive at
+        # X=313.468 after the host read X=282.593 (19 guest frames).
+        # Start earlier so the live guest B still lands at X=275..309
+        # and its landing can enter the *unchanged* grounded roof gate.
+        pit_min_x_milli=263000
+        pit_max_x_milli=276000
+      fi
       roof_min_x_milli=382000
       roof_max_x_milli=410000
       if [ "${QS_ROOF_LATE:-0}" = "1" ]; then
@@ -243,7 +253,8 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           IFS=, read -r fin_seq fin_frame fin_attempt fin_x fin_y fin_vy fin_ground fin_mask fin_checkpoint fin_crate fin_spring fin_heart fin_ledge fin_clear fin_mode fin_best fin_source <<< "$fin_line"
         fi
         if [ "$step" -eq 0 ] && [ "$mode" -eq 1 ] && \
-           [ "$x_milli" -ge 276000 ] && [ "$x_milli" -le 305000 ] && \
+           [ "$x_milli" -ge "$pit_min_x_milli" ] && \
+           [ "$x_milli" -le "$pit_max_x_milli" ] && \
            [ "$grounded" -eq 1 ]; then
           echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
           delayed_keydown pit x
