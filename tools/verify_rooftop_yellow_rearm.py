@@ -118,6 +118,14 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
     flight=[i for i in first_projectile if i<=hit]
     if flight!=list(range(fire+1,hit+1)):
         raise YellowRearmError("second YELLOW projectile flight skipped NRO frames")
+    # shoot_as() creates a right-facing shot at hero.x + 12px and
+    # update_shots() advances it by 5.5px on that SAME FIRE tick.
+    # The first next-tick shot sample must therefore match the actual
+    # hero location immediately before FIRE, not an arbitrary X value.
+    # Millipixel logs truncate floats; allow a 0.05px precision margin.
+    expected_birth_x=rows[fire-1]["x_milli"]+17500
+    if abs(rows[fire+1]["shot_x_before_milli"]-expected_birth_x)>50:
+        raise YellowRearmError("second yellow projectile birth not tied to real hero position")
     for i in flight:
         p=rows[i]
         # shoot() fixes YELLOW horizontal velocity at +5.5 px/tick.
@@ -147,6 +155,14 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
     for k in range(fire,hit):
         if rows[k]["bridge_before"] or rows[k]["bridge_after"] or rows[k]["bridge_cells"]:
             raise YellowRearmError("bridge opened before second projectile overlap")
+        if k>fire:
+            # An identical YELLOW shot cannot pass through the horizontal
+            # switch hitbox without first activating it, then inexplicably
+            # open the bridge only on a later contact frame.
+            x=rows[k]["shot_x_before_milli"]+rows[k]["shot_vx_before_milli"]
+            if (x<TARGET_X_MILLI+TARGET_W_MILLI and
+                x+SHOT_WIDTH_MILLI>TARGET_X_MILLI):
+                raise YellowRearmError("yellow projectile crossed switch before recorded first impact")
     for p in rows[hit+1:]:
         if p["bridge_before"]!=1 or p["bridge_after"]!=1 or p["bridge_cells"]!=6:
             raise YellowRearmError("reopened bridge not physically stable")
