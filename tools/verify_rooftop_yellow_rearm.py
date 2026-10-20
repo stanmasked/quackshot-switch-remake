@@ -194,6 +194,18 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
                 p["bridge_before"]!=prior["bridge_after"] or
                 abs(p["x_milli"]-prior["x_milli"])>16000):
                 raise YellowRearmError("third-visit timeline, bridge state or player movement discontinuity")
+            # The earlier approach is checked above. Preserve that same
+            # per-tick controller/physics proof throughout projectile
+            # flight and the ≥30-frame post-hit stable observation.
+            if k>fire:
+                dx=p["x_milli"]-prior["x_milli"]
+                bits=p["input_bits"]
+                cap=3500 if bits&16 else 2300
+                if abs(dx)>cap:
+                    raise YellowRearmError("post-fire hero exceeded native horizontal speed")
+                if abs(dx)>1000 and ((dx>0 and (bits&3)!=2) or
+                                     (dx<0 and (bits&3)!=1)):
+                    raise YellowRearmError("post-fire hero motion contradicts guest controller input")
     def event(name,fmt):
         vals=[l for l in host.splitlines() if l.startswith(name+" ")]
         if len(vals)!=1:raise YellowRearmError("missing/duplicated host proof "+name)
