@@ -104,10 +104,32 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
             raise YellowRearmError("reopened bridge not physically stable")
         if p["shot_red_before"]!=0:
             raise YellowRearmError("forged red projectile after second YELLOW")
-    # NRO row sequence and frames must have no holes in whole third visit.
-    for a,b in zip(rows[start:],rows[start+1:]):
-        if b["frame"]!=a["frame"]+1 or b["seq"]!=a["seq"]+1:
-            raise YellowRearmError("discontinuous third-visit guest frames")
+    # The Stage158 prefix validated its own rows; post-FIRE samples must
+    # independently be valid NRO-stage observations. A forged stage/mode,
+    # impossible controller bits or instantaneous player teleport cannot
+    # substitute for a real third visit followed by real movement.
+    for k in range(start,len(rows)):
+        p=rows[k]
+        if p["mode"]!=1 or p["stage"]!=2 or p["input_bits"]&~127:
+            raise YellowRearmError("third-visit sample not genuine ROOFTOP controller telemetry")
+        if (not 0<=p["x_milli"]<=1600000 or
+            not -150000<=p["y_milli"]<=250000 or
+            p["bridge_before"] not in (0,1) or
+            p["bridge_after"] not in (0,1) or
+            p["bridge_cells"]!=6*p["bridge_after"]):
+            raise YellowRearmError("invalid third-visit terrain/hero coordinates")
+        if p["shot_active_before"] not in (0,1) or p["shot_red_before"] not in (0,1):
+            raise YellowRearmError("invalid third-visit projectile state")
+        if (not p["shot_active_before"] and
+            (p["shot_x_before_milli"]!=-1 or
+             p["shot_vx_before_milli"]!=0 or p["shot_red_before"])):
+            raise YellowRearmError("fabricated inactive projectile coordinates")
+        if k>start:
+            prior=rows[k-1]
+            if (p["frame"]!=prior["frame"]+1 or p["seq"]!=prior["seq"]+1 or
+                p["bridge_before"]!=prior["bridge_after"] or
+                abs(p["x_milli"]-prior["x_milli"])>16000):
+                raise YellowRearmError("third-visit timeline, bridge state or player movement discontinuity")
     def event(name,fmt):
         vals=[l for l in host.splitlines() if l.startswith(name+" ")]
         if len(vals)!=1:raise YellowRearmError("missing/duplicated host proof "+name)
