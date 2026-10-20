@@ -73,9 +73,27 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   done
   xdotool keyup d
   [ "$acquired" = 1 ] || { echo "BLOCKED: CITY real red pickup not collected"; exit 1; }
-  xdotool key --clearmodifiers m
+  # Wait for a guest-authenticated CITY->MAP transition. Previously
+  # we slept a fixed 550ms and sometimes pressed menu controls before
+  # NeXium consumed START; a valid red pickup then sat in CITY forever.
+  transition="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f -name quackshot-rooftop-transitions.csv -print -quit 2>/dev/null || true)"
+  [ -n "$transition" ] || { echo "BLOCKED: no NRO transition witness"; exit 1; }
+  exited=0
+  for attempt in 1 2 3; do
+   xdotool keydown --clearmodifiers m; sleep 0.18; xdotool keyup m
+   for poll in $(seq 1 22); do
+    sleep 0.07
+    IFS=, read -r seq frame om os nm ns bits before after cells badge red weapon origin <<< "$(tail -n1 "$transition")"
+    if [ "$seq" = 0 ] && [ "$om" = 1 ] && [ "$os" = 0 ] && [ "$nm" = 0 ] &&
+       [ "$red" = 1 ] && [ "$weapon" = 1 ]; then
+     echo "CITY_EXIT_GUEST frame=$frame attempt=$attempt"; exited=1; break
+    fi
+   done
+   [ "$exited" = 1 ] && break
+  done
+  [ "$exited" = 1 ] || { echo "BLOCKED: START did not produce guest CITY-to-MAP edge"; exit 1; }
   echo CITY_EXIT_SENT
-  sleep 0.55
+  sleep 0.35
   for i in 1 2; do
    xdotool keydown --clearmodifiers Down
    sleep 0.20
@@ -94,7 +112,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   done
   [ -n "$guest" ] && [ -n "$transition" ] || { echo "BLOCKED: missing ROOFTOP guest state"; exit 1; }
   IFS=, read -r seq frame om os nm ns bits before after cells badge red weapon origin <<< "$(tail -n1 "$transition")"
-  [ "$seq" = 0 ] && [ "$om" = 0 ] && [ "$nm" = 1 ] &&
+  [ "$seq" = 1 ] && [ "$om" = 0 ] && [ "$nm" = 1 ] &&
    [ "$ns" = 2 ] && [ "$red" = 1 ] && [ "$weapon" = 1 ] &&
    [ "$after" = 0 ] && [ "$cells" = 0 ] ||
     { echo "BLOCKED: red unlock not preserved into actual ROOFTOP"; exit 1; }
@@ -161,7 +179,7 @@ IFS= read -r city < "$out/city-paths.txt"
 IFS= read -r transition < "$out/transition-paths.txt"
 cp "$city" "$out/guest-city-red.csv"
 cp "$transition" "$out/guest-transitions.csv"
-for event in CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST; do
+for event in CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
