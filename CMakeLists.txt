@@ -274,6 +274,11 @@ if(Python3_EXECUTABLE)
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_reentry_trace.py)
 endif()
+if(Python3_EXECUTABLE)
+    add_test(NAME rooftop_red_guest_trace_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_red_trace.py)
+endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)
     find_package(SDL2 QUIET)
