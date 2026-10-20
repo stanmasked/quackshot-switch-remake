@@ -61,7 +61,7 @@ def verify_edge_responses(host_text, samples):
     # Stage 124 brake marker is not proof by itself: require its exact
     # guest-authenticated PIT observation, then separately verify the
     # real B+RIGHT rising edge and resulting vertical displacement.
-    brake=[re.fullmatch(r"PIT_APPROACH_BRAKE_GUEST frame=(\\d+) x_milli=(\\d+)",line)
+    brake=[re.fullmatch(r"PIT_APPROACH_BRAKE_GUEST frame=(\d+) x_milli=(\d+)",line)
            for line in host_text.splitlines()
            if line.startswith("PIT_APPROACH_BRAKE_GUEST")]
     if early:
