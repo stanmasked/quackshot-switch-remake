@@ -4,6 +4,8 @@ on:
     paths:
       - 'tools/bk2_reference_audit.py'
       - 'tests/test_bk2_reference_audit.py'
+      - 'tools/bk2_rom_match.py'
+      - 'tests/test_bk2_rom_match.py'
       - '.github/workflows/bk2-reference-audit.yml'
   workflow_dispatch:
 permissions:
@@ -17,6 +19,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: Synthetic BK2 verifier tests (no private movie or ROM)
-        run: python -m unittest discover -s tests -p test_bk2_reference_audit.py -v
+        run: python -m unittest discover -s tests -p 'test_bk2*.py' -v
       - name: Python syntax validation
-        run: python -m py_compile tools/bk2_reference_audit.py
+        run: python -m py_compile tools/bk2_reference_audit.py tools/bk2_rom_match.py
