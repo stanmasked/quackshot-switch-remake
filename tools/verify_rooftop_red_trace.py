@@ -155,14 +155,20 @@ def verify_red(city_rows, roof_rows, edge_rows):
     for p in roof[hit_idx:]:
         if p["bridge_after"]!=0 or p["bridge_cells"]!=0:
             raise RedGuestError("bridge changed after red projectile overlap")
-    if len(edge_rows)!=1:
-        raise RedGuestError("unexpected transitions during isolated rooftop red test")
-    e=parsed(edge_rows,EDGE_COLUMNS,EDGE_SOURCE)[0]
-    if (e["seq"]!=0 or e["old_mode"]!=0 or e["mode"]!=1 or e["stage"]!=2 or
+    if len(edge_rows)!=2:
+        raise RedGuestError("missing real CITY exit or ambiguous ROOFTOP entry")
+    leave,e=parsed(edge_rows,EDGE_COLUMNS,EDGE_SOURCE)
+    if (leave["seq"]!=0 or leave["old_mode"]!=1 or leave["old_stage"]!=0 or
+        leave["mode"]!=0 or leave["stage"]!=0 or
+        leave["red_unlocked"]!=1 or leave["weapon"]!=1 or
+        leave["bridge_before"]!=0 or leave["bridge_after"]!=0 or
+        not city[-1]["frame"] < leave["frame"] <= city[-1]["frame"]+4):
+        raise RedGuestError("no live CITY-to-MAP exit after red pickup")
+    if (e["seq"]!=1 or e["old_mode"]!=0 or e["mode"]!=1 or e["stage"]!=2 or
         e["red_unlocked"]!=1 or e["weapon"]!=1 or e["bridge_before"]!=0 or
         e["bridge_after"]!=0 or e["bridge_cells"]!=0 or
-        e["frame"]>=roof[0]["frame"] or e["frame"]<=city[-1]["frame"]):
-        raise RedGuestError("red unlock or scene entry not preserved from real CITY")
+        e["frame"]!=roof[0]["frame"]-1 or e["frame"]<=leave["frame"]+3):
+        raise RedGuestError("red unlock or authentic ROOFTOP entry lost across MAP")
     return {"status":"PASS","pickup_frame":city[flips[0]]["frame"],
             "pickup_x_milli":city[flips[0]]["x_milli"],"rooftop_entry_frame":e["frame"],
             "red_flight_frames":len(red_flight),"red_switch_overlap_frame":roof[hit_idx]["frame"],
