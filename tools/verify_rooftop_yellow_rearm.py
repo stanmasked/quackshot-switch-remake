@@ -120,9 +120,14 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
         raise YellowRearmError("second YELLOW projectile flight skipped NRO frames")
     for i in flight:
         p=rows[i]
-        if (p["shot_red_before"]!=0 or not 0<p["shot_vx_before_milli"]<=12000 or
+        # shoot() fixes YELLOW horizontal velocity at +5.5 px/tick.
+        # A smooth, slower forged path must not be mistaken for the
+        # unchanged physical projectile in the Nintendo Switch NRO.
+        if (p["shot_red_before"]!=0 or p["shot_vx_before_milli"]!=5500 or
             not 0<=p["shot_x_before_milli"]<=1400000):
-            raise YellowRearmError("wrong color/direction/coordinate of third-visit projectile")
+            raise YellowRearmError("wrong color/speed/coordinate of third-visit projectile")
+        if i<hit and p["shot_active_after"]!=1:
+            raise YellowRearmError("yellow projectile vanished before its genuine impact")
         if i>fire+1:
             previous_shot=rows[i-1]
             if abs(p["shot_x_before_milli"]-
@@ -145,8 +150,8 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
     for p in rows[hit+1:]:
         if p["bridge_before"]!=1 or p["bridge_after"]!=1 or p["bridge_cells"]!=6:
             raise YellowRearmError("reopened bridge not physically stable")
-        if p["shot_red_before"]!=0:
-            raise YellowRearmError("forged red projectile after second YELLOW")
+        if p["shot_red_before"]!=0 or p["shot_active_before"]!=0 or p["shot_active_after"]!=0:
+            raise YellowRearmError("unexpected projectile after second YELLOW impact")
     # The Stage158 prefix validated its own rows; post-FIRE samples must
     # independently be valid NRO-stage observations. A forged stage/mode,
     # impossible controller bits or instantaneous player teleport cannot
