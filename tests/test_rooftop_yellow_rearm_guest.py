@@ -61,6 +61,14 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:r[600].update(shot_red_before="1"))
     def test_yellow_shot_teleports(self):
         self.bad(lambda c,r,e,w,h:r[599].update(shot_x_before_milli="699999"))
+    def test_player_teleport_in_third_visit(self):
+        self.bad(lambda c,r,e,w,h:r[601].update(x_milli="780000"))
+    def test_wrong_rooftop_stage_after_rearm(self):
+        self.bad(lambda c,r,e,w,h:r[620].update(stage="0"))
+    def test_out_of_range_controller_bits(self):
+        self.bad(lambda c,r,e,w,h:r[620].update(input_bits="512"))
+    def test_bridge_before_after_discontinuity(self):
+        self.bad(lambda c,r,e,w,h:r[625].update(bridge_before="0"))
     def test_rearm_shot_missing_middle_frame(self):
         self.bad(lambda c,r,e,w,h:r[598].update(shot_active_before="0"))
     def test_bridge_opened_before_yellow(self):
