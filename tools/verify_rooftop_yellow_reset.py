@@ -91,8 +91,13 @@ def verify_yellow_reset(city_rows, roof_rows, edge_rows, weapon_rows, host):
     x,=exact_event("ROOFTOP_YELLOW_OPEN_EXIT_GUEST",r"ROOFTOP_YELLOW_OPEN_EXIT_GUEST frame=(\d+)")
     y,=exact_event("ROOFTOP_YELLOW_RESET_ENTRY_GUEST",r"ROOFTOP_YELLOW_RESET_ENTRY_GUEST frame=(\d+)")
     z,=exact_event("ROOFTOP_YELLOW_RESET_CLOSED_GUEST",r"ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=(\d+)")
-    if (x!=leave["frame"] or y!=enter["frame"] or z!=third[-1]["frame"]):
-        raise YellowResetError("controller events not tied to real NRO scene or terrain frames")
+    # The emulator continues writing real NRO ticks after the host has
+    # witnessed 100 closed bridge frames. Bind its checkpoint to a real
+    # guest frame, not the last line of a file that keeps growing.
+    if (x!=leave["frame"] or y!=enter["frame"] or
+        z < third[0]["frame"]+99 or z > third[-1]["frame"] or
+        z not in {p["frame"] for p in third}):
+        raise YellowResetError("controller events not tied to actual verified NRO frames")
     return {**previous,"status":"PASS","yellow_open_exit_frame":leave["frame"],
             "yellow_reset_reentry_frame":enter["frame"],
             "third_visit_closed_frames":len(third),"final_rooftop_frame":third[-1]["frame"],
