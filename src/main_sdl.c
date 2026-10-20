@@ -4504,6 +4504,11 @@ int main(int argc, char **argv) {
     FILE *obstacle_file = NULL;
     FILE *postcheck_file = NULL; /* Stage 92: later phase of SAME live run */
     FILE *finish_file = NULL; /* Stage 93: spring -> heart -> ledge -> clear */
+    /* Stage 145: actual-controller per-frame ROOFTOP world-state witness.
+     * Read-only sampling; unlike automated route probes, it does not
+     * modify player position, input or stage selection. */
+    FILE *rooftop_guest_file = NULL;
+    unsigned rooftop_guest_records=0;
     int finish_records=0,finish_armed=0,finish_previous_heart=0,finish_previous_ledge=0;
     int postcheck_records=0;
     int postcheck_prev_crate=-1,postcheck_prev_spring=0;
@@ -4600,6 +4605,18 @@ int main(int argc, char **argv) {
         }
         if(!finish_file)
             fprintf(stderr,"QuackShot: spring-to-exit guest CSV unavailable (non-fatal)\n");
+        const char *roof_guest_path=getenv("QS_ROOFTOP_GUEST_PATH");
+        if(!roof_guest_path || !*roof_guest_path)
+            roof_guest_path="sdmc:/switch/quackshot-rooftop-guest.csv";
+        rooftop_guest_file=fopen(roof_guest_path,"w");
+        if(rooftop_guest_file) {
+            if(fputs("seq,frame,mode,stage,x_milli,y_milli,grounded,input_bits,shot_x_before_milli,shot_vx_before_milli,shot_red_before,shot_active_before,shot_active_after,bridge_before,bridge_after,bridge_cells,source\n",rooftop_guest_file)<0 ||
+               fflush(rooftop_guest_file)!=0) {
+                fclose(rooftop_guest_file);rooftop_guest_file=NULL;
+            }
+        }
+        if(!rooftop_guest_file)
+            fprintf(stderr,"QuackShot: ROOFTOP guest witness CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4740,13 +4757,60 @@ int main(int argc, char **argv) {
             unsigned input_before = qs_motion_input_bits(game.previous);
             unsigned input_after = qs_motion_input_bits(in);
             unsigned shots_before = 0;
-            for (int slot=0; slot<QS_MAX_SHOTS; ++slot)
+#ifdef __SWITCH__
+            int roof_shot_before_x=-1,roof_shot_before_vx=0;
+            int roof_shot_before_red=0,roof_shot_before_active=0;
+            int roof_bridge_before=game.rooftop_bridge_open;
+#endif
+            for (int slot=0; slot<QS_MAX_SHOTS; ++slot) {
                 shots_before += game.shots[slot].active != 0;
+#ifdef __SWITCH__
+                if(old_mode==QS_STAGE && old_stage==2 &&
+                   !roof_shot_before_active && game.shots[slot].active) {
+                    roof_shot_before_active=1;
+                    roof_shot_before_x=(int)(game.shots[slot].x*1000.0f);
+                    roof_shot_before_vx=(int)(game.shots[slot].vx*1000.0f);
+                    roof_shot_before_red=game.shots[slot].red!=0;
+                }
+#endif
+            }
             qs_step(&game, in);
             (void)qs_live_probe_tick(&live_probe, &game, in, old_mode,
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
 #ifdef __SWITCH__
+            /* Stage 145: guest-originating ROOFTOP bridge evidence from
+             * actual SDL read_input(pad) -> qs_step, not simulated input.
+             * Samples every frame (bounded) so no intermediate movement
+             * can be interpolated by the host. The bridge cells are read
+             * from the terrain matrix itself, never an asserted PASS flag.
+             */
+            if(rooftop_guest_file && pad && old_mode==QS_STAGE &&
+               old_stage==2 && game.mode==QS_STAGE && game.stage==2 &&
+               rooftop_guest_records<1400u) {
+                int solid_cells=0,active_after=0;
+                int col;
+                for(col=QS_ROOF_BRIDGE_FIRST_COL;
+                    col<=QS_ROOF_BRIDGE_LAST_COL;++col) {
+                    solid_cells+=qs_solid(&game,col,13)!=0;
+                    solid_cells+=qs_solid(&game,col,14)!=0;
+                }
+                for(int slot=0;slot<QS_MAX_SHOTS;++slot)
+                    active_after+=game.shots[slot].active!=0;
+                if(fprintf(rooftop_guest_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%u,%d,%d,%d,%d,%d,%d,%d,%d,live_rooftop_pad_qs_step\n",
+                   rooftop_guest_records,game.frames,(int)game.mode,
+                   game.stage,(int)(game.hero.x*1000.0f),
+                   (int)(game.hero.y*1000.0f),game.hero.grounded!=0,
+                   input_after,roof_shot_before_x,roof_shot_before_vx,
+                   roof_shot_before_red,roof_shot_before_active,
+                   active_after,roof_bridge_before,game.rooftop_bridge_open,
+                   solid_cells)>=0 && fflush(rooftop_guest_file)==0) {
+                    ++rooftop_guest_records;
+                } else {
+                    fclose(rooftop_guest_file);rooftop_guest_file=NULL;
+                }
+            }
             /* Observe ONLY the second entry of the actual SDL-controlled
              * game session. No player positions, inputs, foes or terrain
              * are ever changed by this logger. */
@@ -4913,6 +4977,7 @@ int main(int argc, char **argv) {
     if(obstacle_file)fclose(obstacle_file);
     if(postcheck_file)fclose(postcheck_file);
     if(finish_file)fclose(finish_file);
+    if(rooftop_guest_file)fclose(rooftop_guest_file);
 #endif
     qs_trace_close(&trace);
     return 0;
