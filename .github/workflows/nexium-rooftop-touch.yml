@@ -1,0 +1,94 @@
+name: NeXium ROOFTOP Unarmed Touch
+on:
+  pull_request:
+    paths:
+      - "tools/nexium_rooftop_touch_probe.sh"
+      - "tools/verify_rooftop_touch_repeats.py"
+      - ".github/workflows/nexium-rooftop-touch.yml"
+      - "src/main_sdl.c"
+      - "src/qs_game.c"
+      - "include/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure toolchain
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build real Switch homebrew
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-touch-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+  guest:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 19
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1,2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rooftop-touch-nro
+          path: emulator-input
+      - name: Shell and verifier syntax
+        run: |
+          bash -n tools/nexium_rooftop_touch_probe.sh
+          python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_touch_trace.py tools/verify_rooftop_touch_repeats.py
+      - name: Install CPU Vulkan and virtual-screen dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 libgl1 libpulse0
+      - name: Drive real unarmed hero into ROOFTOP target
+        run: bash tools/nexium_rooftop_touch_probe.sh emulator-input/quackshot-prototype.nro rooftop-evidence ${{ matrix.repeat }}
+      - name: Preserve evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-touch-evidence-${{ matrix.repeat }}
+          path: |
+            rooftop-evidence/*.txt
+            rooftop-evidence/*.log
+            rooftop-evidence/guest-rooftop.csv
+            rooftop-evidence/rooftop-touch-summary.json
+            rooftop-evidence/xdg-config/NeXium/logs/*.log
+          retention-days: 7
+          if-no-files-found: warn
+  compare:
+    needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rooftop-touch-evidence-*
+          path: rooftop-evidence
+      - name: Authenticate two independent no-fire contacts
+        run: python3 tools/verify_rooftop_touch_repeats.py rooftop-evidence rooftop-touch-repeat-summary.json
+      - name: Save cross-run comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-touch-repeat-summary
+          path: rooftop-touch-repeat-summary.json
+          retention-days: 7
+          if-no-files-found: warn
