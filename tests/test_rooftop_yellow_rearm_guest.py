@@ -60,9 +60,9 @@ class YellowRearmProtocol(unittest.TestCase):
     def test_yellow_shot_red_instead(self):
         self.bad(lambda c,r,e,w,h:r[600].update(shot_red_before="1"))
     def test_yellow_shot_teleports(self):
-        self.bad(lambda c,r,e,w,h:r[603].update(shot_x_before_milli="699999"))
+        self.bad(lambda c,r,e,w,h:r[599].update(shot_x_before_milli="699999"))
     def test_rearm_shot_missing_middle_frame(self):
-        self.bad(lambda c,r,e,w,h:r[602].update(shot_active_before="0"))
+        self.bad(lambda c,r,e,w,h:r[598].update(shot_active_before="0"))
     def test_bridge_opened_before_yellow(self):
         self.bad(lambda c,r,e,w,h:r[595].update(bridge_after="1",bridge_cells="6"))
     def test_bridge_did_not_open(self):
