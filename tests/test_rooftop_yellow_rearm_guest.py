@@ -122,6 +122,18 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(miss)
     def test_yellow_shot_teleports(self):
         self.bad(lambda c,r,e,w,h:r[799].update(shot_x_before_milli="699999"))
+    def test_smooth_but_wrong_yellow_projectile_velocity(self):
+        # Before this guard, 4.8px/tick passed the wide 0..12px speed
+        # envelope and the 2.5px continuity tolerance.
+        self.bad(lambda c,r,e,w,h:[
+            r[i].update(shot_vx_before_milli="4800") for i in range(793,802)])
+    def test_projectile_vanishes_and_resurrects_midflight(self):
+        self.bad(lambda c,r,e,w,h:r[797].update(shot_active_after="0"))
+    def test_extra_projectile_after_second_yellow_impact(self):
+        # No new FIRE edge may mint a second active projectile.
+        self.bad(lambda c,r,e,w,h:r[812].update(
+            shot_active_before="1",shot_x_before_milli="730000",
+            shot_vx_before_milli="5500"))
     def test_player_teleport_in_third_visit(self):
         self.bad(lambda c,r,e,w,h:r[801].update(x_milli="780000"))
     def test_wrong_rooftop_stage_after_rearm(self):
