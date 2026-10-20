@@ -3,6 +3,9 @@
 import json
 import pathlib
 import sys
+# Called as python3 tools/verify_rooftop_repeats.py: resolve the checkout
+# root explicitly, rather than relying on PYTHONPATH on the Actions host.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_rooftop_guest_trace import verify, read_trace
 
 class RooftopRepeatError(ValueError):
