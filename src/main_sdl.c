@@ -4831,12 +4831,13 @@ int main(int argc, char **argv) {
                     fclose(rooftop_red_acquire_file);rooftop_red_acquire_file=NULL;
                 }
             }
-            /* Stage 153: a boundary is observed after a real controller
-             * input and qs_step, never manufactured by a host-side script.
-             * Record exactly the MAP->ROOFTOP and ROOFTOP->MAP edges.
-             * Use the actual collision matrix, not a renderer flag. */
+            /* Stage 154: also record real CITY->MAP exit, so the host
+             * must prove Start reached the map BEFORE navigating to
+             * ROOFTOP. All samples come from real pad->qs_step edges.
+             * Stage 153's isolated ROOFTOP protocol is unaffected. */
             if(rooftop_transition_file && pad && old_mode!=game.mode &&
-               ((old_mode==QS_STAGE && old_stage==2 && game.mode==QS_MAP) ||
+               ((old_mode==QS_STAGE && old_stage==0 && game.mode==QS_MAP) ||
+                (old_mode==QS_STAGE && old_stage==2 && game.mode==QS_MAP) ||
                 (old_mode==QS_MAP && game.mode==QS_STAGE && game.stage==2)) &&
                rooftop_transition_records<32u) {
                 int cells=0;
