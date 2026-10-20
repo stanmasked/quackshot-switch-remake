@@ -13,6 +13,9 @@ from tools.verify_rooftop_red_trace import (
 from tools.verify_rooftop_guest_trace import COLUMNS,SOURCE
 from tools.verify_rooftop_reentry_trace import EDGE_COLUMNS,EDGE_SOURCE
 from tools.rooftop_red_overlap_witness import overlap_in_guest
+from tools.verify_rooftop_red_repeats import (
+    RedRepeatError, verify_host_event_frames,
+)
 
 
 def scenario():
@@ -108,6 +111,56 @@ class RedGuestProtocol(unittest.TestCase):
                 writer.writeheader()
                 writer.writerows(roof)
             self.assertIsNone(overlap_in_guest(path))
+
+    def test_host_sync_messages_match_guest_frames(self):
+        city,roof,edges=scenario()
+        report=verify_red(city,roof,edges)
+        frame=report["red_switch_overlap_frame"]
+        hit=next(r for r in roof if int(r["frame"])==frame)
+        witness=("CITY_EXIT_GUEST frame=1100 attempt=1\\n"
+                 f"ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame={frame} "
+                 f"x_milli={hit['shot_x_before_milli']}\\n")
+        # Build explicit literal newlines: event parser processes each line.
+        witness=witness.replace("\\n","\n")
+        self.assertEqual(verify_host_event_frames(witness,edges,roof,report)["hit_frame"],frame)
+
+    def test_host_sync_rejects_header_instead_of_numeric_frame(self):
+        city,roof,edges=scenario()
+        report=verify_red(city,roof,edges)
+        fake=("CITY_EXIT_GUEST frame=1100 attempt=1\n"
+              "ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame=frame x_milli=shot_x\n")
+        with self.assertRaises(RedRepeatError):
+            verify_host_event_frames(fake,edges,roof,report)
+
+    def test_host_sync_rejects_wrong_guest_exit_frame(self):
+        city,roof,edges=scenario()
+        report=verify_red(city,roof,edges)
+        frame=report["red_switch_overlap_frame"]
+        x=next(r["shot_x_before_milli"] for r in roof if int(r["frame"])==frame)
+        fake=(f"CITY_EXIT_GUEST frame=1099 attempt=1\n"
+              f"ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame={frame} x_milli={x}\n")
+        with self.assertRaises(RedRepeatError):
+            verify_host_event_frames(fake,edges,roof,report)
+
+    def test_host_sync_rejects_duplicate_shot_event(self):
+        city,roof,edges=scenario()
+        report=verify_red(city,roof,edges)
+        frame=report["red_switch_overlap_frame"]
+        x=next(r["shot_x_before_milli"] for r in roof if int(r["frame"])==frame)
+        fake=(f"CITY_EXIT_GUEST frame=1100 attempt=1\n"
+              f"ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame={frame} x_milli={x}\n"
+              f"ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame={frame} x_milli={x}\n")
+        with self.assertRaises(RedRepeatError):
+            verify_host_event_frames(fake,edges,roof,report)
+
+    def test_host_sync_rejects_mismatched_shot_x(self):
+        city,roof,edges=scenario()
+        report=verify_red(city,roof,edges)
+        frame=report["red_switch_overlap_frame"]
+        fake=(f"CITY_EXIT_GUEST frame=1100 attempt=1\n"
+              f"ROOFTOP_RED_SWITCH_OVERLAP_GUEST frame={frame} x_milli=999999\n")
+        with self.assertRaises(RedRepeatError):
+            verify_host_event_frames(fake,edges,roof,report)
 
     def test_injected_red_unlock(self):
         self.bad(lambda c,r,e: c[0].update(red_before="1"))
