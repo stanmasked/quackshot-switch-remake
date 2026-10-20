@@ -1,6 +1,8 @@
 """Stage 154 proof protocol: never accept red shot without real CITY pickup."""
+import csv
 import pathlib
 import sys
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -10,6 +12,7 @@ from tools.verify_rooftop_red_trace import (
 )
 from tools.verify_rooftop_guest_trace import COLUMNS,SOURCE
 from tools.verify_rooftop_reentry_trace import EDGE_COLUMNS,EDGE_SOURCE
+from tools.rooftop_red_overlap_witness import overlap_in_guest
 
 
 def scenario():
@@ -66,6 +69,45 @@ class RedGuestProtocol(unittest.TestCase):
         mutation(c,r,e)
         with self.assertRaises((RedGuestError,ValueError)):
             verify_red(c,r,e)
+
+    def test_host_witness_reads_real_numeric_frame(self):
+        _city, roof, _edges = scenario()
+        with tempfile.TemporaryDirectory() as tmp:
+            path=pathlib.Path(tmp)/"guest.csv"
+            with path.open("w", newline="", encoding="utf-8") as fd:
+                writer=csv.DictWriter(fd,fieldnames=COLUMNS)
+                writer.writeheader()
+                writer.writerows(roof)
+            frame,x=overlap_in_guest(path)
+            self.assertIsInstance(frame,int)
+            self.assertGreaterEqual(frame,1209)
+            self.assertIsInstance(x,int)
+            self.assertGreater(x,0)
+
+    def test_host_witness_rejects_header_string_as_frame(self):
+        _city, roof, _edges = scenario()
+        forged={k:k for k in COLUMNS}
+        # Even a forged row with matching source cannot count as numeric.
+        forged["source"]=SOURCE
+        with tempfile.TemporaryDirectory() as tmp:
+            path=pathlib.Path(tmp)/"guest.csv"
+            with path.open("w", newline="", encoding="utf-8") as fd:
+                writer=csv.DictWriter(fd,fieldnames=COLUMNS)
+                writer.writeheader()
+                writer.writerow(forged)
+            self.assertIsNone(overlap_in_guest(path))
+
+    def test_host_witness_rejects_open_bridge(self):
+        _city, roof, _edges = scenario()
+        for row in roof:
+            row["bridge_cells"]="6"
+        with tempfile.TemporaryDirectory() as tmp:
+            path=pathlib.Path(tmp)/"guest.csv"
+            with path.open("w", newline="", encoding="utf-8") as fd:
+                writer=csv.DictWriter(fd,fieldnames=COLUMNS)
+                writer.writeheader()
+                writer.writerows(roof)
+            self.assertIsNone(overlap_in_guest(path))
 
     def test_injected_red_unlock(self):
         self.bad(lambda c,r,e: c[0].update(red_before="1"))
