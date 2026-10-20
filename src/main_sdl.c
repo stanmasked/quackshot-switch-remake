@@ -256,6 +256,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
     /* Stage exit marker. */
     rectangle(renderer, (QS_COLUMNS - 4) * QS_TILE - cam, 161, 7, 47,
               color(255, 228, 134));
+    /* Stage 131: procedural RUINS pressure plate. The gate itself is
+     * rendered by the normal tile loop and vanishes only after DOWN. */
+    if (game->stage == 1 && game->physics_profile == QS_PHYSICS_PROTOTYPE) {
+        int x=(int)QS_RUINS_PLATE_X-cam;
+        rectangle(renderer,x,204,16,4,
+                  game->ruins_gate_open == 1
+                    ? color(91,224,155) : color(160,100,71));
+        rectangle(renderer,x+3,201,10,2,
+                  game->ruins_gate_open == 1
+                    ? color(178,255,206) : color(244,189,111));
+    }
     /* Stage 58: visible ORIGINAL-FREE test checkpoint. The flag head
      * changes from muted blue to gold on genuine contact. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
@@ -3993,6 +4004,49 @@ static int run_city_spring_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 131: read actual SDL pixels from both ends of the new gate
+ * interaction. A mere flag change with unchanged solid collision/tiles
+ * cannot pass: the stone gate must visibly disappear after DOWN.
+ */
+static int run_ruins_gate_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t closed_plate=0,open_plate=0,closed_gate=0,open_gate=0;
+    int plate=(int)QS_RUINS_PLATE_X-320+2;
+    int gate=QS_RUINS_GATE_COL*QS_TILE-780+8;
+    qs_init(&g);qs_begin_stage(&g,1);
+    g.hero.x=40;g.camera_x=g.render_camera_x=320;
+    if(!read_multishot_pixel(renderer,&g,plate,205,&closed_plate))
+        return 0;
+    g.camera_x=g.render_camera_x=780;
+    if(!read_multishot_pixel(renderer,&g,gate,192,&closed_gate))
+        return 0;
+    g.hero.x=QS_RUINS_PLATE_X;g.hero.y=188;g.hero.grounded=1;
+    g.camera_x=g.render_camera_x=320;
+    in.down=1;
+    qs_step(&g,in);
+    if(g.ruins_gate_open!=1 || qs_solid(&g,QS_RUINS_GATE_COL,12)) {
+        fprintf(stderr,"RUINS_GATE_SDL_FAIL: DOWN did not remove solid wall\n");
+        return 0;
+    }
+    g.hero.x=40;g.camera_x=g.render_camera_x=320;
+    if(!read_multishot_pixel(renderer,&g,plate,205,&open_plate))
+        return 0;
+    g.camera_x=g.render_camera_x=780;
+    if(!read_multishot_pixel(renderer,&g,gate,192,&open_gate))
+        return 0;
+    if(closed_plate==open_plate || open_plate!=UINT32_C(0xff5be09b) ||
+       closed_gate==open_gate) {
+        fprintf(stderr,"RUINS_GATE_SDL_FAIL: plate/gate pixels unchanged\n");
+        return 0;
+    }
+    printf("RUINS_GATE_SDL_PASS: plate=%08x->%08x wall=%08x->%08x\n",
+           (unsigned)closed_plate,(unsigned)open_plate,
+           (unsigned)closed_gate,(unsigned)open_gate);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4038,6 +4092,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
             }
         }
     }
+    if (!run_ruins_gate_sdl_smoke(renderer)) return 1;
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     if (!run_map_chord_sdl_smoke(renderer)) return 1;

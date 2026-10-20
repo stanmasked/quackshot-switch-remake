@@ -11,6 +11,11 @@
 #define QS_MAX_PICKUPS 5
 #define QS_VIEW_W 400
 #define QS_VIEW_H 240
+/* Stage 131: original-free RUINS TEST floor plate and stone gate. */
+#define QS_RUINS_PLATE_X 512.0f
+#define QS_RUINS_GATE_COL 53
+#define QS_RUINS_GATE_ROW_FIRST 8
+#define QS_RUINS_GATE_ROW_LAST 12
 /* Original-free checkpoint authored for opt-in CITY TEST only. */
 #define QS_CITY_CHECKPOINT_X 640.0f
 #define QS_CITY_CHECKPOINT_Y 188.0f
@@ -65,6 +70,7 @@ typedef struct {
     QsPhysicsProfile physics_profile;
     int selected_stage, stage, cleared[QS_STAGE_COUNT], frames;
     int red_unlocked;
+    int ruins_gate_open; /* RUINS TEST per-entry switch, 0 closed / 1 open */
     int city_checkpoint_active; /* opt-in, per-stage mid-level restart */
     int city_bonus_mask; /* 0..3; collected per-attempt bonus beacons */
     int city_crate_active; /* city-only breakable box, reset on new attempt */
