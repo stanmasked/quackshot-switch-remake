@@ -51,7 +51,7 @@ class SkyLedgeControllerBrakeTests(unittest.TestCase):
         import subprocess
         script=(Path(__file__).resolve().parents[1] /
                 "tools" / "nexium_ci_probe.sh").read_text(encoding="utf-8")
-        match=re.search(r'(?ms)^\\s*elif \\[ "\\$step" -eq 7 \\].*?; then',
+        match=re.search(r'(?ms)^\s*elif \[ "\$step" -eq 7 \].*?; then',
                         script)
         if match is None:
             raise AssertionError("missing CI sky-ledge key-release gate")
