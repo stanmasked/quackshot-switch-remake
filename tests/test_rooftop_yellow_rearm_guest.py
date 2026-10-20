@@ -45,6 +45,14 @@ class YellowRearmProtocol(unittest.TestCase):
         self.assertEqual(report["bridge_solid_cells_after_rearm"],6)
         self.assertEqual(report["yellow_rearm_fire_frame"],1903)
         self.assertEqual(report["yellow_rearm_open_frame"],1912)
+    def test_real_7px_projectile_edge_overlap_is_valid(self):
+        # A 2.5px right-edge overlap is a genuine physical hit, even
+        # when the projectile's left-side coordinate stops before x704.
+        c,r,e,w,h=fixture()
+        for i in range(593,602):
+            r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-5000)
+        report=verify_rearm(c,r,e,w,h)
+        self.assertEqual(report["bridge_solid_cells_after_rearm"],6)
     def bad(self,fn):
         c,r,e,w,h=fixture()
         new=fn(c,r,e,w,h)
