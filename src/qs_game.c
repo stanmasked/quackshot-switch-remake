@@ -271,6 +271,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->reference_jump_steps = 0;
     g->ruins_gate_open = 0; /* every new test scene closes its own gate */
     g->ruins_relic_collected = 0; /* only local relic resets on new entry */
+    g->rooftop_bridge_open = 0; /* reconstruct stage 2 pit on every entry */
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
     g->city_crate_active =
@@ -655,6 +656,29 @@ static void update_shots(QsGame *g) {
         if (s->attached) continue;
         s->x += s->vx;
         if (s->x < 0 || s->x >= QS_COLUMNS * QS_TILE) { s->active = 0; continue; }
+        /*
+         * Stage 141: genuine projectile-vs-switch intersection opens the
+         * synthetic ROOFTOP bridge. Only a moving yellow shot can hit it.
+         * The existing terrain grid is updated so hero/shot collision and
+         * the renderer see the same newly solid floor. No teleports or
+         * in-game state injection from the test runner.
+         */
+        if (g->mode == QS_STAGE && g->stage == 2 &&
+            g->physics_profile == QS_PHYSICS_PROTOTYPE &&
+            g->rooftop_bridge_open == 0 && !s->red &&
+            overlaps(s->x,s->y,7.0f,4.0f,
+                     QS_ROOF_SWITCH_X,QS_ROOF_SWITCH_Y,
+                     QS_ROOF_SWITCH_W,QS_ROOF_SWITCH_H)) {
+            int col;
+            for (col=QS_ROOF_BRIDGE_FIRST_COL;
+                 col<=QS_ROOF_BRIDGE_LAST_COL; ++col) {
+                g->terrain[13][col]='#';
+                g->terrain[14][col]='#';
+            }
+            g->rooftop_bridge_open=1;
+            s->active=0;
+            continue;
+        }
         if (hits_tiles(g, s->x, s->y, 7, 4)) {
             if (s->red) {
                 s->attached = 1; s->frames = 230;
