@@ -4164,7 +4164,7 @@ static int run_rooftop_bridge_sdl_smoke(SDL_Renderer *renderer) {
        floor_after!=UINT32_C(0xff536480) ||
        floor_before==floor_after)
         return 0;
-    printf("ROOFTOP_BRIDGE_SDL_PASS: switch=%08x->%08x bridge=%08x->%08x\\n",
+    printf("ROOFTOP_BRIDGE_SDL_PASS: switch=%08x->%08x bridge=%08x->%08x\n",
            (unsigned)switch_before,(unsigned)switch_after,
            (unsigned)floor_before,(unsigned)floor_after);
     return 1;
