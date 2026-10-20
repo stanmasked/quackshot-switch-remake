@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define REQUIRE(x) do { if (!(x)) { \
-    fprintf(stderr,"RUINS_RELIC_FAIL line %d: %s\\n",__LINE__,#x); \
+    fprintf(stderr,"RUINS_RELIC_FAIL line %d: %s\n",__LINE__,#x); \
     exit(EXIT_FAILURE); } } while(0)
 
 static QsInput idle(void) { QsInput in={0}; return in; }

@@ -4078,7 +4078,7 @@ static int run_ruins_relic_sdl_smoke(SDL_Renderer *renderer) {
     /* Use the same grounded DOWN-edge that opens real stone tiles. */
     g.hero.x=QS_RUINS_PLATE_X;g.hero.y=188;g.hero.grounded=1;
     in.down=1;qs_step(&g,in);
-    if(g.ruins_gate_open!=1 || !qs_solid(&g,QS_RUINS_GATE_COL+1,12))
+    if(g.ruins_gate_open!=1 || qs_solid(&g,QS_RUINS_GATE_COL,12))
         return 0;
     /* The relic must be collected through actual qs_step overlap. */
     g.hero.x=QS_RUINS_RELIC_X;g.hero.y=188;g.hero.grounded=1;
@@ -4103,7 +4103,7 @@ static int run_ruins_relic_sdl_smoke(SDL_Renderer *renderer) {
                            &map_after,(int)sizeof(map_after))!=0 ||
        map_before==map_after || map_after!=UINT32_C(0xfffff4b8))
         return 0;
-    printf("RUINS_RELIC_SDL_PASS: world=%08x->%08x map=%08x->%08x\\n",
+    printf("RUINS_RELIC_SDL_PASS: world=%08x->%08x map=%08x->%08x\n",
            (unsigned)world_before,(unsigned)world_after,
            (unsigned)map_before,(unsigned)map_after);
     return 1;
