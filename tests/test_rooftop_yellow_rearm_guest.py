@@ -85,6 +85,20 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:r[440].update(x_milli="640000"))
     def test_no_actual_right_movement(self):
         self.bad(lambda c,r,e,w,h:[row.update(input_bits="0") for row in r[580:780]])
+    def test_idle_spawn_drift_not_earned_by_right(self):
+        # Within the old 16px continuity allowance, but not a real
+        # stationary 100-frame bridge reset checkpoint.
+        self.bad(lambda c,r,e,w,h:r[480].update(x_milli="42000"))
+    def test_movement_with_unpressed_right_must_not_count(self):
+        # Still leaves 140 valid DASH+RIGHT frames, so input totals
+        # alone would falsely accept this 60-frame movement segment.
+        self.bad(lambda c,r,e,w,h:[
+            row.update(input_bits="0") for row in r[580:640]])
+    def test_smooth_but_unnaturally_fast_hero_motion(self):
+        # Both adjacent jumps fit the old permissive 16px threshold;
+        # actual ROOFTOP DASH motion never exceeds 3.1px per NRO tick.
+        self.bad(lambda c,r,e,w,h:r[660].update(
+            x_milli=str(int(r[660]["x_milli"])+12000)))
     def test_missing_dash_during_approach(self):
         self.bad(lambda c,r,e,w,h:[row.update(input_bits="2") for row in r[580:780]])
     def test_right_button_used_before_reset_observation(self):
