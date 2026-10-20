@@ -72,6 +72,8 @@ def verify(rows):
             raise RooftopTraceError("invalid post-step shot count")
         if i>0 and p["bridge_before"]!=parsed[-1]["bridge_after"]:
             raise RooftopTraceError("bridge state changed outside qs_step")
+        if i>0 and abs(p["x_milli"]-parsed[-1]["x_milli"])>12000:
+            raise RooftopTraceError("guest hero teleported between adjacent simulation frames")
         parsed.append(p)
     if parsed[0]["bridge_before"] or parsed[0]["bridge_after"]:
         raise RooftopTraceError("bridge was already open before input")
@@ -101,7 +103,8 @@ def verify(rows):
     if len(flight)<3 or flight[-1][0]!=trigger:
         raise RooftopTraceError("projectile lacks continuous guest flight evidence")
     for (i,a),(j,b) in zip(flight,flight[1:]):
-        if j!=i+1 or not 1<=b-a<=12000:
+        if (j!=i+1 or not 1<=b-a<=12000 or
+            abs((b-a)-parsed[i]["shot_vx_before_milli"])>2500):
             raise RooftopTraceError("teleported/stale or discontinuous projectile")
     if flight[0][0]<=edges[0]:
         raise RooftopTraceError("bullet position precedes real FIRE input")

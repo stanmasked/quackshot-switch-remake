@@ -7,7 +7,7 @@ from tools.verify_rooftop_guest_trace import COLUMNS,SOURCE,RooftopTraceError,ve
 
 def make_valid():
     rows=[]
-    for i in range(75):
+    for i in range(118):
         # 8..12 FIRE triggers an independently travelling projectile;
         # activation at tick 15, after x=693,000 and vx=5,500.
         fire=(i==8)
@@ -18,7 +18,7 @@ def make_valid():
             shot_x=-1
             shot_active=0
         right=i>=16
-        x=810000+3200*(i-16) if right else 640000
+        x=640000+3000*(i-15) if right else 640000
         values=dict(seq=i,frame=1000+i,mode=1,stage=2,
             x_milli=x,y_milli=188000,grounded=1,
             input_bits=(8 if fire else 0)|(2 if right else 0),
@@ -55,6 +55,10 @@ class RooftopGuestTraceTests(unittest.TestCase):
         self.bad(lambda rows: [row.update(grounded="0") for row in rows[16:]])
     def test_teleported_player(self):
         self.bad(lambda rows: rows[30].update(x_milli="1100000"))
+    def test_pre_bridge_teleport(self):
+        self.bad(lambda rows: rows[14].update(x_milli="745000"))
+    def test_projectile_position_ignores_actual_velocity(self):
+        self.bad(lambda rows: rows[12].update(shot_x_before_milli="675000"))
     def test_duplicate_guest_frame(self):
         self.bad(lambda rows: rows[27].update(frame=rows[26]["frame"]))
     def test_wrong_stage(self):
