@@ -52,7 +52,7 @@ def scenario():
                    input_bits=64,bridge_before=0,bridge_after=0,bridge_cells=6,
                    ruins_relic_earned=0,red_unlocked=1,weapon=1,source=EDGE_SOURCE)
     roof_entry=dict(seq=1,frame=1199,old_mode=0,old_stage=0,mode=1,stage=2,
-                    input_bits=0,bridge_before=0,bridge_after=0,bridge_cells=0,
+                    input_bits=32,bridge_before=0,bridge_after=0,bridge_cells=0,
                     ruins_relic_earned=0,red_unlocked=1,weapon=1,source=EDGE_SOURCE)
     return city,roof,[{k:str(edge[k]) for k in EDGE_COLUMNS} for edge in (exit_edge,roof_entry)]
 
@@ -141,6 +141,15 @@ class RedGuestProtocol(unittest.TestCase):
 
     def test_wrong_selected_weapon_at_entry(self):
         self.bad(lambda c,r,e: e[1].update(weapon="0"))
+
+    def test_city_exit_requires_real_start_pad_bit(self):
+        self.bad(lambda c,r,e: e[0].update(input_bits="0"))
+
+    def test_rooftop_entry_requires_real_nintendo_a_pad_bit(self):
+        self.bad(lambda c,r,e: e[1].update(input_bits="0"))
+
+    def test_rooftop_entry_rejects_start_and_select_same_tick(self):
+        self.bad(lambda c,r,e: e[1].update(input_bits="96"))
 
     def test_no_authenticated_city_exit(self):
         self.bad(lambda c,r,e: e.pop(0))

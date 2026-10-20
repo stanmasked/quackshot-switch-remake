@@ -160,11 +160,13 @@ def verify_red(city_rows, roof_rows, edge_rows):
     leave,e=parsed(edge_rows,EDGE_COLUMNS,EDGE_SOURCE)
     if (leave["seq"]!=0 or leave["old_mode"]!=1 or leave["old_stage"]!=0 or
         leave["mode"]!=0 or leave["stage"]!=0 or
+        not (leave["input_bits"] & 64) or
         leave["red_unlocked"]!=1 or leave["weapon"]!=1 or
         leave["bridge_before"]!=0 or leave["bridge_after"]!=0 or
         not city[-1]["frame"] < leave["frame"] <= city[-1]["frame"]+4):
         raise RedGuestError("no live CITY-to-MAP exit after red pickup")
     if (e["seq"]!=1 or e["old_mode"]!=0 or e["mode"]!=1 or e["stage"]!=2 or
+        not (e["input_bits"] & 32) or (e["input_bits"] & 64) or
         e["red_unlocked"]!=1 or e["weapon"]!=1 or e["bridge_before"]!=0 or
         e["bridge_after"]!=0 or e["bridge_cells"]!=0 or
         e["frame"]!=roof[0]["frame"]-1 or e["frame"]<=leave["frame"]+3):
