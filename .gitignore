@@ -1,0 +1,13 @@
+# Never commit original game binaries, movies, saves or compressed captures.
+*.gen
+*.smd
+*.bin
+*.rom
+*.bk2
+*.fm2
+*.sav
+*.state
+*.zip
+*.gz
+__pycache__/
+.pytest_cache/
