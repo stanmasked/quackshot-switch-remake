@@ -61,6 +61,13 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:r[592].update(shot_active_after="0"))
     def test_yellow_shot_red_instead(self):
         self.bad(lambda c,r,e,w,h:r[600].update(shot_red_before="1"))
+    def test_smooth_yellow_projectile_misses_switch(self):
+        # A continuous 5.5 px/frame flight is insufficient: the second
+        # switch impact must actually overlap physical x=704..716.
+        def miss(c,r,e,w,h):
+            for i in range(593,602):
+                r[i]["shot_x_before_milli"]=str(int(r[i]["shot_x_before_milli"])-8000)
+        self.bad(miss)
     def test_yellow_shot_teleports(self):
         self.bad(lambda c,r,e,w,h:r[599].update(shot_x_before_milli="699999"))
     def test_player_teleport_in_third_visit(self):
