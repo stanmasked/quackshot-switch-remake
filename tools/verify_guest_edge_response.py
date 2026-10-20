@@ -58,12 +58,24 @@ def verify_edge_responses(host_text, samples):
     if len(profile)>1:
         raise ValueError("duplicate host input timing profile")
     early=(len(profile)==1 and profile[0]==("2","25","90"))
+    # Stage 124 brake marker is not proof by itself: require its exact
+    # guest-authenticated PIT observation, then separately verify the
+    # real B+RIGHT rising edge and resulting vertical displacement.
+    brake=[re.fullmatch(r"PIT_APPROACH_BRAKE_GUEST frame=(\\d+) x_milli=(\\d+)",line)
+           for line in host_text.splitlines()
+           if line.startswith("PIT_APPROACH_BRAKE_GUEST")]
+    if early:
+        if (len(brake)!=1 or brake[0] is None or
+            tuple(map(int,brake[0].groups()))!=launches["PIT_LAUNCH_GUEST"]):
+            raise ValueError("profile 2 requires authenticated PIT brake anchor")
+    elif brake:
+        raise ValueError("unexpected profile-specific PIT brake")
     details={}
     preceding_frame=-1
     response_frame=-1
     for name,marker,bit,xlow,xhigh in EVENTS:
         if name=="pit" and early:
-            xlow,xhigh=269000,276000
+            xlow,xhigh=272000,289000
         start,x=launches[marker]
         if start<=preceding_frame:
             raise ValueError("host button actions reordered")

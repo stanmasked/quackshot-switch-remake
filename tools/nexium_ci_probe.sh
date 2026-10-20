@@ -184,6 +184,11 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           actual=0
         fi
         echo "INPUT_EDGE_DELAY event=$event requested_ms=$input_delay_ms measured_ms=$actual"
+        if [ "$event" = "pit" ] && [ "${QS_REPEAT_ID:-0}" = "2" ]; then
+          # Restore RIGHT just before B, so the NRO sees a real
+          # B+RIGHT rising edge rather than a scripted teleport.
+          xdotool keydown --clearmodifiers d
+        fi
         xdotool keydown --clearmodifiers "$key"
       }
       obstacle_file=""
@@ -199,8 +204,10 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
         # X=313.468 after the host read X=282.593 (19 guest frames).
         # Start earlier so the live guest B still lands at X=275..309
         # and its landing can enter the *unchanged* grounded roof gate.
-        pit_min_x_milli=269000
-        pit_max_x_milli=276000
+        # Wider than one sampled 90ms movement interval. Releasing RIGHT
+        # during the delayed B edge limits variable guest advancement.
+        pit_min_x_milli=272000
+        pit_max_x_milli=289000
       fi
       roof_min_x_milli=382000
       roof_max_x_milli=410000
@@ -257,6 +264,12 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
            [ "$x_milli" -le "$pit_max_x_milli" ] && \
            [ "$grounded" -eq 1 ]; then
           echo "PIT_LAUNCH_GUEST frame=$frame x_milli=$x_milli"
+          if [ "${QS_REPEAT_ID:-0}" = "2" ]; then
+            # Stage 124: physical controller brake before the delayed B.
+            # No game-state injection, only a temporary release of RIGHT.
+            echo "PIT_APPROACH_BRAKE_GUEST frame=$frame x_milli=$x_milli"
+            xdotool keyup d
+          fi
           delayed_keydown pit x
           sleep 0.36
           xdotool keyup x

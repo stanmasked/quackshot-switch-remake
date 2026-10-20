@@ -33,44 +33,75 @@ class GuestButtonEdgeTests(unittest.TestCase):
         report=verify_edge_responses(self.host,self.rows)
         self.assertEqual([report["events"][e]["guest_frame_window"] for e in ("pit","roof","crate")],[3,4,4])
     def test_early_pit_profile_genuine_guest_edge(self):
-        # Only the delayed run #2 may request PIT before X=276.
+        # Only delayed profile #2 may hold movement before the B edge.
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host.replace("x_milli=280000","x_milli=270000",1))
-        self.rows[100]["x_milli"]="270000"
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000\n"+
+                   self.host)
+        self.rows[100]["x_milli"]="280000"
         report=verify_edge_responses(self.host,self.rows)
         self.assertEqual(report["events"]["pit"]["nro_first_button_frame"],103)
 
     def test_early_profile_window_floor_accepts_real_anchor(self):
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host.replace("x_milli=280000","x_milli=269000",1))
-        self.rows[100]["x_milli"]="269000"
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=272000\n"+
+                   self.host.replace("x_milli=280000","x_milli=272000",1))
+        self.rows[100]["x_milli"]="272000"
         self.assertEqual(
             verify_edge_responses(self.host,self.rows)["events"]["pit"]["guest_frame_window"],3)
 
     def test_early_profile_upper_bound_rejects_old_late_anchor(self):
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host.replace("x_milli=280000","x_milli=276001",1))
-        self.rows[100]["x_milli"]="276001"
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=289001\n"+
+                   self.host.replace("x_milli=280000","x_milli=289001",1))
+        self.rows[100]["x_milli"]="289001"
         with self.assertRaisesRegex(ValueError,"legitimate grounded"):
             verify_edge_responses(self.host,self.rows)
 
     def test_early_pit_rejected_without_profile(self):
-        self.host=self.host.replace("x_milli=280000","x_milli=270000",1)
-        self.rows[100]["x_milli"]="270000"
+        self.host=self.host.replace("x_milli=280000","x_milli=272000",1)
+        self.rows[100]["x_milli"]="272000"
         with self.assertRaisesRegex(ValueError,"legitimate grounded"):
             verify_edge_responses(self.host,self.rows)
 
     def test_delayed_profile_rejects_old_late_launch(self):
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host)
-        with self.assertRaisesRegex(ValueError,"legitimate grounded"):
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000\n"+
+                   self.host.replace("x_milli=280000","x_milli=290000",1))
+        self.rows[100]["x_milli"]="290000"
+        with self.assertRaisesRegex(ValueError,"brake anchor"):
             verify_edge_responses(self.host,self.rows)
 
     def test_early_profile_cannot_start_too_early(self):
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host.replace("x_milli=280000","x_milli=268999",1))
-        self.rows[100]["x_milli"]="268999"
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=271999\n"+
+                   self.host.replace("x_milli=280000","x_milli=271999",1))
+        self.rows[100]["x_milli"]="271999"
         with self.assertRaisesRegex(ValueError,"legitimate grounded"):
+            verify_edge_responses(self.host,self.rows)
+
+    def test_profile2_brake_missing_fails_closed(self):
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   self.host)
+        with self.assertRaisesRegex(ValueError,"brake anchor"):
+            verify_edge_responses(self.host,self.rows)
+
+    def test_brake_forged_position_rejected(self):
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   "PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280001\n"+
+                   self.host)
+        with self.assertRaisesRegex(ValueError,"brake anchor"):
+            verify_edge_responses(self.host,self.rows)
+
+    def test_brake_marker_rejected_in_baseline(self):
+        self.host="PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000\n"+self.host
+        with self.assertRaisesRegex(ValueError,"unexpected profile-specific"):
+            verify_edge_responses(self.host,self.rows)
+
+    def test_profile2_brake_duplicate_rejected(self):
+        marker="PIT_APPROACH_BRAKE_GUEST frame=100 x_milli=280000\n"
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   marker+marker+self.host)
+        with self.assertRaisesRegex(ValueError,"brake anchor"):
             verify_edge_responses(self.host,self.rows)
 
     def test_host_anchor_absent(self):
