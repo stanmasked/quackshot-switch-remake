@@ -94,7 +94,13 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  wait "$emu_pid"; emu_result=$?
  wait "$pid"; input_result=$?
  echo "emulator_exit=$emu_result input_exit=$input_result"
- [ "$input_result" = 0 ] && { [ "$emu_result" = 124 ] || [ "$emu_result" = 0 ]; }
+ # A healthy NeXium may ignore timeout SIGTERM and be SIGKILLed
+ # after --kill-after=5s. GNU timeout then returns 137, as observed in
+ # BOTH true guest traversal archives. This cannot authorize a PASS
+ # alone: require finished virtual-controller route here AND validate
+ # genuine NRO-produced projectile/bridge CSV separately after return.
+ [ "$input_result" = 0 ] &&
+   { [ "$emu_result" = 124 ] || [ "$emu_result" = 137 ] || [ "$emu_result" = 0 ]; }
 ' bash "$emu" "$nro" "$out/emulator-stdout.log" "$out/input-injection.txt" > "$out/runner-status.log" 2>&1
 rc=$?
 set -e
