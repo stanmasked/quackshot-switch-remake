@@ -4898,7 +4898,7 @@ int main(int argc, char **argv) {
                         "%u,%d,%d,%d,%d,%d,%d,%d,live_rooftop_weapon_pad_qs_step\n",
                         rooftop_guest_records,game.frames,(int)game.mode,game.stage,
                         in.change!=0,roof_weapon_before,(int)game.weapon,
-                        game.red_unlocked)!=0) && fflush(rooftop_weapon_file)==0) {
+                        game.red_unlocked)>=0) && fflush(rooftop_weapon_file)==0) {
                         /* read-only matching NRO frame/seq */
                     } else if(rooftop_weapon_file) {
                         fclose(rooftop_weapon_file);rooftop_weapon_file=NULL;
