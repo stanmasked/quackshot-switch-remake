@@ -36,6 +36,48 @@ def three():
 
 
 
+class SkyLedgeControllerBrakeTests(unittest.TestCase):
+    """Stage 120: check the actual host key-release gate at the sky ledge.
+
+    A 90ms poll can advance several NRO frames before the host releases
+    RIGHT. The recovered run #4 overshot the ledge (X=1206.687), unlike
+    successful run #5 (landing X=1198.562). Preserve both as evidence.
+    """
+
+    @staticmethod
+    def gate(x, mode="1", step="7"):
+        import os
+        import re
+        import subprocess
+        script=(Path(__file__).resolve().parents[1] /
+                "tools" / "nexium_ci_probe.sh").read_text(encoding="utf-8")
+        match=re.search(r'(?ms)^\\s*elif \\[ "\\$step" -eq 7 \\].*?; then',
+                        script)
+        if match is None:
+            raise AssertionError("missing CI sky-ledge key-release gate")
+        shell=match.group(0).strip().replace("elif ","if ",1)+ " echo PASS; fi"
+        result=subprocess.run(["bash","-c",shell],
+                              env=dict(os.environ,step=str(step),
+                                       fin_x=str(x),fin_mode=str(mode)),
+                              text=True,capture_output=True,check=True)
+        return result.stdout.strip()=="PASS"
+
+    def test_release_at_early_sample_of_failed_guest_run(self):
+        # Run #4: frame 1590, X=1174.656; old gate at 1180px
+        # missed this moment and released only at X=1194.156.
+        self.assertTrue(self.gate(1174656))
+
+    def test_release_before_last_successful_ledge_position(self):
+        # The other blocked-roof run landed at X=1198.562.
+        self.assertTrue(self.gate(1181156))
+        self.assertTrue(self.gate(1190906))
+
+    def test_do_not_release_early_or_in_wrong_state(self):
+        self.assertFalse(self.gate(1170999))
+        self.assertFalse(self.gate(1171000,mode="0"))
+        self.assertFalse(self.gate(1185000,step="6"))
+        self.assertFalse(self.gate("not-a-position"))
+
 class SpringControllerShellGateTests(unittest.TestCase):
     """Stage 111: execute the actual CI shell gate, not a Python imitation."""
 

@@ -315,7 +315,11 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
           xdotool keydown --clearmodifiers d
           step=7
         elif [ "$step" -eq 7 ] && [[ "$fin_x" =~ ^[0-9]+$ ]] && \
-             [ "$fin_x" -ge 1180000 ] && [ "$fin_mode" = "1" ]; then
+             [ "$fin_x" -ge 1171000 ] && [ "$fin_mode" = "1" ]; then
+          # Stage 120: brake before the one-way ledge: real blocked-roof
+          # run #4 passed x=1194.156 before keyup, then coasted another
+          # 12.531px to x=1206.687 and missed the ledge ending at 1204.
+          # Earlier keyup is host controller input only; never teleport.
           echo "LEDGE_ALIGN_GUEST frame=$fin_frame x_milli=$fin_x"
           xdotool keyup d
           step=8
