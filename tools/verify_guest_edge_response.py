@@ -53,7 +53,7 @@ def verify_edge_responses(host_text, samples):
     # earlier. Match the real host profile marker, then require the
     # authentic guest first B in the ORIGINAL 275..309px range.
     profile=re.findall(
-        r"^INPUT_TIMING_PROFILE profile=(\\d+) edge_delay_ms=(\\d+) poll_ms=(\\d+)$",
+        r"^INPUT_TIMING_PROFILE profile=(\d+) edge_delay_ms=(\d+) poll_ms=(\d+)$",
         host_text,re.M)
     if len(profile)>1:
         raise ValueError("duplicate host input timing profile")
