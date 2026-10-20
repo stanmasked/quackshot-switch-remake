@@ -4508,6 +4508,9 @@ int main(int argc, char **argv) {
      * Read-only sampling; unlike automated route probes, it does not
      * modify player position, input or stage selection. */
     FILE *rooftop_guest_file = NULL;
+    /* Stage 153: guest-owned proof of map exit and fresh ROOFTOP entry. */
+    FILE *rooftop_transition_file = NULL;
+    unsigned rooftop_transition_records=0;
     unsigned rooftop_guest_records=0;
     int finish_records=0,finish_armed=0,finish_previous_heart=0,finish_previous_ledge=0;
     int postcheck_records=0;
@@ -4617,6 +4620,17 @@ int main(int argc, char **argv) {
         }
         if(!rooftop_guest_file)
             fprintf(stderr,"QuackShot: ROOFTOP guest witness CSV unavailable (non-fatal)\n");
+        /* Separate scene-boundary witness. Do not reset the original
+         * ROOFTOP CSV seq counter: its frame gap proves a real map visit. */
+        rooftop_transition_file=fopen("sdmc:/switch/quackshot-rooftop-transitions.csv","w");
+        if(rooftop_transition_file) {
+            if(fputs("seq,frame,old_mode,old_stage,mode,stage,input_bits,bridge_before,bridge_after,bridge_cells,ruins_relic_earned,red_unlocked,weapon,source\n",rooftop_transition_file)<0 ||
+               fflush(rooftop_transition_file)!=0) {
+                fclose(rooftop_transition_file);rooftop_transition_file=NULL;
+            }
+        }
+        if(!rooftop_transition_file)
+            fprintf(stderr,"QuackShot: ROOFTOP transition CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4779,6 +4793,31 @@ int main(int argc, char **argv) {
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
 #ifdef __SWITCH__
+            /* Stage 153: a boundary is observed after a real controller
+             * input and qs_step, never manufactured by a host-side script.
+             * Record exactly the MAP->ROOFTOP and ROOFTOP->MAP edges.
+             * Use the actual collision matrix, not a renderer flag. */
+            if(rooftop_transition_file && pad && old_mode!=game.mode &&
+               ((old_mode==QS_STAGE && old_stage==2 && game.mode==QS_MAP) ||
+                (old_mode==QS_MAP && game.mode==QS_STAGE && game.stage==2)) &&
+               rooftop_transition_records<32u) {
+                int cells=0;
+                for(int col=QS_ROOF_BRIDGE_FIRST_COL;col<=QS_ROOF_BRIDGE_LAST_COL;++col) {
+                    cells+=qs_solid(&game,col,13)!=0;
+                    cells+=qs_solid(&game,col,14)!=0;
+                }
+                if(fprintf(rooftop_transition_file,
+                   "%u,%d,%d,%d,%d,%d,%u,%d,%d,%d,%d,%d,%d,live_rooftop_pad_scene_edge\n",
+                   rooftop_transition_records,game.frames,(int)old_mode,
+                   old_stage,(int)game.mode,game.stage,input_after,
+                   roof_bridge_before,game.rooftop_bridge_open,cells,
+                   game.ruins_relic_earned,game.red_unlocked,(int)game.weapon)>=0 &&
+                   fflush(rooftop_transition_file)==0) {
+                    ++rooftop_transition_records;
+                } else {
+                    fclose(rooftop_transition_file);rooftop_transition_file=NULL;
+                }
+            }
             /* Stage 145: guest-originating ROOFTOP bridge evidence from
              * actual SDL read_input(pad) -> qs_step, not simulated input.
              * Samples every frame (bounded) so no intermediate movement
@@ -4978,6 +5017,7 @@ int main(int argc, char **argv) {
     if(postcheck_file)fclose(postcheck_file);
     if(finish_file)fclose(finish_file);
     if(rooftop_guest_file)fclose(rooftop_guest_file);
+    if(rooftop_transition_file)fclose(rooftop_transition_file);
 #endif
     qs_trace_close(&trace);
     return 0;
