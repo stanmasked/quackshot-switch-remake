@@ -58,7 +58,7 @@ class RooftopGuestTraceTests(unittest.TestCase):
     def test_pre_bridge_teleport(self):
         self.bad(lambda rows: rows[14].update(x_milli="745000"))
     def test_projectile_position_ignores_actual_velocity(self):
-        self.bad(lambda rows: rows[12].update(shot_x_before_milli="675000"))
+        self.bad(lambda rows: rows[12].update(shot_x_before_milli="680000"))
     def test_duplicate_guest_frame(self):
         self.bad(lambda rows: rows[27].update(frame=rows[26]["frame"]))
     def test_wrong_stage(self):
