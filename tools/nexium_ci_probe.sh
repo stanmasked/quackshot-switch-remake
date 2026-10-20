@@ -166,13 +166,15 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
       # Separate clock subprocesses added unbounded scheduling noise to
       # short (25/45ms) virtual button delays on a loaded CI runner.
       delayed_edge_ms() {
-        perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,usleep -e '
-          my $delay=shift;
-          my $begin=clock_gettime(CLOCK_MONOTONIC);
-          usleep($delay*1000);
-          my $elapsed=(clock_gettime(CLOCK_MONOTONIC)-$begin)*1000;
-          print int($elapsed+0.999);
-        ' "$1"
+        # This function is embedded in a single-quoted "bash -c" body.
+        # Use a double-quoted Perl expression and escape all Perl dollars:
+        # an inner single quote prematurely closes the outer shell script.
+        perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,usleep -e \
+          "my \$delay=shift; \
+           my \$begin=clock_gettime(CLOCK_MONOTONIC); \
+           usleep(\$delay*1000); \
+           my \$elapsed=(clock_gettime(CLOCK_MONOTONIC)-\$begin)*1000; \
+           print int(\$elapsed+0.999);" "$1"
       }
       delayed_keydown() {
         local event="$1" key="$2" actual

@@ -58,6 +58,15 @@ class InputLatencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"missing measured"):
             verify_latency_profile(meta,log,3)
 
+    def test_complete_outer_and_nested_emulator_shell_parse(self):
+        """Prevent Stage 114 nested Bash/Perl quote regression (#39342750339)."""
+        import subprocess
+        script_path=(Path(__file__).resolve().parents[1] /
+                     "tools" / "nexium_ci_probe.sh")
+        result=subprocess.run(["bash","-n",str(script_path)],
+                              capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_shell_clock_is_monotonic_in_single_sleep_process(self):
         import re
         import subprocess
@@ -66,7 +75,7 @@ class InputLatencyTests(unittest.TestCase):
         helper=re.search(r"(?m)^      delayed_edge_ms\(\) \{\n(?:.*\n)*?      \}",script)
         self.assertIsNotNone(helper)
         self.assertIn("clock_gettime(CLOCK_MONOTONIC)",helper.group(0))
-        self.assertIn("usleep($delay*1000)",helper.group(0))
+        self.assertIn(r"usleep(\$delay*1000)",helper.group(0))
         self.assertNotIn("date +%s%3N",script)
         self.assertNotIn("monotonic_ms()",script)
         command=(helper.group(0)+
