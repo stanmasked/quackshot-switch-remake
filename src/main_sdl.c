@@ -283,6 +283,20 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
         rectangle(renderer,x+3,(int)QS_RUINS_RELIC_Y+3,4,4,
                   color(255,244,184));
     }
+    /* Stage 141: the stage-2 trigger remains visible before/after a
+     * real yellow projectile hit; floor tiles appear through the normal
+     * renderer only after gameplay changes actual terrain cells. */
+    if (game->stage == 2 &&
+        game->physics_profile == QS_PHYSICS_PROTOTYPE) {
+        int x=(int)QS_ROOF_SWITCH_X-cam;
+        rectangle(renderer,x,(int)QS_ROOF_SWITCH_Y,
+                  (int)QS_ROOF_SWITCH_W,(int)QS_ROOF_SWITCH_H,
+                  game->rooftop_bridge_open==1
+                    ? color(91,224,155) : color(240,161,94));
+        rectangle(renderer,x+4,(int)QS_ROOF_SWITCH_Y+4,4,4,
+                  game->rooftop_bridge_open==1
+                    ? color(176,255,206) : color(255,226,155));
+    }
     /* Stage 58: visible ORIGINAL-FREE test checkpoint. The flag head
      * changes from muted blue to gold on genuine contact. */
     if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
@@ -4109,6 +4123,53 @@ static int run_ruins_relic_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage 141: the switch and the actual pit floor must both change on
+ * SDL pixels only after a real yellow projectile traverses the target.
+ */
+static int run_rooftop_bridge_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t switch_before=0,switch_after=0,floor_before=0,floor_after=0;
+    const int target_x=(int)QS_ROOF_SWITCH_X-600+1;
+    const int bridge_x=QS_ROOF_BRIDGE_FIRST_COL*QS_TILE-760+8;
+    int ticks;
+    qs_init(&g);qs_begin_stage(&g,2);
+    g.hero.x=40;g.camera_x=g.render_camera_x=600;
+    if(!read_multishot_pixel(renderer,&g,target_x,194,&switch_before))
+        return 0;
+    g.camera_x=g.render_camera_x=760;
+    if(!read_multishot_pixel(renderer,&g,bridge_x,212,&floor_before))
+        return 0;
+    if(qs_solid(&g,QS_ROOF_BRIDGE_FIRST_COL,13) ||
+       g.rooftop_bridge_open!=0) return 0;
+
+    /* These inputs drive the real shot code, not a fake opened flag. */
+    g.hero.x=640;g.hero.y=188;g.hero.facing=1;g.hero.grounded=1;
+    in.fire=1;qs_step(&g,in);
+    in=(QsInput){0};
+    for(ticks=0;ticks<22 && !g.rooftop_bridge_open;++ticks)
+        qs_step(&g,in);
+    if(g.rooftop_bridge_open!=1 ||
+       !qs_solid(&g,QS_ROOF_BRIDGE_FIRST_COL,13))
+        return 0;
+    g.hero.x=40;g.camera_x=g.render_camera_x=600;
+    if(!read_multishot_pixel(renderer,&g,target_x,194,&switch_after))
+        return 0;
+    g.camera_x=g.render_camera_x=760;
+    if(!read_multishot_pixel(renderer,&g,bridge_x,212,&floor_after))
+        return 0;
+    if(switch_before!=UINT32_C(0xfff0a15e) ||
+       switch_after!=UINT32_C(0xff5be09b) ||
+       floor_after!=UINT32_C(0xff536480) ||
+       floor_before==floor_after)
+        return 0;
+    printf("ROOFTOP_BRIDGE_SDL_PASS: switch=%08x->%08x bridge=%08x->%08x\\n",
+           (unsigned)switch_before,(unsigned)switch_after,
+           (unsigned)floor_before,(unsigned)floor_after);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4156,6 +4217,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     }
     if (!run_ruins_gate_sdl_smoke(renderer)) return 1;
     if (!run_ruins_relic_sdl_smoke(renderer)) return 1;
+    if (!run_rooftop_bridge_sdl_smoke(renderer)) return 1;
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     if (!run_map_chord_sdl_smoke(renderer)) return 1;
