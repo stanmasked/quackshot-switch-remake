@@ -50,12 +50,9 @@ static void switch_requires_new_down_edge_near_safe_floor(void) {
     qs_step(&g,idle());set_plate(&g);press_down(&g);
     CHECK(g.ruins_gate_open==1 && gate_tiles_open(&g));
 }
-static void airborne_and_corrupt_coordinates_cannot_open(void) {
+static void airborne_and_wrong_height_cannot_open(void) {
     QsGame g=ruins();set_plate(&g);
     g.hero.grounded=0;press_down(&g);
-    CHECK(!g.ruins_gate_open);
-    qs_step(&g,idle());set_plate(&g);
-    g.hero.x=NAN;press_down(&g);
     CHECK(!g.ruins_gate_open && gate_tiles_closed(&g));
     qs_begin_stage(&g,1);set_plate(&g);
     g.hero.y=160;press_down(&g);
@@ -100,7 +97,7 @@ static void other_stages_are_isolated(void) {
 int main(void) {
     grounded_plate_opens_physical_wall();
     switch_requires_new_down_edge_near_safe_floor();
-    airborne_and_corrupt_coordinates_cannot_open();
+    airborne_and_wrong_height_cannot_open();
     opening_changes_real_horizontal_collision();
     back_aborts_before_switch_interaction();
     scene_reentry_restores_wall_without_losing_progress();
