@@ -269,6 +269,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_shot = 0;
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
+    g->ruins_gate_open = 0; /* every new test scene closes its own gate */
     g->city_checkpoint_active = 0;
     g->city_bonus_mask = 0;
     g->city_crate_active =
@@ -738,6 +739,34 @@ static void update_pickups(QsGame *g) {
  * so fatal collisions and numeric/pit retries never grant old-life
  * progress. No original QuackShot checkpoint data is used.
  */
+/*
+ * Stage 131: independent RUINS TEST plate. It genuinely removes the
+ * five solid stone cells blocking the existing corridor, so normal
+ * hero/shot collision observes the same terrain as the SDL renderer.
+ * It is NOT a recreation of an original QuackShot puzzle.
+ *
+ * The plate requires a fresh DOWN press while grounded beside it;
+ * holding DOWN while approaching does not activate it accidentally.
+ * Stage entry recreates the blocked scene, but a life retry does not.
+ * Other stages and the measured CITY TEST physics are unaffected.
+ */
+static void update_ruins_plate(QsGame *g, QsInput in) {
+    int row;
+    QsPlayer *h=&g->hero;
+    if (g->mode != QS_STAGE || g->stage != 1 ||
+        g->physics_profile != QS_PHYSICS_PROTOTYPE ||
+        g->ruins_gate_open != 0 ||
+        !edge(in.down,g->previous.down) || !h->grounded ||
+        !isfinite(h->x) || !isfinite(h->y) ||
+        h->x < QS_RUINS_PLATE_X-10.0f ||
+        h->x > QS_RUINS_PLATE_X+10.0f ||
+        h->y < 184.0f || h->y > 189.0f)
+        return;
+    for (row=QS_RUINS_GATE_ROW_FIRST; row<=QS_RUINS_GATE_ROW_LAST; ++row)
+        g->terrain[row][QS_RUINS_GATE_COL]='.';
+    g->ruins_gate_open=1;
+}
+
 static void update_city_checkpoint(QsGame *g) {
     if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY ||
         g->stage != 0 || g->city_checkpoint_active)
@@ -1494,6 +1523,9 @@ void qs_step(QsGame *g, QsInput input) {
         } else if (edge(input.back, g->previous.back)) {
             city_leave_to_map(g);
         } else {
+            /* Stage 131: process a genuine plate interaction before the
+             * movement collision step, without any position injection. */
+            update_ruins_plate(g,input);
             if (edge(input.change, g->previous.change) && g->red_unlocked)
                 g->weapon = g->weapon == QS_YELLOW ? QS_RED : QS_YELLOW;
             {
