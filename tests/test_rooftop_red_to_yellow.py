@@ -86,6 +86,18 @@ class RedToYellowProtocol(unittest.TestCase):
     def test_no_yellow_fire(self):self.bad(lambda c,r,e,w,h:r[364].update(input_bits="0"))
     def test_bridge_open_too_soon(self):self.bad(lambda c,r,e,w,h:r[363].update(bridge_after="1",bridge_cells="6"))
     def test_bridge_never_open(self):self.bad(lambda c,r,e,w,h:[p.update(bridge_after="0",bridge_before="0",bridge_cells="0") for p in r[360:]])
+    def test_yellow_projectile_teleport_rejected(self):
+        self.bad(lambda c,r,e,w,h:r[369].update(shot_x_before_milli="699000"))
+
+    def test_missing_middle_yellow_flight_frame_rejected(self):
+        self.bad(lambda c,r,e,w,h:r[369].update(shot_active_before="0",
+            shot_x_before_milli="-1",shot_vx_before_milli="0"))
+
+    def test_yellow_projectile_before_fire_rejected(self):
+        self.bad(lambda c,r,e,w,h:r[363].update(shot_active_before="1",
+            shot_red_before="0",shot_x_before_milli="647000",
+            shot_vx_before_milli="5500"))
+
     def test_bridge_misses_yellow_switch(self):self.bad(lambda c,r,e,w,h:r[373].update(shot_x_before_milli="680000"))
     def test_bridge_later_closes(self):self.bad(lambda c,r,e,w,h:r[398].update(bridge_after="0",bridge_cells="0"))
     def test_frame_discontinuity(self):self.bad(lambda c,r,e,w,h:r[389].update(frame="2000"))

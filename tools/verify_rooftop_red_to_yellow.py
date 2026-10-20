@@ -98,9 +98,25 @@ def verify_red_to_yellow(city_rows,roof_rows,edges,weapon_rows,host):
             opened.append(j)
         elif p["bridge_after"] not in (0,1) or p["bridge_cells"] not in (0,6):
             raise RedToYellowError("partial or invalid real bridge terrain")
-    if len(fires)!=1 or len(opened)!=1 or not yellow:
-        raise RedToYellowError("expected one yellow FIRE edge and one bridge-open edge")
+    if len(fires)!=1 or len(opened)!=1 or len(yellow)<5:
+        raise RedToYellowError("expected one yellow FIRE edge and real yellow flight")
     hit=opened[0]
+    # The game advances a 5.5px/tick yellow projectile through successive
+    # NRO frames. A single forged overlap sample is NOT evidence of a shot.
+    # Require the same contiguous projectile all the way to physical
+    # activation, without teleporting or inserting inactive frames.
+    if yellow[0] <= fires[0] or yellow[-1] != hit:
+        raise RedToYellowError("yellow flight not bound to FIRE and bridge activation")
+    for a,b in zip(yellow,yellow[1:]):
+        if b!=a+1:
+            raise RedToYellowError("yellow projectile trace interrupted")
+        start=roof[a]["shot_x_before_milli"]
+        end=roof[b]["shot_x_before_milli"]
+        vx=roof[a]["shot_vx_before_milli"]
+        if not 0<=start<=1400000 or end<=start or abs(end-start-vx)>2500:
+            raise RedToYellowError("yellow projectile moved discontinuously")
+    if any(roof[i]["shot_active_before"] for i in range(toggle,fires[0]+1)):
+        raise RedToYellowError("yellow projectile existed before physical FIRE")
     overlap=[j for j in yellow if
         roof[j]["shot_x_before_milli"]+roof[j]["shot_vx_before_milli"] <
           TARGET_X_MILLI+TARGET_W_MILLI and
