@@ -42,7 +42,12 @@ def _measure(rows,pulse,name):
     for row in rows[index+1:]:
         if row["frame"]-start>85:
             break
-        if row["frame"]>released and row["grounded"]==1:
+        # Stage 126: a real sampled B falling edge may coincide with
+        # physical ground contact in the same NRO frame (roof run #4,
+        # frame 1105). Require the guest's B bit to be OFF at touchdown;
+        # any earlier grounded frame remains inside 'segment' and fails.
+        if (row["frame"]>=released and row["grounded"]==1 and
+            not row["input_bits"]&4):
             landing=row
             break
     if landing is None:
@@ -70,8 +75,8 @@ def _measure(rows,pulse,name):
     if (ascent<minimum_ascent or not 8<=apex["frame"]-start<=40 or
         not 20<=landing["frame"]-start<=80):
         raise ValueError(f"{name} ascent, apex or flight duration invalid")
-    if landing["frame"]<=released:
-        raise ValueError(f"{name} landing preceded button release")
+    if landing["frame"]<released or landing["input_bits"]&4:
+        raise ValueError(f"{name} landing preceded B release")
     if name!="roof" and descent<3:
         raise ValueError(f"{name} missing genuine descent")
     if name=="roof" and not (descent>=1 or landing["y_milli"]>apex["y_milli"]):

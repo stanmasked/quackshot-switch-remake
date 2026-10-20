@@ -92,6 +92,40 @@ class GuestArcTests(unittest.TestCase):
         self.assertAlmostEqual(result["arcs"]["roof"]["rise_px"],27.43,places=2)
         self.assertGreater(result["wall_recovery"]["rise_px"],64)
 
+    def test_blocked_roof_touchdown_on_exact_b_release_frame(self):
+        # Archived NeXium run #4 (39384198311): blocked roof press
+        # frame=1079, release frame=1105, first grounded sample=1105.
+        # The guest B bit is already OFF at the same real physics tick.
+        host,rows=blocked_roof_fixture()
+        for frame in range(196,215):
+            rows[frame]["input_bits"]="6"
+        result=verify_jump_arcs(host,rows)
+        roof=result["arcs"]["roof"]
+        self.assertEqual(roof["landing_frame"],215)
+        self.assertEqual(roof["released_frame"],215)
+        self.assertEqual(result["roof_path"],"ground_then_wall_recovery")
+
+    def test_blocked_roof_grounded_before_b_release_rejected(self):
+        # This time the player is on the ground at frame 214 but B
+        # is still physically held through that frame. Do not treat a
+        # later B falling edge as legitimizing a premature touchdown.
+        host,rows=blocked_roof_fixture()
+        for frame in range(196,215):
+            rows[frame]["input_bits"]="6"
+        rows[214]["grounded"]="1"
+        rows[214]["y_milli"]="188000"
+        with self.assertRaisesRegex(ValueError,"prematurely grounded"):
+            verify_jump_arcs(host,rows)
+
+    def test_roof_touchdown_with_b_held_not_accepted(self):
+        # Even if the report later contains a release, a ground sample
+        # while B is still set must not stand in for a real release.
+        host,rows=blocked_roof_fixture()
+        for frame in range(196,216):
+            rows[frame]["input_bits"]="6"
+        with self.assertRaises(ValueError):
+            verify_jump_arcs(host,rows)
+
     def test_sparse_telemetry_still_proves_blocked_roof(self):
         # Real Stage 107 run 5 reached Y≈160.656 from Y=188, but
         # three-frame guest telemetry showed just three ascent steps.
