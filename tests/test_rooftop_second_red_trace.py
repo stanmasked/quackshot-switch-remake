@@ -50,6 +50,33 @@ class SecondRedGuestProtocol(unittest.TestCase):
         with self.assertRaises((SecondRedGuestError, ValueError)):
             verify_second_red(c,r,e)
 
+    def test_full_1400_frame_guest_log_with_long_second_idle(self):
+        c,r,e=fixture()
+        # Independent real NeXium profiles retained 1109 and 1104 second-
+        # visit frames. A long neutral tail is legal if every row is guest-
+        # continuous and both projectiles left the bridge closed.
+        tail=dict(r[-1])
+        for i in range(1,1041):
+            item=dict(tail)
+            item["seq"]=str(int(tail["seq"])+i)
+            item["frame"]=str(int(tail["frame"])+i)
+            r.append(item)
+        self.assertEqual(len(r),1400)
+        out=verify_second_red(c,r,e)
+        self.assertEqual(out["bridge_solid_cells"],0)
+
+    def test_more_than_1400_guest_rooftop_frames_rejected(self):
+        c,r,e=fixture()
+        tail=dict(r[-1])
+        for i in range(1,1042):
+            item=dict(tail)
+            item["seq"]=str(int(tail["seq"])+i)
+            item["frame"]=str(int(tail["frame"])+i)
+            r.append(item)
+        self.assertEqual(len(r),1401)
+        with self.assertRaises(SecondRedGuestError):
+            verify_second_red(c,r,e)
+
     def test_no_four_authentic_edges(self):
         self.bad(lambda c,r,e:e.pop())
 
