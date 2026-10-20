@@ -92,6 +92,11 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
                    previous_shot["shot_vx_before_milli"])>2500:
                 raise YellowRearmError("second yellow projectile teleported")
     impact=rows[hit]
+    # The actual Stage158 NeXium traces show the projectile is consumed
+    # on physical switch contact. A fake open flag with a surviving shot
+    # must not qualify as a second legitimate activation.
+    if impact["shot_active_before"]!=1 or impact["shot_active_after"]!=0:
+        raise YellowRearmError("second YELLOW shot not consumed on switch contact")
     sx=impact["shot_x_before_milli"]+impact["shot_vx_before_milli"]
     if not (sx<TARGET_X_MILLI+TARGET_W_MILLI and
             sx+SHOT_WIDTH_MILLI>TARGET_X_MILLI):
