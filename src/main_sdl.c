@@ -4508,6 +4508,8 @@ int main(int argc, char **argv) {
      * Read-only sampling; unlike automated route probes, it does not
      * modify player position, input or stage selection. */
     FILE *rooftop_guest_file = NULL;
+    /* Stage157: read-only per-frame weapon toggle witness, never an input. */
+    FILE *rooftop_weapon_file = NULL;
     /* Stage 153: guest-owned proof of map exit and fresh ROOFTOP entry. */
     FILE *rooftop_transition_file = NULL;
     /* Stage 154: independent, guest-only witnessed CITY red pickup. */
@@ -4623,6 +4625,12 @@ int main(int argc, char **argv) {
         }
         if(!rooftop_guest_file)
             fprintf(stderr,"QuackShot: ROOFTOP guest witness CSV unavailable (non-fatal)\n");
+        rooftop_weapon_file=fopen("sdmc:/switch/quackshot-rooftop-weapon.csv","w");
+        if(rooftop_weapon_file &&
+           (fputs("seq,frame,mode,stage,change_pressed,weapon_before,weapon_after,red_unlocked,source\n",rooftop_weapon_file)<0 ||
+            fflush(rooftop_weapon_file)!=0)) {
+            fclose(rooftop_weapon_file);rooftop_weapon_file=NULL;
+        }
         /* Separate scene-boundary witness. Do not reset the original
          * ROOFTOP CSV seq counter: its frame gap proves a real map visit. */
         rooftop_transition_file=fopen("sdmc:/switch/quackshot-rooftop-transitions.csv","w");
@@ -4787,6 +4795,7 @@ int main(int argc, char **argv) {
             int roof_shot_before_x=-1,roof_shot_before_vx=0;
             int roof_shot_before_red=0,roof_shot_before_active=0;
             int roof_bridge_before=game.rooftop_bridge_open;
+            int roof_weapon_before=game.weapon;
             int red_before=game.red_unlocked;
             int red_pickup_before=game.pickups[0].active &&
                 game.pickups[0].kind==QS_PICKUP_RED;
@@ -4884,6 +4893,16 @@ int main(int argc, char **argv) {
                    roof_shot_before_red,roof_shot_before_active,
                    active_after,roof_bridge_before,game.rooftop_bridge_open,
                    solid_cells)>=0 && fflush(rooftop_guest_file)==0) {
+                    if(rooftop_weapon_file &&
+                       (fprintf(rooftop_weapon_file,
+                        "%u,%d,%d,%d,%d,%d,%d,%d,live_rooftop_weapon_pad_qs_step\n",
+                        rooftop_guest_records,game.frames,(int)game.mode,game.stage,
+                        in.change!=0,roof_weapon_before,(int)game.weapon,
+                        game.red_unlocked)!=0) && fflush(rooftop_weapon_file)==0) {
+                        /* read-only matching NRO frame/seq */
+                    } else if(rooftop_weapon_file) {
+                        fclose(rooftop_weapon_file);rooftop_weapon_file=NULL;
+                    }
                     ++rooftop_guest_records;
                 } else {
                     fclose(rooftop_guest_file);rooftop_guest_file=NULL;
@@ -5056,6 +5075,7 @@ int main(int argc, char **argv) {
     if(postcheck_file)fclose(postcheck_file);
     if(finish_file)fclose(finish_file);
     if(rooftop_guest_file)fclose(rooftop_guest_file);
+    if(rooftop_weapon_file)fclose(rooftop_weapon_file);
     if(rooftop_transition_file)fclose(rooftop_transition_file);
     if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
 #endif
