@@ -42,6 +42,14 @@ class YellowBridgeResetProtocol(unittest.TestCase):
         self.assertEqual(report["third_visit_closed_frames"],140)
         self.assertEqual(report["bridge_solid_cells_after_reentry"],0)
         self.assertEqual(report["selected_weapon_after_reentry"],0)
+    def test_host_checkpoint_can_precede_final_guest_frame(self):
+        a,b,c,d,e=fixture()
+        checkpoint=e.replace("ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=1890",
+                             "ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=1870")
+        report=verify_yellow_reset(a,b,c,d,checkpoint)
+        self.assertEqual(report["third_visit_closed_frames"],140)
+        self.assertEqual(report["final_rooftop_frame"],1890)
+
     def bad(self,mutate):
         a,b,c,d,e=fixture()
         new=mutate(a,b,c,d,e)
@@ -82,8 +90,9 @@ class YellowBridgeResetProtocol(unittest.TestCase):
     def test_duplicate_host_reentry(self):
         self.bad(lambda a,b,c,d,e:e+"ROOFTOP_YELLOW_RESET_ENTRY_GUEST frame=1750\n")
     def test_fake_host_closed_frame(self):
+        # Only 90 third-visit frames by 1840; 100 are mandatory.
         self.bad(lambda a,b,c,d,e:e.replace("ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=1890",
-                                             "ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=1889"))
+                                             "ROOFTOP_YELLOW_RESET_CLOSED_GUEST frame=1840"))
     def test_guest_emits_1401_frames(self):
         def mutate(a,b,c,d,e):
             last=dict(b[-1]);w=dict(d[-1])
