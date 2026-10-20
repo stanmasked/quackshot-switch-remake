@@ -59,9 +59,19 @@ class RedToYellowProtocol(unittest.TestCase):
     def bad(self,mutate):
         c,r,e,w,h=fixture()
         out=mutate(c,r,e,w,h)
-        if out is not None:h=out
+        # Mutations of row lists often return a list-comprehension value.
+        # Only an explicit replacement transcript may override host text.
+        if isinstance(out,str):h=out
         with self.assertRaises((ValueError,RedToYellowError)):
             self.accept(c,r,e,w,h)
+    def test_held_nintendo_x_counts_as_one_press(self):
+        city,roof,edges,weapon,host=fixture()
+        for i in range(361,370):
+            weapon[i]["change_pressed"]="1"
+        report=self.accept(city,roof,edges,weapon,host)
+        self.assertEqual(report["status"],"PASS")
+        self.assertEqual(report["bridge_solid_cells"],6)
+
     def test_no_weapon_log(self):self.bad(lambda c,r,e,w,h:w.clear())
     def test_weapon_source_fake(self):self.bad(lambda c,r,e,w,h:w[360].update(source="host"))
     def test_guest_seq_mismatch(self):self.bad(lambda c,r,e,w,h:w[360].update(seq="0"))

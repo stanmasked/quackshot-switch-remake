@@ -56,7 +56,12 @@ def verify_red_to_yellow(city_rows,roof_rows,edges,weapon_rows,host):
     for p,x in zip(roof,w):
         if x["seq"]!=p["seq"] or x["frame"]!=p["frame"]:
             raise RedToYellowError("weapon tick does not match immutable ROOF sample")
-    switch=[i for i,p in enumerate(w) if p["change_pressed"]==1]
+    # A physical Nintendo X press normally lasts several frames. Only
+    # its rising edge toggles the game weapon; a held button must not
+    # count as repeated independent weapon-selection commands.
+    switch=[i for i,p in enumerate(w)
+            if p["change_pressed"]==1 and
+            (i==0 or w[i-1]["change_pressed"]==0)]
     if len(switch)!=1:
         raise RedToYellowError("missing or repeated physical change-button input")
     toggle=switch[0]
