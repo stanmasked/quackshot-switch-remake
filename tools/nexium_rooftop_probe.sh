@@ -38,9 +38,16 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
   [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
   xdotool windowfocus "$window"; sleep 0.7
-  # NeXium default WASD=stick, C=Nintendo A, E=R, Z=Nintendo Y.
-  for i in 1 2; do xdotool keydown s; sleep 0.2; xdotool keyup s; sleep 0.4; done
-  xdotool key --delay 120 c
+  # NeXium controller_config.rs: ArrowDown=Nintendo D-pad Down,
+  # while S=left-stick Y. The game menu processes D-pad, not stick Y.
+  # Use two distinct rising edges, with a neutral release interval.
+  for i in 1 2; do
+    xdotool keydown --clearmodifiers Down
+    sleep 0.20
+    xdotool keyup Down
+    sleep 0.40
+  done
+  xdotool key --clearmodifiers --delay 120 c
   echo ROOFTOP_MENU_SENT
   guest=""
   for i in $(seq 1 100); do
