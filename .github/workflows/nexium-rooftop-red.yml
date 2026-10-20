@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - "tools/nexium_rooftop_red_probe.sh"
+      - "tools/rooftop_red_overlap_witness.py"
       - "tools/verify_rooftop_red_repeats.py"
       - ".github/workflows/nexium-rooftop-red.yml"
       - "src/main_sdl.c"
@@ -52,7 +53,7 @@ jobs:
       - name: Shell and verifier syntax
         run: |
           bash -n tools/nexium_rooftop_red_probe.sh
-          python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_red_trace.py tools/verify_rooftop_red_repeats.py
+          python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_red_trace.py tools/verify_rooftop_red_repeats.py tools/rooftop_red_overlap_witness.py
       - name: Install CPU Vulkan and virtual-screen dependencies
         run: |
           sudo apt-get update -qq
