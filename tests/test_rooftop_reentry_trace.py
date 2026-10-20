@@ -53,6 +53,22 @@ class ReentryTraceProtocol(unittest.TestCase):
         with self.assertRaises((ReentryError, ValueError)):
             verify_reentry(rows, edges)
 
+    def test_long_realistic_second_visit(self):
+        rows, edges = fixture()
+        for _ in range(65, 1019):
+            previous = rows[-1]
+            sample = dict(previous)
+            sample["seq"] = str(len(rows))
+            sample["frame"] = str(int(previous["frame"]) + 1)
+            rows.append(sample)
+        report = verify_reentry(rows, edges)
+        self.assertEqual(report["second_visit_frames"], 1019)
+        # Even late frames must still be checked, not simply accepted
+        # after an early positive 45-frame observation.
+        rows[-1]["bridge_cells"] = "6"
+        with self.assertRaises(ReentryError):
+            verify_reentry(rows, edges)
+
     def test_missing_exit(self):
         self.bad(lambda r,e: e.pop(1))
 
