@@ -14,6 +14,12 @@ on:
       - "src/qs_game.c"
       - "include/**"
   workflow_dispatch:
+# Each workflow keeps only the newest PR revision. Independent workflows
+# still run separately; manual dispatches and main remain auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

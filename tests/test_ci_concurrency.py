@@ -14,6 +14,11 @@ WORKFLOWS = (
     "core-tests.yml",
     "emulator-runtime.yml",
     "switch-nro.yml",
+    "nexium-blocked-roof.yml",
+    "nexium-rooftop-guest.yml",
+    "nexium-rooftop-touch.yml",
+    "nexium-rooftop-reentry.yml",
+    "nexium-rooftop-red.yml",
 )
 GROUP = (
     "group: quackshot-${{ github.workflow }}-"
