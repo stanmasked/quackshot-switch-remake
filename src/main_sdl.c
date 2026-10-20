@@ -43,6 +43,11 @@ static void render_map(SDL_Renderer *renderer, const QsGame *game) {
                   active ? color(255, 208, 109) : color(107, 113, 127));
         if (game->cleared[i])
             rectangle(renderer, 322, y + 12, 16, 16, color(94, 221, 138));
+        /* Optional RUINS achievement, separate from the CLEAR indicator. */
+        if (i == 1 && game->ruins_relic_earned == 1) {
+            rectangle(renderer, 299, y + 14, 12, 12, color(255, 213, 103));
+            rectangle(renderer, 303, y + 18, 4, 4, color(255, 244, 184));
+        }
         rectangle(renderer, 70, y + 12, 150 + 30*i, 14,
                   active ? color(239, 227, 177) : color(144, 170, 184));
     }
@@ -266,6 +271,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
         rectangle(renderer,x+3,201,10,2,
                   game->ruins_gate_open == 1
                     ? color(178,255,206) : color(244,189,111));
+    }
+    /* Stage 136: decorative relic behind the RUINS gate. The actual
+     * award comes ONLY from guest gameplay overlap, not the renderer. */
+    if (game->stage == 1 && game->physics_profile == QS_PHYSICS_PROTOTYPE &&
+        game->ruins_relic_collected == 0) {
+        int x=(int)QS_RUINS_RELIC_X-cam;
+        rectangle(renderer,x,(int)QS_RUINS_RELIC_Y,
+                  (int)QS_RUINS_RELIC_SIZE,(int)QS_RUINS_RELIC_SIZE,
+                  color(255,213,103));
+        rectangle(renderer,x+3,(int)QS_RUINS_RELIC_Y+3,4,4,
+                  color(255,244,184));
     }
     /* Stage 58: visible ORIGINAL-FREE test checkpoint. The flag head
      * changes from muted blue to gold on genuine contact. */
@@ -4047,6 +4063,52 @@ static int run_ruins_gate_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/* Stage 136: prove both the world pickup vanishes AND the map badge
+ * survives a proper Back transition. Checks the actual SDL pixel buffer. */
+static int run_ruins_relic_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput in={0};
+    uint32_t world_before=0,world_after=0,map_before=0,map_after=0;
+    SDL_Rect badge={303,116,1,1}; /* RUINS row at y=98 + 18 */
+    int relic=(int)QS_RUINS_RELIC_X-780+1;
+    qs_init(&g);qs_begin_stage(&g,1);
+    g.hero.x=40;g.camera_x=g.render_camera_x=780;
+    if(!read_multishot_pixel(renderer,&g,relic,189,&world_before))
+        return 0;
+    /* Use the same grounded DOWN-edge that opens real stone tiles. */
+    g.hero.x=QS_RUINS_PLATE_X;g.hero.y=188;g.hero.grounded=1;
+    in.down=1;qs_step(&g,in);
+    if(g.ruins_gate_open!=1 || qs_solid(&g,QS_RUINS_GATE_COL,12))
+        return 0;
+    /* The relic must be collected through actual qs_step overlap. */
+    g.hero.x=QS_RUINS_RELIC_X;g.hero.y=188;g.hero.grounded=1;
+    in=(QsInput){0};qs_step(&g,in);
+    if(g.ruins_relic_collected!=1 || g.ruins_relic_earned!=1)
+        return 0;
+    g.hero.x=40;g.camera_x=g.render_camera_x=780;
+    if(!read_multishot_pixel(renderer,&g,relic,189,&world_after) ||
+       world_before!=UINT32_C(0xffffd567) || world_before==world_after)
+        return 0;
+    /* Sample the map with and without earned session progress. */
+    in.back=1;qs_step(&g,in);
+    if(g.mode!=QS_MAP) return 0;
+    if(SDL_SetRenderDrawColor(renderer,0,0,0,255)!=0 ||
+       SDL_RenderClear(renderer)!=0) return 0;
+    g.ruins_relic_earned=0;render_map(renderer,&g);
+    if(SDL_RenderReadPixels(renderer,&badge,SDL_PIXELFORMAT_ARGB8888,
+                           &map_before,(int)sizeof(map_before))!=0)
+        return 0;
+    g.ruins_relic_earned=1;render_map(renderer,&g);
+    if(SDL_RenderReadPixels(renderer,&badge,SDL_PIXELFORMAT_ARGB8888,
+                           &map_after,(int)sizeof(map_after))!=0 ||
+       map_before==map_after || map_after!=UINT32_C(0xfffff4b8))
+        return 0;
+    printf("RUINS_RELIC_SDL_PASS: world=%08x->%08x map=%08x->%08x\n",
+           (unsigned)world_before,(unsigned)world_after,
+           (unsigned)map_before,(unsigned)map_after);
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4093,6 +4155,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
         }
     }
     if (!run_ruins_gate_sdl_smoke(renderer)) return 1;
+    if (!run_ruins_relic_sdl_smoke(renderer)) return 1;
     if (!run_progress_map_sdl_smoke(renderer)) return 1;
     if (!run_multistage_map_sdl_smoke(renderer)) return 1;
     if (!run_map_chord_sdl_smoke(renderer)) return 1;
