@@ -63,7 +63,7 @@ def verify_edge_responses(host_text, samples):
     response_frame=-1
     for name,marker,bit,xlow,xhigh in EVENTS:
         if name=="pit" and early:
-            xlow,xhigh=263000,276000
+            xlow,xhigh=269000,276000
         start,x=launches[marker]
         if start<=preceding_frame:
             raise ValueError("host button actions reordered")

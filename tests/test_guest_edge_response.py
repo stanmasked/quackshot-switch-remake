@@ -40,6 +40,20 @@ class GuestButtonEdgeTests(unittest.TestCase):
         report=verify_edge_responses(self.host,self.rows)
         self.assertEqual(report["events"]["pit"]["nro_first_button_frame"],103)
 
+    def test_early_profile_window_floor_accepts_real_anchor(self):
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   self.host.replace("x_milli=280000","x_milli=269000",1))
+        self.rows[100]["x_milli"]="269000"
+        self.assertEqual(
+            verify_edge_responses(self.host,self.rows)["events"]["pit"]["guest_frame_window"],3)
+
+    def test_early_profile_upper_bound_rejects_old_late_anchor(self):
+        self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
+                   self.host.replace("x_milli=280000","x_milli=276001",1))
+        self.rows[100]["x_milli"]="276001"
+        with self.assertRaisesRegex(ValueError,"legitimate grounded"):
+            verify_edge_responses(self.host,self.rows)
+
     def test_early_pit_rejected_without_profile(self):
         self.host=self.host.replace("x_milli=280000","x_milli=270000",1)
         self.rows[100]["x_milli"]="270000"
@@ -54,8 +68,8 @@ class GuestButtonEdgeTests(unittest.TestCase):
 
     def test_early_profile_cannot_start_too_early(self):
         self.host=("INPUT_TIMING_PROFILE profile=2 edge_delay_ms=25 poll_ms=90\n"+
-                   self.host.replace("x_milli=280000","x_milli=262999",1))
-        self.rows[100]["x_milli"]="262999"
+                   self.host.replace("x_milli=280000","x_milli=268999",1))
+        self.rows[100]["x_milli"]="268999"
         with self.assertRaisesRegex(ValueError,"legitimate grounded"):
             verify_edge_responses(self.host,self.rows)
 

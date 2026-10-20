@@ -199,7 +199,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" \
         # X=313.468 after the host read X=282.593 (19 guest frames).
         # Start earlier so the live guest B still lands at X=275..309
         # and its landing can enter the *unchanged* grounded roof gate.
-        pit_min_x_milli=263000
+        pit_min_x_milli=269000
         pit_max_x_milli=276000
       fi
       roof_min_x_milli=382000
