@@ -61,6 +61,21 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
         w=weapon[k]
         if w["weapon_before"]!=0 or w["weapon_after"]!=0 or w["red_unlocked"]!=1 or w["change_pressed"]!=0:
             raise YellowRearmError("third-visit weapon selection changed")
+    # The two original Stage158 NeXium captures prove that a real
+    # reentry starts at x=40 px, with no horizontal input for 130+ frames.
+    # Stage160 must prove an actual *new* RIGHT+DASH approach after that
+    # closed checkpoint; a fabricated pre-positioned x640 hero cannot pass.
+    if not 35000<=rows[start]["x_milli"]<=50000:
+        raise YellowRearmError("third ROOFTOP visit did not begin at genuine x40 spawn")
+    if any((r["input_bits"]&2) for r in rows[start:start+100]):
+        raise YellowRearmError("third visit moved before required closed-bridge checkpoint")
+    motion=rows[start:fire]
+    if not motion or rows[fire]["x_milli"]-rows[start]["x_milli"]<550000:
+        raise YellowRearmError("third visit has no real long-distance switch approach")
+    right=sum(1 for r in motion if r["input_bits"]&2)
+    dash_right=sum(1 for r in motion if (r["input_bits"]&18)==18)
+    if right<100 or dash_right<80:
+        raise YellowRearmError("no authentic sustained DASH+RIGHT approach after third entry")
     if rows[fire]["bridge_before"]!=0 or rows[fire]["bridge_after"]!=0 or rows[fire]["bridge_cells"]!=0:
         raise YellowRearmError("bridge not closed on third FIRE")
     if rows[fire]["shot_active_before"] or rows[fire]["shot_active_after"]!=1:
