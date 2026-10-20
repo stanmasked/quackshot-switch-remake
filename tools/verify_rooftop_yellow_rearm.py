@@ -76,6 +76,29 @@ def verify_rearm(city_rows,roof_rows,edges,weapon_rows,host):
     dash_right=sum(1 for r in motion if (r["input_bits"]&18)==18)
     if right<100 or dash_right<80:
         raise YellowRearmError("no authentic sustained DASH+RIGHT approach after third entry")
+    # ROOFTOP runs the prototype physics profile: a normal RIGHT tick is
+    # capped at 1.9px and DASH+RIGHT at 3.1px. Its guest CSV contains the
+    # post-qs_step hero coordinate and the input consumed in that same tick.
+    # Therefore distance must be earned *on right-input ticks*, rather than
+    # from a smooth forged coordinate drift while the hero is idle.
+    start_x=rows[start]["x_milli"]
+    right_distance=0
+    for k in range(start+1,fire+1):
+        tick=rows[k]
+        dx=tick["x_milli"]-rows[k-1]["x_milli"]
+        bits=tick["input_bits"]
+        if k<start+100 and abs(tick["x_milli"]-start_x)>1000:
+            raise YellowRearmError("third-visit spawn drifted during the closed idle checkpoint")
+        limit=3500 if bits&16 else 2300
+        if abs(dx)>limit:
+            raise YellowRearmError("third-visit hero exceeded native horizontal speed")
+        if abs(dx)>1000 and ((dx>0 and (bits&3)!=2) or
+                             (dx<0 and (bits&3)!=1)):
+            raise YellowRearmError("third-visit horizontal motion disagrees with controller")
+        if dx>0 and (bits&3)==2:
+            right_distance+=dx
+    if right_distance<550000:
+        raise YellowRearmError("third-visit approach distance not earned by RIGHT input")
     if rows[fire]["bridge_before"]!=0 or rows[fire]["bridge_after"]!=0 or rows[fire]["bridge_cells"]!=0:
         raise YellowRearmError("bridge not closed on third FIRE")
     if rows[fire]["shot_active_before"] or rows[fire]["shot_active_after"]!=1:
