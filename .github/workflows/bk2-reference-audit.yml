@@ -1,0 +1,24 @@
+name: BK2 Reference Input Audit
+on:
+  pull_request:
+    paths:
+      - 'tools/bk2_reference_audit.py'
+      - 'tests/test_bk2_reference_audit.py'
+      - 'tools/bk2_rom_match.py'
+      - 'tests/test_bk2_rom_match.py'
+      - '.github/workflows/bk2-reference-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bk2-audit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic BK2 verifier tests (no private movie or ROM)
+        run: python -m unittest discover -s tests -p 'test_bk2*.py' -v
+      - name: Python syntax validation
+        run: python -m py_compile tools/bk2_reference_audit.py tools/bk2_rom_match.py
