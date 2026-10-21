@@ -31,6 +31,19 @@ jobs:
         run: cmake --build build-desktop --parallel
       - name: Test
         run: ctest --test-dir build-desktop --output-on-failure
+      - name: Audit first-city event gaps against published numeric evidence
+        run: |
+          python3 -m unittest discover -s tests -p 'test_city_event_gap.py' -v
+          python3 tools/city_event_gap.py --binary build-desktop/qs_city_landmark_timeline_tests --out city-event-gap.json
+          python3 - <<'PY'
+          import json
+          with open("city-event-gap.json", encoding="utf-8") as fh:
+              report = json.load(fh)
+          assert report["status"] == "DIAGNOSTIC_ONLY_NOT_ROM_PARITY"
+          assert report["original_rom_was_run"] is False
+          assert report["original_assets_in_report"] is False
+          print("CITY_EVENT_GAP_EVIDENCE_PASS: relative event intervals only")
+          PY
       - name: Record deterministic rational-timeline digest
         run: |
           ./build-desktop/qs_city_fraction_tests > timeline-digest.txt
@@ -38,7 +51,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: city-timeline-${{ matrix.compiler }}-${{ matrix.build_type }}
-          path: timeline-digest.txt
+          path: |
+            timeline-digest.txt
+            city-event-gap.json
           if-no-files-found: error
   compare-city-timeline:
     needs: core
@@ -60,6 +75,30 @@ jobs:
               print(f"{p.parent.name}: {v}")
           assert len(set(values)) == 1, values
           print("CITY_CROSS_COMPILER_PASS: four identical exact-timeline digests")
+          PY
+      - name: Compare original-free event interval fingerprints across four builds
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = sorted(Path("city-timeline-results").glob(
+              "city-timeline-*/city-event-gap.json"))
+          assert len(files) == 4, files
+          signatures = []
+          for path in files:
+              report = json.loads(path.read_text(encoding="utf-8"))
+              assert report["status"] == "DIAGNOSTIC_ONLY_NOT_ROM_PARITY", path
+              assert report["original_rom_was_run"] is False, path
+              interval = report["causal_intervals_frames"]["synthetic"]
+              frames = report["synthetic_relative_frames"]
+              signature = tuple(frames[k] for k in ("fall", "land", "wall"))
+              signature += tuple(interval[k] for k in (
+                  "fall_to_land", "land_to_wall", "fall_to_wall"))
+              signature += (report["reverse_camera_lag_frames"]["synthetic"],)
+              signatures.append(signature)
+              print(path.parent.name, "event_fingerprint=", signature)
+          assert len(set(signatures)) == 1, signatures
+          print("CITY_EVENT_GAP_CROSS_COMPILER_PASS: event intervals identical; ROM parity not asserted")
           PY
   sdl-desktop:
     runs-on: ubuntu-latest
