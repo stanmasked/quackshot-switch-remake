@@ -149,7 +149,7 @@ static void direct_fractional_edge_drop(int edge_index, int right_edge) {
     a.hero.vx = b.hero.vx = 0.0f;
     a.hero.vy = b.hero.vy = 3.0f;
     a.hero.grounded = b.hero.grounded = 0;
-    a.reference_jump_steps = b.reference_jump_steps = QS_CITY_MAX_JUMP_HOLD + 1;
+    a.reference_jump_steps = b.reference_jump_steps = 16; /* measured hold cap 15 + sentinel */
 
     for (tick = 0; tick < 12; ++tick) {
         QsInput in = {0};
