@@ -111,7 +111,7 @@ class YellowResetWindowReadiness(unittest.TestCase):
         from tools.verify_nested_nexium_route import check_route, embedded_program
         cls.script = ROOT / "tools" / "nexium_rooftop_yellow_reset_probe.sh"
         cls.source = cls.script.read_text(encoding="utf-8")
-        cls.inner = embedded_program(cls.script)
+        cls.inner = embedded_program(cls.script.read_text(encoding="utf-8"))
         cls.check_route = check_route
         cls.begin = "# BEGIN YELLOW RESET WINDOW AND GAME READY GATE"
         cls.end = "# END YELLOW RESET WINDOW AND GAME READY GATE"
