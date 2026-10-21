@@ -18,7 +18,7 @@ class RooftopTouchStartupTest(unittest.TestCase):
         self.assertIn('xdotool search --onlyvisible --name NeXium 2>/dev/null', INNER)
         self.assertIn('kill -0 "$emu_pid"', INNER)
         self.assertIn('BLOCKED: no emulator window after bounded startup poll', INNER)
-        self.assertNotIn('sleep 5\\n  window=', INNER)
+        self.assertNotIn("sleep 5" + chr(10) + "  window=", INNER)
 
     def test_menu_input_waits_for_authenticated_guest_frames(self):
         self.assertIn('for boot_poll in $(seq 1 100)', INNER)
