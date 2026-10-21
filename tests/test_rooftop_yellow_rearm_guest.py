@@ -263,7 +263,7 @@ class Stage160HostProtocolTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.script=(ROOT/"tools/nexium_rooftop_yellow_rearm_probe.sh").read_text(encoding="utf-8")
-        cls.inner=embedded_program(cls.script.read_text(encoding="utf-8"))
+        cls.inner=embedded_program(cls.script)
 
     def test_live_poll_does_not_prematurely_emit_authenticated_markers(self):
         for observed in (
