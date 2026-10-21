@@ -325,7 +325,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
     witness="$(python3 tools/rooftop_yellow_guest_witness.py "$guest" "$weapon" fire "$yellow_reset_entry_frame" || true)"
     if [ -n "$witness" ]; then
       third_yellow_fire_frame="$witness"
-      echo "ROOFTOP_YELLOW_REARM_FIRE_GUEST frame=$witness"
+      echo "ROOFTOP_YELLOW_REARM_FIRE_LIVE_POLL frame=$witness"
       fired=1; break
     fi
   done
@@ -343,7 +343,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
     sleep 0.05
     witness="$(python3 tools/rooftop_yellow_guest_witness.py "$guest" "$weapon" bridge "$third_yellow_fire_frame" || true)"
     if [ -n "$witness" ]; then
-      echo "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST frame=$witness"
+      echo "ROOFTOP_YELLOW_REARM_OPEN_LIVE_POLL frame=$witness"
       third_yellow_open_frame="$witness";opened_again=1;break
     fi
   done
@@ -358,7 +358,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
     if [[ "$frame" =~ ^[0-9]+$ ]] && [ "$frame" -gt "$((third_yellow_open_frame+35))" ] &&
        [ "$mode" = 1 ] && [ "$stage" = 2 ] &&
        [ "$g0" = 1 ] && [ "$g1" = 1 ] && [ "$tiles" = 6 ]; then
-      echo "ROOFTOP_YELLOW_REARM_STABLE_GUEST frame=$frame"
+      echo "ROOFTOP_YELLOW_REARM_STABLE_LIVE_POLL frame=$frame"
       stable=1;break
     fi
   done
@@ -415,16 +415,28 @@ for label in ROOFTOP_YELLOW_REARM_FIRE_GUEST ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GU
     ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST) trusted="$open_frame";;
     ROOFTOP_YELLOW_REARM_STABLE_GUEST) trusted="$final_frame";;
   esac
-  existing="$(sed -n "s/^$label frame=\([0-9][0-9]*\)$/\1/p" "$out/input-injection.txt")"
-  if [ -n "$existing" ]; then
-    if [ "$label" != ROOFTOP_YELLOW_REARM_STABLE_GUEST ] && [ "$existing" != "$trusted" ]; then
+  # Keep live observations as separate diagnostic markers. The
+  # canonical authenticated FIRE -> OPEN -> STABLE events are appended
+  # only after all original NRO CSVs have been paired and validated.
+  case "$label" in
+    ROOFTOP_YELLOW_REARM_FIRE_GUEST) live_label=ROOFTOP_YELLOW_REARM_FIRE_LIVE_POLL;;
+    ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST) live_label=ROOFTOP_YELLOW_REARM_OPEN_LIVE_POLL;;
+    ROOFTOP_YELLOW_REARM_STABLE_GUEST) live_label=ROOFTOP_YELLOW_REARM_STABLE_LIVE_POLL;;
+  esac
+  observed="$(sed -n "s/^$live_label frame=\([0-9][0-9]*\)$/\1/p" "$out/input-injection.txt")"
+  if [ -n "$observed" ]; then
+    [[ "$observed" =~ ^[0-9]+$ ]] || { echo "BLOCKED: invalid live-poll witness" > "$out/result.txt"; exit 1; }
+    if [ "$label" != ROOFTOP_YELLOW_REARM_STABLE_GUEST ] && [ "$observed" != "$trusted" ]; then
       echo "BLOCKED: live witness disagrees with final paired NRO state" > "$out/result.txt"; exit 1
     fi
-  else
-    printf '%s frame=%s\n' "$label" "$trusted" >> "$out/input-injection.txt"
+    if [ "$label" = ROOFTOP_YELLOW_REARM_STABLE_GUEST ] &&
+       { [ "$observed" -lt "$((open_frame+30))" ] || [ "$observed" -gt "$final_frame" ]; }; then
+      echo "BLOCKED: invalid live stable marker" > "$out/result.txt"; exit 1
+    fi
   fi
+  printf '%s frame=%s\n' "$label" "$trusted" >> "$out/input-injection.txt"
 done
-printf 'postrun_guest_fire=%s postrun_guest_open=%s postrun_stable=%s\n' "$fire_frame" "$open_frame" "$final_frame" >> "$out/metadata.txt"
+printf 'postrun_guest_fire=%s\npostrun_guest_open=%s\npostrun_stable=%s\n' "$fire_frame" "$open_frame" "$final_frame" >> "$out/metadata.txt"
 for event in CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST ROOFTOP_EXIT_GUEST ROOFTOP_SECOND_ENTRY_SENT ROOFTOP_REENTRY_RED_GUEST ROOFTOP_SECOND_APPROACH_GUEST ROOFTOP_SECOND_RED_FIRE_SENT ROOFTOP_SECOND_RED_SWITCH_OVERLAP_GUEST ROOFTOP_SECOND_RED_BRIDGE_CLOSED_GUEST ROOFTOP_NINTENDO_X_SENT ROOFTOP_YELLOW_SELECTED_GUEST ROOFTOP_YELLOW_FIRE_SENT ROOFTOP_YELLOW_FIRE_GUEST ROOFTOP_YELLOW_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_OPEN_STABLE_GUEST ROOFTOP_YELLOW_OPEN_EXIT_GUEST ROOFTOP_YELLOW_RESET_ENTRY_SENT ROOFTOP_YELLOW_RESET_ENTRY_GUEST ROOFTOP_YELLOW_RESET_CLOSED_GUEST ROOFTOP_YELLOW_REARM_APPROACH_GUEST ROOFTOP_YELLOW_REARM_FIRE_SENT ROOFTOP_YELLOW_REARM_FIRE_GUEST ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_REARM_STABLE_GUEST; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
