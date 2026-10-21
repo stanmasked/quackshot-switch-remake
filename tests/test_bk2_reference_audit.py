@@ -93,6 +93,42 @@ class BK2AuditTest(unittest.TestCase):
                 with self.assertRaises(BK2ValidationError):
                     audit(self.path)
 
+    def test_invalid_sync_settings_json_fails(self):
+        movie(self.path)
+        with ZipFile(self.path, "r") as source:
+            members = {name: source.read(name) for name in source.namelist()}
+        members["SyncSettings.json"] = b'{"broken": '
+        with ZipFile(self.path, "w", compression=ZIP_DEFLATED) as target:
+            for name, payload in members.items():
+                target.writestr(name, payload)
+        with self.assertRaises(BK2ValidationError):
+            audit(self.path)
+
+    def test_corrupted_input_member_crc_fails_closed(self):
+        movie(self.path)
+        with ZipFile(self.path, "r") as source:
+            members = {name: source.read(name) for name in source.namelist()}
+        with ZipFile(self.path, "w", compression=ZIP_DEFLATED) as target:
+            for name, payload in members.items():
+                target.writestr(name, payload)
+        # Damage compressed archive bytes after writing valid members.
+        data = bytearray(self.path.read_bytes())
+        input_member = members["Input Log.txt"]
+        offset = data.find(input_member)
+        if offset < 0:
+            # ZIP_DEFLATED bytes need not contain the plaintext; flip a byte
+            # in the local file header's CRC field instead.
+            name_offset = data.find(b"Input Log.txt")
+            self.assertGreaterEqual(name_offset, 0)
+            local_header = name_offset - 30
+            self.assertGreaterEqual(local_header, 0)
+            data[local_header + 14] ^= 0x01
+        else:
+            data[offset] ^= 0x01
+        self.path.write_bytes(data)
+        with self.assertRaises(BK2ValidationError):
+            audit(self.path)
+
     def test_missing_input_fails(self):
         with ZipFile(self.path, "w") as z:
             z.writestr("Header.txt", "Platform GEN\n")
