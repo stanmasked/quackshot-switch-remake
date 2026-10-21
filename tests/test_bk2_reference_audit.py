@@ -93,6 +93,26 @@ class BK2AuditTest(unittest.TestCase):
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
 
+    def test_core_state_takes_priority_over_header(self):
+        movie(self.path, members={"CoreState": b"synthetic-state"})
+        result = audit(self.path)
+        self.assertTrue(result["core_state_in_movie"])
+        self.assertEqual(result["movie_start_kind"], "savestate")
+
+    def test_no_core_state_means_start_not_savestate(self):
+        movie(self.path)
+        result = audit(self.path)
+        self.assertFalse(result["core_state_in_movie"])
+        self.assertEqual(result["movie_start_kind"], "power_on_or_reset")
+
+    def test_archive_size_bound_is_enforced(self):
+        movie(self.path)
+        with self.path.open("r+b") as stream:
+            stream.seek(16_000_000)
+            stream.write(b"x")
+        with self.assertRaises(BK2ValidationError):
+            audit(self.path)
+
     def test_oversized_payload_fails(self):
         movie(self.path, members={"padding.bin": "x" * 15_000_001})
         with self.assertRaises(BK2ValidationError):
