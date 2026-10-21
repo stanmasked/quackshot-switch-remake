@@ -57,6 +57,12 @@ add_test(NAME ruins_relic_optional_objective COMMAND qs_ruins_relic_tests)
 add_executable(qs_rooftop_bridge_tests tests/test_rooftop_shot_bridge.c)
 target_link_libraries(qs_rooftop_bridge_tests PRIVATE qs_core)
 add_test(NAME rooftop_projectile_bridge COMMAND qs_rooftop_bridge_tests)
+add_executable(qs_rooftop_red_reentry_tests tests/test_rooftop_red_reentry.c)
+target_link_libraries(qs_rooftop_red_reentry_tests PRIVATE qs_core)
+add_test(NAME rooftop_red_reentry_native COMMAND qs_rooftop_red_reentry_tests)
+add_executable(qs_rooftop_yellow_rearm_tests tests/test_rooftop_yellow_rearm.c)
+target_link_libraries(qs_rooftop_yellow_rearm_tests PRIVATE qs_core)
+add_test(NAME rooftop_yellow_rearm_native COMMAND qs_rooftop_yellow_rearm_tests)
 add_executable(qs_multistage_progress_tests tests/test_multistage_progress.c)
 target_link_libraries(qs_multistage_progress_tests PRIVATE qs_core)
 add_test(NAME multistage_progress_sequence COMMAND qs_multistage_progress_tests)
@@ -283,6 +289,26 @@ if(Python3_EXECUTABLE)
     add_test(NAME nexium_guest_nested_bash_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_nested_nexium_route.py)
+endif()
+if(Python3_EXECUTABLE)
+    add_test(NAME rooftop_second_red_guest_trace_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_second_red_trace.py)
+endif()
+if(Python3_EXECUTABLE)
+    add_test(NAME rooftop_red_to_yellow_guest_trace_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_red_to_yellow.py)
+endif()
+if(Python3_EXECUTABLE)
+    add_test(NAME rooftop_yellow_bridge_reset_guest_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_yellow_reset.py)
+endif()
+if(Python3_EXECUTABLE)
+    add_test(NAME rooftop_yellow_rearm_guest_trace_protocol
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_yellow_rearm_guest.py)
 endif()
 option(QS_BUILD_DESKTOP "Build SDL2 desktop prototype if SDL2 is installed" ON)
 if(QS_BUILD_DESKTOP)
