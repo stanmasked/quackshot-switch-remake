@@ -110,6 +110,15 @@ class FractionalFallProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "before ledge"):
             phase.analyze(right, repeated, idle, INPUTS)
 
+    def test_private_fall_must_be_monotonic_near_first_drop(self):
+        right, repeated, idle = synthetic_series()
+        for series in (right, repeated):
+            # Preserve independently known integer landmarks, but forge a
+            # fractional backward step after the first integer crossing.
+            series[2282] = {"x": 396, "y": 177, "y_fraction": 10000}
+        with self.assertRaisesRegex(ValueError, "nondecreasing"):
+            phase.analyze(right, repeated, idle, INPUTS)
+
     def test_idle_reference_must_be_still(self):
         right, repeated, idle = synthetic_series()
         idle[2270]["y_fraction"] = 1

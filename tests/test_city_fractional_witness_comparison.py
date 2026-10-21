@@ -98,6 +98,69 @@ class FractionalWitnessComparisonTests(unittest.TestCase):
                          result["strictly_comparable_threshold_deltas"])
         self.assertNotIn("fractional_y_units_at_integer_176_frame_2280", result)
 
+    def test_frame_2280_fraction_must_agree_with_first_crossings(self):
+        # All of these are deliberately forged, ROM-free fixtures.
+        scenarios = (
+            ("zero_but_claims_earlier_motion",
+             "fractional_y_units_at_integer_176_frame_2280", 0,
+             "positive threshold"),
+            ("below_quarter_but_claims_quarter_crossing",
+             "fractional_y_units_at_integer_176_frame_2280", 12000,
+             "quarter-pixel threshold"),
+            ("above_quarter_but_claims_later_crossing",
+             "first_y_above_quarter_pixel_frame", 2281,
+             "quarter-pixel threshold"),
+        )
+        for label, field, value, error in scenarios:
+            fake = simulated_external_witness(self.ref)
+            fake[field] = value
+            if field == "first_y_above_quarter_pixel_frame":
+                fake["fall_duration_by_threshold_frames"][
+                    "over_quarter_to_integer_floor"] = 16
+            with self.subTest(case=label), self.assertRaisesRegex(
+                    ValueError, error):
+                compare(self.obs, self.source, authored_32px_report(), fake)
+
+    def test_exact_quarter_boundary_is_strictly_greater_only(self):
+        # Numerically consistent forged fixtures are accepted as SHAPES,
+        # never promoted to independently verified source measurements.
+        cases = (
+            (0, 2281, 2281),
+            (1, 2280, 2281),
+            (16384, 2280, 2281),
+            (16385, 2280, 2280),
+        )
+        for fraction, positive, quarter in cases:
+            fake = simulated_external_witness(self.ref)
+            fake["fractional_y_units_at_integer_176_frame_2280"] = fraction
+            fake["first_y_positive_subpixel_frame"] = positive
+            fake["first_y_above_quarter_pixel_frame"] = quarter
+            fake["fall_duration_by_threshold_frames"][
+                "positive_subpixel_to_integer_floor"] = 2297 - positive
+            fake["fall_duration_by_threshold_frames"][
+                "over_quarter_to_integer_floor"] = 2297 - quarter
+            with self.subTest(fraction=fraction):
+                report = compare(self.obs, self.source,
+                                 authored_32px_report(), fake)
+                self.assertEqual(report["status"],
+                                 "USER_NUMERIC_WITNESS_NOT_INDEPENDENTLY_ATTESTED")
+                self.assertFalse(report["physics_calibration_gate"][
+                                 "safe_to_modify_switch_physics"])
+
+    def test_fake_numeric_witness_never_authorizes_physics_tuning(self):
+        fake = simulated_external_witness(self.ref)
+        report = compare(self.obs, self.source, authored_32px_report(), fake)
+        gate = report["physics_calibration_gate"]
+        self.assertFalse(gate["safe_to_modify_switch_physics"])
+        self.assertEqual(gate["status"],
+                         "BLOCKED_COORDINATE_ORIGIN_AND_HITBOX_UNMEASURED")
+        self.assertEqual(len(gate["required_before_tuning"]), 3)
+        no_witness = compare(self.obs, self.source, authored_32px_report())
+        self.assertEqual(no_witness["physics_calibration_gate"]["status"],
+                         "BLOCKED_NO_NEW_ORIGINAL_SUBPIXEL_MEASUREMENT")
+        self.assertFalse(no_witness["physics_calibration_gate"][
+                         "safe_to_modify_switch_physics"])
+
     def test_wrong_phase_cannot_be_mistaken_for_original_timing(self):
         for key in ("ram_checkpoint_phase", "video_callback_phase"):
             fake = simulated_external_witness(self.ref)
