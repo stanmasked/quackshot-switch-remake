@@ -4,6 +4,8 @@ on:
     paths:
       - "tools/nexium_rooftop_touch_probe.sh"
       - "tests/test_rooftop_touch_exit_gate.py"
+      - "tests/test_nested_nexium_route.py"
+      - "tools/verify_nested_nexium_route.py"
       - "tools/verify_rooftop_touch_repeats.py"
       - ".github/workflows/nexium-rooftop-touch.yml"
       - "src/main_sdl.c"
@@ -58,6 +60,7 @@ jobs:
         run: |
           bash -n tools/nexium_rooftop_touch_probe.sh
           python3 tools/verify_nested_nexium_route.py tools/nexium_rooftop_touch_probe.sh
+          python3 -m unittest discover -s tests -p test_nested_nexium_route.py
           python3 -m unittest discover -s tests -p test_rooftop_touch_exit_gate.py
           python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_touch_trace.py tools/verify_rooftop_touch_repeats.py
       - name: Install CPU Vulkan and virtual-screen dependencies
