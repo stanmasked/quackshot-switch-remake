@@ -1,5 +1,7 @@
 """Stage160: adversarial protocol checks for the *second* real yellow bridge opening."""
+import csv
 import pathlib
+import tempfile
 import sys
 import unittest
 ROOT=pathlib.Path(__file__).resolve().parents[1]
@@ -7,6 +9,9 @@ sys.path.insert(0,str(ROOT))
 sys.path.insert(0,str(ROOT/"tests"))
 from test_rooftop_yellow_reset import fixture as reset_fixture
 from tools.verify_rooftop_yellow_rearm import verify_rearm,YellowRearmError
+from tools.rooftop_yellow_guest_witness import witness
+from tools.verify_rooftop_guest_trace import COLUMNS
+from tools.verify_rooftop_red_to_yellow import WEAPON_COLUMNS
 
 def fixture():
     city,roof,edges,weapon,host=reset_fixture()
@@ -63,6 +68,42 @@ def fixture():
     return city,roof,edges,weapon,host
 
 class YellowRearmProtocol(unittest.TestCase):
+    def test_live_csv_lag_does_not_hide_authentic_yellow_fire(self):
+        # Real NRO commits/flushed roof CSV before weapon CSV, so an
+        # asynchronous host poll may see one trailing unpaired roof row.
+        # Stage160 real dual-guest artifacts failed to recognize FIRE
+        # despite genuine NRO fire=1512 and bridge=1521 in both logs.
+        c,r,e,w,h=fixture()
+        with tempfile.TemporaryDirectory() as root:
+            roof=pathlib.Path(root)/"roof.csv"
+            weapon=pathlib.Path(root)/"weapon.csv"
+            with roof.open("w",newline="",encoding="utf-8") as out:
+                writer=csv.DictWriter(out,fieldnames=COLUMNS)
+                writer.writeheader()
+                writer.writerows(r)
+            with weapon.open("w",newline="",encoding="utf-8") as out:
+                writer=csv.DictWriter(out,fieldnames=WEAPON_COLUMNS)
+                writer.writeheader()
+                writer.writerows(w[:-1])
+            self.assertEqual(witness(roof,weapon,"fire",1750),2103)
+            self.assertEqual(witness(roof,weapon,"bridge",2103),2111)
+
+    def test_live_csv_unpaired_tail_must_not_invent_fire(self):
+        c,r,e,w,h=fixture()
+        with tempfile.TemporaryDirectory() as root:
+            roof=pathlib.Path(root)/"roof.csv"
+            weapon=pathlib.Path(root)/"weapon.csv"
+            with roof.open("w",newline="",encoding="utf-8") as out:
+                writer=csv.DictWriter(out,fieldnames=COLUMNS)
+                writer.writeheader()
+                writer.writerows(r)
+            with weapon.open("w",newline="",encoding="utf-8") as out:
+                writer=csv.DictWriter(out,fieldnames=WEAPON_COLUMNS)
+                writer.writeheader()
+                # No weapon telemetry after the second YELLOW FIRE.
+                writer.writerows(w[:792])
+            self.assertIsNone(witness(roof,weapon,"fire",2090))
+
     def test_valid_red_red_yellow_reset_yellow_reopen(self):
         report=verify_rearm(*fixture())
         self.assertEqual(report["status"],"PASS")
