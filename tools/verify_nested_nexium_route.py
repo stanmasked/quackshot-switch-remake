@@ -15,6 +15,8 @@ class RouteSyntaxError(ValueError):
 
 
 def embedded_program(source):
+    if not isinstance(source, str):
+        raise RouteSyntaxError("route source must be text, not a path object")
     start_marker = 'xvfb-run -a -s "-screen 0 1280x720x24" bash -c ' + "'\n"
     end_marker = '\n' + "' bash " + '"$emu" "$nro"'
     if source.count(start_marker) != 1 or source.count(end_marker) != 1:
