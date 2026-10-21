@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import sys
 import zipfile
+import zlib
 
 BUTTONS = ("Up", "Down", "Left", "Right", "A", "B", "C", "Start", "X", "Y", "Z", "Mode")
 SYMBOLS = "UDLRABCSXYZM"
@@ -44,10 +45,15 @@ def audit(path: Path) -> dict:
                 raise BK2ValidationError("BK2 is missing required input metadata")
             if sum(x.file_size for x in info) > MAX_UNCOMPRESSED_BYTES:
                 raise BK2ValidationError("BK2 data exceeds safe size bound")
+            # Validate CRC/decompression for every member, including CoreState
+            # and optional metadata that the aggregate report does not expose.
+            bad_member = archive.testzip()
+            if bad_member is not None:
+                raise BK2ValidationError("BK2 member failed integrity check")
             header_bytes = archive.read("Header.txt")
             settings_bytes = archive.read("SyncSettings.json")
             movie_bytes = archive.read("Input Log.txt")
-    except (OSError, zipfile.BadZipFile, RuntimeError, EOFError) as exc:
+    except (OSError, zipfile.BadZipFile, RuntimeError, EOFError, zlib.error) as exc:
         raise BK2ValidationError("Cannot open BK2 ZIP archive") from exc
     try:
         head_text = header_bytes.decode("utf-8-sig")
