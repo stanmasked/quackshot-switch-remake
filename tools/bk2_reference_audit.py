@@ -171,6 +171,9 @@ def main(argv=None) -> int:
         return 1
     data = json.dumps(result, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     if args.out:
+        if args.out.resolve() == args.bk2.resolve():
+            print("BK2_AUDIT_FAIL: report path would overwrite original BK2", file=sys.stderr)
+            return 2
         args.out.write_text(data, encoding="utf-8")
     else:
         sys.stdout.write(data)
