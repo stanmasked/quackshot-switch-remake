@@ -156,8 +156,17 @@ def main():
     try:
         root = args.root.resolve()
         observations, source = read_inputs(root)
-        witness = (json.loads(args.numeric_witness.read_text(encoding="utf-8"))
-                   if args.numeric_witness else None)
+        if args.numeric_witness:
+            input_path = args.numeric_witness.resolve()
+            require(root not in input_path.parents and input_path != root,
+                    "private contact witness must stay outside public repository")
+            try:
+                witness = json.loads(input_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                raise ValueError("CITY original contact candidate: "
+                                 "private numeric witness is missing or invalid") from None
+        else:
+            witness = None
         report = analyze(observations, source, witness)
         serialized = json.dumps(report, sort_keys=True, indent=2,
                                 ensure_ascii=False) + "\n"
@@ -172,8 +181,10 @@ def main():
             args.out.write_text(serialized, encoding="utf-8")
         else:
             print(serialized, end="")
-    except (ValueError, TypeError, KeyError, OSError,
-            json.JSONDecodeError) as exc:
+    except OSError:
+        p.exit(1, "CITY original contact candidate: local I/O error "
+                  "(private paths redacted)\n")
+    except (ValueError, TypeError, KeyError) as exc:
         p.exit(1, str(exc) + "\n")
 
 
