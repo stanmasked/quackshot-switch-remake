@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import zlib
 from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +49,18 @@ class LocalROMMatchTests(unittest.TestCase):
         result = check_rom(self.movie, self.rom)
         self.assertEqual(result["status"], "candidate_hash_match")
         self.assertEqual(result["candidate_hash_algorithm"], "sha1")
+
+    def test_8_hex_claim_matches_legacy_crc32_candidate(self):
+        synth_movie(self.movie, format(zlib.crc32(self.bytes) & 0xffffffff, "08X"))
+        result = check_rom(self.movie, self.rom)
+        self.assertEqual(result["status"], "candidate_hash_match")
+        self.assertEqual(result["candidate_hash_algorithm"], "crc32_candidate_for_8_digit_SHA1_field")
+        self.assertFalse(result["replay_compatibility_verified"])
+
+    def test_8_hex_claim_mismatch(self):
+        declared = "00000000" if (zlib.crc32(self.bytes) & 0xffffffff) else "11111111"
+        synth_movie(self.movie, declared)
+        self.assertEqual(check_rom(self.movie, self.rom)["status"], "candidate_hash_mismatch")
 
     def test_32_hex_claim_mismatch(self):
         synth_movie(self.movie, "0" * 32)
