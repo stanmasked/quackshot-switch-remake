@@ -6,7 +6,6 @@ numeric event summary leaves this function: no raw RAM, frame arrays,
 pixels, sound, savestates, ROM bytes or controller log is serialized.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -15,6 +14,8 @@ from genesis_city_obstacle_probe import (
 )
 from genesis_libretro_probe import parse_script, run_core, safe_rom, setup_core
 from genesis_playable_physics import DEFAULT_ENTRY
+from private_genesis_input_guard import PinnedOriginalInputs
+from reference_evidence_integrity import read_inputs, validate
 
 Q16 = 65536
 START_WORLD_Y = 176
@@ -130,9 +131,11 @@ def analyze(right, right_repeat, idle, input_deltas):
     }
 
 
-def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
+def measure(core, metadata, private_rom_path, rom_bytes, verified_sha, *,
+            verify_inputs):
     require(verified_sha == EXPECTED_ROM_SHA256,
             "ROM SHA differs from the observed original version")
+    require(callable(verify_inputs), "private input guard must be callable")
     intro = parse_script(DEFAULT_ENTRY)
     traces, videos, read_counts = {}, {}, {}
     for name in ("idle", "right", "right_repeat"):
@@ -142,12 +145,18 @@ def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
             if FIRST <= frame < LAST_EXCLUSIVE:
                 series[frame] = decode(ram)
 
-        result = run_core(
-            core, metadata, rom_bytes, verified_sha, TOTAL,
-            intro + RUNS[name], private_rom_path=private_rom_path,
-            ram_window=(FIRST, LAST_EXCLUSIVE),
-            checkpoint_sink=on_private_ram, video_stride=60
-        )
+        # Check both local files around *every* independent emulation run.
+        # Do this again after a failed run, not just a successful return.
+        verify_inputs()
+        try:
+            result = run_core(
+                core, metadata, rom_bytes, verified_sha, TOTAL,
+                intro + RUNS[name], private_rom_path=private_rom_path,
+                ram_window=(FIRST, LAST_EXCLUSIVE),
+                checkpoint_sink=on_private_ram, video_stride=60
+            )
+        finally:
+            verify_inputs()
         require(result["frames_video_callbacks"] == TOTAL,
                 "original emulator stopped early")
         require(result.get("ram_checkpoint_phase") ==
@@ -198,11 +207,20 @@ def main():
                     "refusing to overwrite private ROM/core")
             require(output.suffix.lower() == ".json",
                     "numeric output must be JSON")
+        # Pin against existing numeric-only evidence *before loading* the core.
+        # This does not grant independent provenance to exported JSON.
+        provenance = validate(*read_inputs(Path(__file__).resolve().parents[1]))
+        guard = PinnedOriginalInputs(
+            args.rom, args.core, EXPECTED_ROM_SHA256,
+            provenance["genesis_core_sha256"])
+        guard()
         core, metadata = setup_core(args.core)
         rom_bytes, sha = safe_rom(args.rom, args.expected_sha256)
-        report = measure(core, metadata, args.rom, rom_bytes, sha)
-        report["core_binary_sha256"] = hashlib.sha256(
-            args.core.read_bytes()).hexdigest()
+        guard()
+        report = measure(core, metadata, args.rom, rom_bytes, sha,
+                         verify_inputs=guard)
+        guard()
+        report["core_binary_sha256"] = provenance["genesis_core_sha256"]
         serialized = json.dumps(report, sort_keys=True, indent=2) + "\n"
         if args.output:
             args.output.write_text(serialized, encoding="utf-8")
