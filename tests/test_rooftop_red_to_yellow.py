@@ -128,7 +128,7 @@ class NeXiumStartupWindowReadiness(unittest.TestCase):
         self.assertNotIn('sleep 5\n  window=',self.window_block)
 
     def test_all_interactive_routes_share_bounded_guest_startup(self):
-        from tools.verify_nested_nexium_route import check_route
+        from tools.verify_nested_nexium_route import check_route, embedded_program
         scripts = (
             "tools/nexium_rooftop_probe.sh",
             "tools/nexium_rooftop_red_probe.sh",
