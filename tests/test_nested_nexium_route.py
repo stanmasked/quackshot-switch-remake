@@ -65,7 +65,7 @@ class NativeGuestStartupGateTests(unittest.TestCase):
             with self.subTest(route=name):
                 path = ROOT / "tools" / name
                 source = path.read_text(encoding="utf-8")
-                inner = embedded_program(path)
+                inner = embedded_program(source)
                 self.assertEqual(check_route(path)["status"], "PASS")
                 self.assertIn("for startup_poll in $(seq 1 80)", inner)
                 self.assertIn("for boot_poll in $(seq 1 100)", inner)
