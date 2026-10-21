@@ -48,5 +48,44 @@ class NestedGuestShellTests(unittest.TestCase):
         self.assertEqual(embedded_program(PREFIX + code + SUFFIX), code)
 
 
+class NativeGuestStartupGateTests(unittest.TestCase):
+    """All real NeXium routes must wait for both X11 and native NRO frames."""
+    ROUTES = (
+        "nexium_rooftop_red_probe.sh",
+        "nexium_rooftop_reentry_probe.sh",
+        "nexium_rooftop_second_red_probe.sh",
+        "nexium_rooftop_red_to_yellow_probe.sh",
+        "nexium_rooftop_touch_probe.sh",
+        "nexium_rooftop_yellow_rearm_probe.sh",
+        "nexium_rooftop_yellow_reset_probe.sh",
+    )
+
+    def test_every_route_has_bounded_window_and_guest_readiness(self):
+        for name in self.ROUTES:
+            with self.subTest(route=name):
+                path = ROOT / "tools" / name
+                source = path.read_text(encoding="utf-8")
+                inner = embedded_program(path)
+                self.assertEqual(check_route(path)["status"], "PASS")
+                self.assertIn("for startup_poll in $(seq 1 80)", inner)
+                self.assertIn("for boot_poll in $(seq 1 100)", inner)
+                self.assertIn('xdotool search --onlyvisible --name NeXium', inner)
+                self.assertIn('grep -qF "[guest-present] queued=300"', inner)
+                self.assertIn("NEXIUM_WINDOW_READY", inner)
+                self.assertIn("NEXIUM_GUEST_FRAMES_READY", inner)
+                self.assertIn(
+                    "for event in NEXIUM_WINDOW_READY NEXIUM_GUEST_FRAMES_READY",
+                    source,
+                )
+                self.assertLess(
+                    inner.index("NEXIUM_GUEST_FRAMES_READY"),
+                    inner.index('xdotool key --clearmodifiers c'),
+                )
+                self.assertNotIn(
+                    'window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"',
+                    inner,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
