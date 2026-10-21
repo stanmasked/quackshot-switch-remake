@@ -99,8 +99,20 @@ def validate_witness(witness, provenance, original):
     require(exact_floor is None or
             exact_integer(exact_floor, "exact_floor", 2297, 2510) >= landing,
             "exact floor frame precedes integer landing")
-    exact_integer(witness["fractional_y_units_at_integer_176_frame_2280"],
-                  "fractional_y_units_at_integer_176_frame_2280", 0, 65535)
+    frac_2280 = exact_integer(
+        witness["fractional_y_units_at_integer_176_frame_2280"],
+        "fractional_y_units_at_integer_176_frame_2280", 0, 65535)
+    # Stage188 explicitly observes Y=176 on frame 2280, increasing
+    # monotonically during the falling interval. Strict comparisons:
+    # >0 iff fraction >0; >1/4 px iff fraction >16384.
+    # A valid event first seen on/before frame 2280 MUST agree with
+    # that observed value. This is about post-retro_run RAM state only.
+    first_positive = markers["first_y_positive_subpixel_frame"]
+    first_quarter = markers["first_y_above_quarter_pixel_frame"]
+    require((first_positive <= 2280) == (frac_2280 > 0),
+            "frame 2280 fractional Y contradicts positive threshold")
+    require((first_quarter <= 2280) == (frac_2280 > 16384),
+            "frame 2280 fractional Y contradicts quarter-pixel threshold")
     durations = witness["fall_duration_by_threshold_frames"]
     require(type(durations) is dict and
             set(durations) == set(DURATION_FIELDS),
@@ -175,12 +187,24 @@ def compare(observations, source, synthetic_report=None, numeric_witness=None):
         "original_fractional_threshold_intervals": None,
         "authored_switch_32px_threshold_intervals": synthetic,
         "strictly_comparable_threshold_deltas": None,
+        "physics_calibration_gate": {
+            "status": ("BLOCKED_COORDINATE_ORIGIN_AND_HITBOX_UNMEASURED"
+                       if numeric_witness is not None else
+                       "BLOCKED_NO_NEW_ORIGINAL_SUBPIXEL_MEASUREMENT"),
+            "safe_to_modify_switch_physics": False,
+            "required_before_tuning": [
+                "Independently verify first-city original subpixel timing",
+                "Resolve original Y anchor versus Switch hero top-Y origin",
+                "Establish comparable collision geometry and time reference",
+            ],
+        },
         "measurement_caveats": [
             "An external numeric JSON report is not cryptographic proof of original emulation",
             "Stage186 >0.01px and Stage188 >0px thresholds are NOT interchangeable",
             "Original integer Y and authored hero top Y have different origins and hitboxes",
             "A matching time interval cannot prove identical geometry or collision physics",
-            "Genesis libretro memory callback phase vs displayed frames is not independently established",
+            "Stage190 verified harness post-retro_run RAM labels, not 68000 instruction/VDP scanout timing",
+            "Numeric threshold differences are diagnostic only; no cross-game collision parity claim",
         ],
     }
     if numeric_witness is not None:
