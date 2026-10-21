@@ -120,8 +120,10 @@ class BK2AuditTest(unittest.TestCase):
         name_len = int.from_bytes(data[local_header + 26:local_header + 28], "little")
         extra_len = int.from_bytes(data[local_header + 28:local_header + 30], "little")
         compressed_start = local_header + 30 + name_len + extra_len
-        self.assertLess(compressed_start, len(data))
-        data[compressed_start] ^= 0x01
+        self.assertLess(compressed_start + 1, len(data))
+        # Mutate the compressed payload body; changing only its first byte
+        # can leave a valid DEFLATE stream with identical decoded content.
+        data[compressed_start + 1] ^= 0x40
         self.path.write_bytes(data)
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
@@ -142,8 +144,8 @@ class BK2AuditTest(unittest.TestCase):
         name_len = int.from_bytes(data[local_header + 26:local_header + 28], "little")
         extra_len = int.from_bytes(data[local_header + 28:local_header + 30], "little")
         compressed_start = local_header + 30 + name_len + extra_len
-        self.assertLess(compressed_start, len(data))
-        data[compressed_start] ^= 0x01
+        self.assertLess(compressed_start + 1, len(data))
+        data[compressed_start + 1] ^= 0x40
         self.path.write_bytes(data)
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
