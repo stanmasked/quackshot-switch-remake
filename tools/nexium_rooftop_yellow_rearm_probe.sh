@@ -37,7 +37,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   # BEGIN YELLOW RESET WINDOW AND GAME READY GATE
   # NeXium may create its X11 window after the guest is already running.
   # Never fail on one early lookup: poll a bounded number of times and
-  # require the pinned emulator's real guest-present frame witness before
+  # require the pinned NeXium real guest-present frame witness before
   # sending any game/controller input.
   window=""
   for startup_poll in $(seq 1 80); do
