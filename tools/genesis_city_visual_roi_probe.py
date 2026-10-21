@@ -51,12 +51,36 @@ def summarize(traces, read_counts, video_digests, roi, sha, core_sha):
                     0 <= metric["player_ram_y"] <= 65535,
                     "invalid original RAM-Y number")
             visual = metric["visual"]
-            require(type(visual) is dict and
-                    visual.get("roi") == list(roi) and
-                    visual.get("source_collision_plane_measured") is False and
-                    type(visual.get("blue_pixel_count")) is int and
+            allowed = {
+                "roi", "pixel_format", "blue_pixel_count",
+                "blue_centroid_x_milli", "blue_centroid_y_milli",
+                "blue_bbox_xyxy_exclusive", "source_collision_plane_measured"
+            }
+            require(type(visual) is dict and set(visual) == allowed and
+                    visual["roi"] == list(roi) and
+                    visual["source_collision_plane_measured"] is False and
+                    visual["pixel_format"] in
+                    ("0RGB1555", "XRGB8888", "RGB565") and
+                    type(visual["blue_pixel_count"]) is int and
                     0 <= visual["blue_pixel_count"] <= roi[2] * roi[3],
-                    "invalid visual ROI numbers or collision claim")
+                    "unexpected original payload in numeric visual ROI")
+            count = visual["blue_pixel_count"]
+            cx, cy = (visual["blue_centroid_x_milli"],
+                      visual["blue_centroid_y_milli"])
+            bbox = visual["blue_bbox_xyxy_exclusive"]
+            if count == 0:
+                require(cx is None and cy is None and bbox is None,
+                        "empty blue ROI cannot claim a location")
+            else:
+                require(type(cx) is int and type(cy) is int and
+                        roi[0] * 1000 <= cx < (roi[0] + roi[2]) * 1000 and
+                        roi[1] * 1000 <= cy < (roi[1] + roi[3]) * 1000,
+                        "numeric centroid outside selected ROI")
+                require(type(bbox) is list and len(bbox) == 4 and
+                        all(type(v) is int for v in bbox) and
+                        roi[0] <= bbox[0] < bbox[2] <= roi[0] + roi[2] and
+                        roi[1] <= bbox[1] < bbox[3] <= roi[1] + roi[3],
+                        "numeric bounding box outside selected ROI")
     require(traces["right"] == traces["right_repeat"],
             "two original right-run visual/RAM observations diverged")
     require(all(traces["right"][frame]["player_ram_y"] == y
