@@ -154,6 +154,10 @@ def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
                 "post_retro_run_before_next_input" and
                 result.get("video_callback_phase") == "during_retro_run",
                 "emulator checkpoint phase contract is absent or incompatible")
+        require(result.get("frames_without_video_callback") == 0 and
+                result.get("frames_with_multiple_video_callbacks") == 0 and
+                result.get("video_callbacks_outside_retro_run") == 0,
+                "emulator video callback cadence is not one per retro_run")
         traces[name] = series
         videos[name] = result["video_checkpoints"]
         read_counts[name] = result["input_nonzero_reads"]

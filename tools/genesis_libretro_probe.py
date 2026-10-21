@@ -138,6 +138,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             raise ValueError("ram_window requires (start, end_exclusive) within frame count")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
+             "inside_retro_run": False, "video_callbacks_current_step": 0,
+             "video_callbacks_outside_retro_run": 0,
+             "frames_without_video_callback": 0,
+             "frames_with_multiple_video_callbacks": 0,
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
@@ -169,6 +173,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     @VideoCb
     def video(data, width, height, pitch):
         state["video_frames"] += 1
+        if state["inside_retro_run"]:
+            state["video_callbacks_current_step"] += 1
+        else:
+            state["video_callbacks_outside_retro_run"] += 1
         if not data or state["frame"] % video_stride or not width or not height:
             return
         bytes_per_pixel = 4 if state["pixel_format"] == 1 else 2
@@ -228,7 +236,16 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             state["frame"] = frame
             active = buttons_at(frame, schedule)
             state["pressed"] = {BUTTONS[name] for name in active}
-            core.retro_run()
+            state["video_callbacks_current_step"] = 0
+            state["inside_retro_run"] = True
+            try:
+                core.retro_run()
+            finally:
+                state["inside_retro_run"] = False
+            if state["video_callbacks_current_step"] == 0:
+                state["frames_without_video_callback"] += 1
+            elif state["video_callbacks_current_step"] > 1:
+                state["frames_with_multiple_video_callbacks"] += 1
             if frame % 60 == 0 or (ram_window is not None and ram_window[0] <= frame < ram_window[1]):
                 ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
                 ram = C.string_at(ptr, ram_len) if ptr and ram_len else b""
@@ -260,6 +277,11 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "reference_rom_sha256": rom_hash,
             "frames_requested": frames,
             "frames_video_callbacks": state["video_frames"],
+            # A correct total alone may hide a zero-callback frame paired
+            # with a double-callback frame. Keep only aggregate counts.
+            "frames_without_video_callback": state["frames_without_video_callback"],
+            "frames_with_multiple_video_callbacks": state["frames_with_multiple_video_callbacks"],
+            "video_callbacks_outside_retro_run": state["video_callbacks_outside_retro_run"],
             "video_stride": video_stride,
             "input_polls": state["input_polls"],
             "input_reads": state["input_reads"],

@@ -19,7 +19,9 @@ import genesis_city_fractional_fall_probe as fall
 
 class FakeLibretroCore:
     """Minimal deterministic fake implementing just the tested API."""
-    def __init__(self):
+    def __init__(self, video_counts=None, video_before_load=False):
+        self.video_counts = video_counts or {}
+        self.video_before_load = video_before_load
         self.memory = C.create_string_buffer(65536)
         self.frame = 0
         self.events = []
@@ -37,6 +39,8 @@ class FakeLibretroCore:
 
     def retro_load_game(self, game_info):
         self.events.append("load")
+        if self.video_before_load:
+            self.video(None, 0, 0, 0)
         return True
 
     def retro_set_controller_port_device(self, port, device):
@@ -62,7 +66,8 @@ class FakeLibretroCore:
                                  libretro.BUTTONS["RIGHT"]))
         self.memory[0] = bytes([self.frame + 1])
         self.memory[1] = bytes([pressed])
-        self.video(None, 0, 0, 0)
+        for _ in range(self.video_counts.get(self.frame, 1)):
+            self.video(None, 0, 0, 0)
         self.events.append(("run_completed", self.frame))
         self.frame += 1
 
@@ -95,6 +100,9 @@ class LibretroSamplingPhaseTests(unittest.TestCase):
         ])
         self.assertEqual(report["input_nonzero_reads"], 2)
         self.assertEqual(report["frames_video_callbacks"], 4)
+        self.assertEqual(report["frames_without_video_callback"], 0)
+        self.assertEqual(report["frames_with_multiple_video_callbacks"], 0)
+        self.assertEqual(report["video_callbacks_outside_retro_run"], 0)
         self.assertEqual(report["ram_checkpoint_phase"],
                          "post_retro_run_before_next_input")
         self.assertEqual(report["video_callback_phase"], "during_retro_run")
@@ -123,6 +131,58 @@ class LibretroSamplingPhaseTests(unittest.TestCase):
         }
         with mock.patch.object(fall, "run_core", return_value=bad):
             with self.assertRaisesRegex(ValueError, "phase contract"):
+                fall.measure(None, {}, Path("/private/synthetic-not-used"),
+                             b"fake", fall.EXPECTED_ROM_SHA256)
+
+    def test_equal_total_video_callbacks_can_hide_bad_per_frame_cadence(self):
+        # Video frame 1 is skipped; frame 2 sends two callbacks instead.
+        # A naive total-count assertion would accept this trace.
+        fake = FakeLibretroCore(video_counts={1: 0, 2: 2})
+        report = libretro.run_core(
+            fake, {"need_fullpath": False}, b"fake", "synthetic",
+            4, [], ram_window=(0, 4), checkpoint_sink=lambda *_: None
+        )
+        self.assertEqual(report["frames_video_callbacks"], 4)
+        self.assertEqual(report["frames_without_video_callback"], 1)
+        self.assertEqual(report["frames_with_multiple_video_callbacks"], 1)
+        self.assertEqual(report["video_callbacks_outside_retro_run"], 0)
+
+    def test_load_time_video_callback_is_not_mislabeled_as_during_run(self):
+        fake = FakeLibretroCore(video_before_load=True)
+        report = libretro.run_core(
+            fake, {"need_fullpath": False}, b"fake", "synthetic",
+            2, [], ram_window=(0, 2), checkpoint_sink=lambda *_: None
+        )
+        self.assertEqual(report["frames_video_callbacks"], 3)
+        self.assertEqual(report["frames_without_video_callback"], 0)
+        self.assertEqual(report["frames_with_multiple_video_callbacks"], 0)
+        self.assertEqual(report["video_callbacks_outside_retro_run"], 1)
+
+    def test_private_probe_rejects_bad_video_cadence_before_using_ram(self):
+        bad = {
+            "frames_video_callbacks": fall.TOTAL,
+            "ram_checkpoint_phase": "post_retro_run_before_next_input",
+            "video_callback_phase": "during_retro_run",
+            "frames_without_video_callback": 1,
+            "frames_with_multiple_video_callbacks": 1,
+            "video_callbacks_outside_retro_run": 0,
+        }
+        with mock.patch.object(fall, "run_core", return_value=bad):
+            with self.assertRaisesRegex(ValueError, "video callback cadence"):
+                fall.measure(None, {}, Path("/private/synthetic-not-used"),
+                             b"fake", fall.EXPECTED_ROM_SHA256)
+
+    def test_private_probe_rejects_video_callbacks_outside_run(self):
+        bad = {
+            "frames_video_callbacks": fall.TOTAL,
+            "ram_checkpoint_phase": "post_retro_run_before_next_input",
+            "video_callback_phase": "during_retro_run",
+            "frames_without_video_callback": 0,
+            "frames_with_multiple_video_callbacks": 0,
+            "video_callbacks_outside_retro_run": 1,
+        }
+        with mock.patch.object(fall, "run_core", return_value=bad):
+            with self.assertRaisesRegex(ValueError, "video callback cadence"):
                 fall.measure(None, {}, Path("/private/synthetic-not-used"),
                              b"fake", fall.EXPECTED_ROM_SHA256)
 
