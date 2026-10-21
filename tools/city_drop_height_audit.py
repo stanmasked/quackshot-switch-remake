@@ -104,8 +104,26 @@ def summarize(rows, original):
             "difference_to_original_32px_interval_frames":
                 timing - benchmark if h == 32 else None,
         })
+    baseline = rows[32, 25]
+    registration_intervals = {
+        "first_unsupported": (baseline["unsupported_to_land_frames"]),
+        "first_y_gt_0p01": baseline["fall_to_land_frames"],
+        "first_y_gt_0p25": baseline["landing"] - baseline["fall_0p25"],
+        "first_y_gt_1px": baseline["landing"] - baseline["fall_1px"],
+    }
+    registration_residuals = {
+        key: frames - benchmark
+        for key, frames in registration_intervals.items()
+    }
     return {
         "schema": "quackshot_city_drop_height_sensitivity_v1",
+        "baseline_32px_threshold_comparison": {
+            "ledge_column": 25,
+            "source_numeric_original_interval_frames": benchmark,
+            "synthetic_intervals_frames": registration_intervals,
+            "synthetic_minus_original_frames": registration_residuals,
+            "warning": "Threshold matching is not proof of original event semantics",
+        },
         "status": "SYNTHETIC_DROP_EXPERIMENT_NOT_ROM_PARITY",
         "original_rom_was_run": False,
         "original_assets_in_report": False,
