@@ -127,6 +127,29 @@ class NeXiumStartupWindowReadiness(unittest.TestCase):
         self.assertIn('kill -0 "$emu_pid"',self.window_block)
         self.assertNotIn('sleep 5\n  window=',self.window_block)
 
+    def test_all_interactive_routes_share_bounded_guest_startup(self):
+        from tools.verify_nested_nexium_route import check_route
+        scripts = (
+            "tools/nexium_rooftop_probe.sh",
+            "tools/nexium_rooftop_red_probe.sh",
+            "tools/nexium_rooftop_reentry_probe.sh",
+            "tools/nexium_rooftop_second_red_probe.sh",
+            "tools/nexium_rooftop_yellow_rearm_probe.sh",
+            "tools/nexium_rooftop_yellow_reset_probe.sh",
+            "tools/nexium_rooftop_red_to_yellow_probe.sh",
+            "tools/nexium_rooftop_touch_probe.sh",
+        )
+        for relative in scripts:
+            with self.subTest(script=relative):
+                path = ROOT / relative
+                inner = embedded_program(path.read_text(encoding="utf-8"))
+                self.assertIn("for startup_poll in $(seq 1 80)", inner)
+                self.assertIn("[guest-present] queued=300", inner)
+                self.assertIn("for boot_poll in $(seq 1 100)", inner)
+                self.assertNotIn("sleep 5" + chr(10) + "  window=", inner)
+                self.assertEqual(check_route(path)["status"], "PASS")
+
+
     def run_startup(self,appear_at):
         with tempfile.TemporaryDirectory() as directory:
             directory=pathlib.Path(directory)
