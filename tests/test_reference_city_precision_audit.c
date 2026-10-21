@@ -71,7 +71,7 @@ static void audit_float_ulp(void) {
 static void audit_observed_walk_grid(int start_x) {
     int64_t x = (int64_t)start_x * RAW_UNIT, vx = 0;
     float float_x = (float)start_x, float_vx = 0.0f;
-    int frame, max_error_quarters = 0;
+    int frame;
     for (frame = 0; frame < 720; ++frame) {
         /* Independent bidirectional and neutral six-phase walk.
          * Public measured acceleration and maximum speed only;
@@ -103,7 +103,6 @@ static void audit_observed_walk_grid(int start_x) {
         CHECK((double)float_x == (double)x / (double)RAW_UNIT);
         CHECK((double)float_vx == (double)vx / (double)RAW_UNIT);
     }
-    CHECK(max_error_quarters == 0);
     printf("STAGE180_WALK_GRID_PASS start=%d frames=720\n", start_x);
 }
 
