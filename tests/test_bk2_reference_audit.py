@@ -126,6 +126,28 @@ class BK2AuditTest(unittest.TestCase):
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
 
+    def test_corrupted_core_state_member_fails_closed(self):
+        # CoreState affects whether this audit classifies the movie as a
+        # savestate, so it must not be trusted merely because the ZIP lists it.
+        movie(self.path, members={"CoreState": b"synthetic-state" * 10})
+        with ZipFile(self.path, "r") as source:
+            members = {name: source.read(name) for name in source.namelist()}
+        with ZipFile(self.path, "w", compression=ZIP_DEFLATED) as target:
+            for name, payload in members.items():
+                target.writestr(name, payload)
+        data = bytearray(self.path.read_bytes())
+        name_offset = data.find(b"CoreState")
+        self.assertGreaterEqual(name_offset, 30)
+        local_header = name_offset - 30
+        name_len = int.from_bytes(data[local_header + 26:local_header + 28], "little")
+        extra_len = int.from_bytes(data[local_header + 28:local_header + 30], "little")
+        compressed_start = local_header + 30 + name_len + extra_len
+        self.assertLess(compressed_start, len(data))
+        data[compressed_start] ^= 0x01
+        self.path.write_bytes(data)
+        with self.assertRaises(BK2ValidationError):
+            audit(self.path)
+
     def test_missing_input_fails(self):
         with ZipFile(self.path, "w") as z:
             z.writestr("Header.txt", "Platform GEN\n")
