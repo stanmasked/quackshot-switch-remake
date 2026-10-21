@@ -132,7 +132,8 @@ class LibretroSamplingPhaseTests(unittest.TestCase):
         with mock.patch.object(fall, "run_core", return_value=bad):
             with self.assertRaisesRegex(ValueError, "phase contract"):
                 fall.measure(None, {}, Path("/private/synthetic-not-used"),
-                             b"fake", fall.EXPECTED_ROM_SHA256)
+                             b"fake", fall.EXPECTED_ROM_SHA256,
+                             verify_inputs=lambda: None)
 
     def test_equal_total_video_callbacks_can_hide_bad_per_frame_cadence(self):
         # Video frame 1 is skipped; frame 2 sends two callbacks instead.
@@ -170,7 +171,8 @@ class LibretroSamplingPhaseTests(unittest.TestCase):
         with mock.patch.object(fall, "run_core", return_value=bad):
             with self.assertRaisesRegex(ValueError, "video callback cadence"):
                 fall.measure(None, {}, Path("/private/synthetic-not-used"),
-                             b"fake", fall.EXPECTED_ROM_SHA256)
+                             b"fake", fall.EXPECTED_ROM_SHA256,
+                             verify_inputs=lambda: None)
 
     def test_private_probe_rejects_video_callbacks_outside_run(self):
         bad = {
@@ -184,7 +186,8 @@ class LibretroSamplingPhaseTests(unittest.TestCase):
         with mock.patch.object(fall, "run_core", return_value=bad):
             with self.assertRaisesRegex(ValueError, "video callback cadence"):
                 fall.measure(None, {}, Path("/private/synthetic-not-used"),
-                             b"fake", fall.EXPECTED_ROM_SHA256)
+                             b"fake", fall.EXPECTED_ROM_SHA256,
+                             verify_inputs=lambda: None)
 
     def test_phase_marker_not_original_cpu_cycle_assertion(self):
         # The harness constrains its own callbacks, not CPU or VDP timing.
