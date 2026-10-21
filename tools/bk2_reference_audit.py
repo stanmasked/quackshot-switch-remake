@@ -88,7 +88,7 @@ def audit(path: Path) -> dict:
         if len(chunks) != 5 or chunks[0] != "" or chunks[4] != "":
             raise BK2ValidationError(f"Malformed input row at frame {index}")
         system, p1, p2 = chunks[1:4]
-        if len(system) != 2 or any(ch not in ".PR" for ch in system):
+        if len(system) != 2 or system[0] not in ".P" or system[1] not in ".R":
             raise BK2ValidationError(f"Invalid power/reset data at frame {index}")
         for player in (p1, p2):
             if len(player) != 12 or any(ch not in (".", SYMBOLS[j]) for j, ch in enumerate(player)):
