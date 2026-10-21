@@ -1,0 +1,111 @@
+name: NeXium ROOFTOP Two Red Reentry
+on:
+  pull_request:
+    paths:
+      - "tools/nexium_rooftop_second_red_probe.sh"
+      - "tools/rooftop_red_overlap_witness.py"
+      - "tools/verify_nested_nexium_route.py"
+      - "tests/test_nested_nexium_route.py"
+      - "tools/verify_rooftop_second_red_repeats.py"
+      - "tools/verify_rooftop_second_red_trace.py"
+      - ".github/workflows/nexium-rooftop-second-red.yml"
+      - "src/main_sdl.c"
+      - "tests/test_rooftop_second_red_trace.py"
+      - "CMakeLists.txt"
+      - "src/qs_game.c"
+      - "include/**"
+  workflow_dispatch:
+# Each workflow keeps only the newest PR revision. Independent workflows
+# still run separately; manual dispatches and main remain auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure toolchain
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build real Switch homebrew
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-second-red-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+  guest:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 19
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1,2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rooftop-second-red-nro
+          path: emulator-input
+      - name: Shell and verifier syntax
+        run: |
+          bash -n tools/nexium_rooftop_second_red_probe.sh
+          python3 tools/verify_nested_nexium_route.py tools/nexium_rooftop_second_red_probe.sh
+          python3 -m unittest discover -s tests -p test_nested_nexium_route.py
+          python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_red_trace.py tools/verify_rooftop_second_red_trace.py tools/verify_rooftop_second_red_repeats.py tools/rooftop_red_overlap_witness.py
+          python3 -m unittest discover -s tests -p test_rooftop_second_red_trace.py
+      - name: Install CPU Vulkan and virtual-screen dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 libgl1 libpulse0
+      - name: Drive two real red shots with ROOFTOP map reentry
+        run: bash tools/nexium_rooftop_second_red_probe.sh emulator-input/quackshot-prototype.nro rooftop-second-evidence ${{ matrix.repeat }}
+      - name: Preserve evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-second-red-evidence-${{ matrix.repeat }}
+          path: |
+            rooftop-second-evidence/*.txt
+            rooftop-second-evidence/*.log
+            rooftop-second-evidence/guest-rooftop.csv
+            rooftop-second-evidence/guest-city-red.csv
+            rooftop-second-evidence/guest-transitions.csv
+            rooftop-second-evidence/rooftop-second-red-summary.json
+            rooftop-second-evidence/xdg-config/NeXium/logs/*.log
+          retention-days: 7
+          if-no-files-found: warn
+  compare:
+    needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rooftop-second-red-evidence-*
+          path: rooftop-second-evidence
+      - name: Authenticate two real red-switch reentry guests
+        run: python3 tools/verify_rooftop_second_red_repeats.py rooftop-second-evidence rooftop-second-red-repeat-summary.json
+      - name: Save cross-run comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-second-red-repeat-summary
+          path: rooftop-second-red-repeat-summary.json
+          retention-days: 7
+          if-no-files-found: warn
