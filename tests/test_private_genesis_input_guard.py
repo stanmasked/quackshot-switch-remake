@@ -85,6 +85,14 @@ class PinnedInputsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid expected SHA256"):
             self.guard(expected_core="not-a-hash")
 
+    def test_removed_file_fails_without_leaking_private_path(self):
+        guard = self.guard()
+        guard()
+        self.core.unlink()
+        with self.assertRaisesRegex(ValueError, "stable local file") as raised:
+            guard()
+        self.assertNotIn(str(self.core), str(raised.exception))
+
     def test_private_file_names_not_in_error(self):
         guard = self.guard(expected_rom="0" * 64)
         with self.assertRaises(ValueError) as raised:
