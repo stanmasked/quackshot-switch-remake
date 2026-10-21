@@ -12,8 +12,14 @@ def witness(roof_path,weapon_path,kind,after):
         rows=list(csv.DictReader(fd))
     with pathlib.Path(weapon_path).open(newline="",encoding="utf-8") as fd:
         wr=list(csv.DictReader(fd))
-    if not rows or not wr or len(rows)!=len(wr):
-        return None  # Partially-written paired CSVs are not yet synchronized.
+    if not rows or not wr:
+        return None
+    # The actual NRO writes/flushes ROOF before WEAPON on each tick.
+    # Concurrent host polling often catches ROOF one row ahead, so
+    # exact whole-file length equality hides a genuine earlier event.
+    # Scan ONLY the common paired prefix; the full post-run verifier
+    # still demands exact complete-file matching, contiguous seq/frame
+    # and the complete original controller/shot/bridge timeline.
     if tuple(rows[0])!=COLUMNS or tuple(wr[0])!=WEAPON_COLUMNS:
         return None
     prev_bits=0
