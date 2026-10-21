@@ -250,6 +250,12 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         return {
             "schema": "private_genesis_libretro_numeric_probe_v1",
             "evidence_type": "actual_emulator_frames_numeric_metadata_only",
+            # Input is set before retro_run(frame); checkpoint_sink reads
+            # RAM after that call returns, before next frame's input.
+            # This is a harness sampling fact, NOT original 68000
+            # CPU instruction order or exact scanout timing.
+            "ram_checkpoint_phase": "post_retro_run_before_next_input",
+            "video_callback_phase": "during_retro_run",
             "core": metadata,
             "reference_rom_sha256": rom_hash,
             "frames_requested": frames,
