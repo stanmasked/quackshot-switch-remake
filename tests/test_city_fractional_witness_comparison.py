@@ -121,6 +121,32 @@ class FractionalWitnessComparisonTests(unittest.TestCase):
                     ValueError, error):
                 compare(self.obs, self.source, authored_32px_report(), fake)
 
+    def test_exact_quarter_boundary_is_strictly_greater_only(self):
+        # Numerically consistent forged fixtures are accepted as SHAPES,
+        # never promoted to independently verified source measurements.
+        cases = (
+            (0, 2281, 2281),
+            (1, 2280, 2281),
+            (16384, 2280, 2281),
+            (16385, 2280, 2280),
+        )
+        for fraction, positive, quarter in cases:
+            fake = simulated_external_witness(self.ref)
+            fake["fractional_y_units_at_integer_176_frame_2280"] = fraction
+            fake["first_y_positive_subpixel_frame"] = positive
+            fake["first_y_above_quarter_pixel_frame"] = quarter
+            fake["fall_duration_by_threshold_frames"][
+                "positive_subpixel_to_integer_floor"] = 2297 - positive
+            fake["fall_duration_by_threshold_frames"][
+                "over_quarter_to_integer_floor"] = 2297 - quarter
+            with self.subTest(fraction=fraction):
+                report = compare(self.obs, self.source,
+                                 authored_32px_report(), fake)
+                self.assertEqual(report["status"],
+                                 "USER_NUMERIC_WITNESS_NOT_INDEPENDENTLY_ATTESTED")
+                self.assertFalse(report["physics_calibration_gate"][
+                                 "safe_to_modify_switch_physics"])
+
     def test_fake_numeric_witness_never_authorizes_physics_tuning(self):
         fake = simulated_external_witness(self.ref)
         report = compare(self.obs, self.source, authored_32px_report(), fake)
