@@ -6,7 +6,6 @@ numeric event summary leaves this function: no raw RAM, frame arrays,
 pixels, sound, savestates, ROM bytes or controller log is serialized.
 """
 import argparse
-import json
 from pathlib import Path
 
 from genesis_city_obstacle_probe import (
@@ -15,6 +14,7 @@ from genesis_city_obstacle_probe import (
 from genesis_libretro_probe import parse_script, run_core, safe_rom, setup_core
 from genesis_playable_physics import DEFAULT_ENTRY
 from private_genesis_input_guard import PinnedOriginalInputs
+from private_genesis_report_output import write_private_numeric_report
 from reference_evidence_integrity import read_inputs, validate
 
 Q16 = 65536
@@ -196,17 +196,14 @@ def main():
     ap.add_argument("--rom", type=Path, required=True)
     ap.add_argument("--expected-sha256",
                     default=EXPECTED_ROM_SHA256)
-    ap.add_argument("--output", type=Path)
+    ap.add_argument("--output", type=Path, required=True,
+                    help="Absolute private .json path outside the repository")
     args = ap.parse_args()
     try:
         require(args.expected_sha256 == EXPECTED_ROM_SHA256,
                 "expected original ROM SHA must stay pinned")
-        if args.output:
-            output = args.output.resolve()
-            require(output not in (args.rom.resolve(),args.core.resolve()),
-                    "refusing to overwrite private ROM/core")
-            require(output.suffix.lower() == ".json",
-                    "numeric output must be JSON")
+        # Report output is never streamed to stdout or a public work tree.
+        # The writer rejects existing files, symlinks and relative paths.
         # Pin against existing numeric-only evidence *before loading* the core.
         # This does not grant independent provenance to exported JSON.
         provenance = validate(*read_inputs(Path(__file__).resolve().parents[1]))
@@ -221,12 +218,14 @@ def main():
                          verify_inputs=guard)
         guard()
         report["core_binary_sha256"] = provenance["genesis_core_sha256"]
-        serialized = json.dumps(report, sort_keys=True, indent=2) + "\n"
-        if args.output:
-            args.output.write_text(serialized, encoding="utf-8")
-        else:
-            print(serialized, end="")
-    except (ValueError, RuntimeError, OSError, KeyError) as exc:
+        # Fail-closed Stage189 schema/provenance/phase verification precedes
+        # writing; no invalid or partial numeric report is exported.
+        write_private_numeric_report(
+            report, args.output, Path(__file__).resolve().parents[1])
+    except OSError:
+        ap.exit(1, "Private fractional fall probe failed: local I/O error "
+                   "(private paths redacted)\n")
+    except (ValueError, RuntimeError, KeyError) as exc:
         ap.exit(1, "Private fractional fall probe failed: " + str(exc) + "\n")
 
 
