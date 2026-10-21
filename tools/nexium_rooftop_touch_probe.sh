@@ -34,10 +34,45 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  timeout --signal=TERM --kill-after=5s 90s "$1" "$2" > "$3" 2>&1 &
  emu_pid=$!
  (
-  sleep 5
-  window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
-  [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
-  xdotool windowfocus "$window"; sleep 0.7
+  # BEGIN ROOFTOP WINDOW AND GAME READY GATE
+  # GUI startup is asynchronous on busy GitHub runners. A fixed 5s
+  # lookup can fail while the NRO is booting normally. Bound the wait
+  # to a visible GUI AND 300 independently logged guest-present frames.
+  window=""
+  for startup_poll in $(seq 1 80); do
+   window="$(xdotool search --onlyvisible --name NeXium 2>/dev/null | tail -n1 || true)"
+   [ -n "$window" ] && break
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before visible window"; exit 1;
+   }
+   sleep 0.25
+  done
+  [ -n "$window" ] || {
+   echo "BLOCKED: no emulator window after bounded startup poll"; exit 1;
+  }
+  echo "NEXIUM_WINDOW_READY"
+  # Window visibility alone does not guarantee the NRO menu is ready.
+  # Use the same pinned emulator frame witness as the RED->YELLOW test.
+  game_ready=0
+  for boot_poll in $(seq 1 100); do
+   bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
+   if [ -n "$bootlog" ] && grep -qF "[guest-present] queued=300" "$bootlog"; then
+    game_ready=1; break
+   fi
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before NRO frames"; exit 1;
+   }
+   sleep 0.2
+  done
+  [ "$game_ready" = 1 ] || {
+   echo "BLOCKED: no authenticated NRO guest frames"; exit 1;
+  }
+  echo "NEXIUM_GUEST_FRAMES_READY"
+  xdotool windowfocus "$window" || {
+   echo "BLOCKED: emulator window focus failed"; exit 1;
+  }
+  sleep 0.7
+  # END ROOFTOP WINDOW AND GAME READY GATE
   # NeXium controller_config.rs: ArrowDown=Nintendo D-pad Down,
   # while S=left-stick Y. The game menu processes D-pad, not stick Y.
   # Use two distinct rising edges, with a neutral release interval.
@@ -94,10 +129,63 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
    exit 1
   fi
   echo "ROOFTOP_NO_BRIDGE_GUEST frame=$frame x_milli=$x"
-  # Leave the guest stage using the ACTUAL controller Start; this also
-  # prevents late enemy contact from contaminating the negative probe.
-  xdotool key --clearmodifiers m
+  # Leave the guest stage with a genuine held START input. A
+  # millisecond-scale xdotool tap can fall BETWEEN 60 Hz guest polls,
+  # silently keeping ROOFTOP active until the game later respawns.
+  # Verify that native guest CSV production ACTUALLY stops; never
+  # bless an unacknowledged host keypress as proof of game exit.
+  # BEGIN ROOFTOP START EXIT GATE
+  # Confirm the NRO witness is advancing BEFORE attributing its later
+  # silence to a delivered START button. Host/CI stalls cannot pass.
+  before="$(wc -l < "$guest")"
+  live=0
+  for tick in $(seq 1 20); do
+   sleep 0.10
+   now="$(wc -l < "$guest")"
+   if [ "$now" -gt "$before" ]; then
+    live=1
+    echo "ROOFTOP_GUEST_LIVE_BEFORE_EXIT rows=$now"
+    break
+   fi
+  done
+  [ "$live" = 1 ] || {
+   echo "BLOCKED: no live guest frames before START"; exit 1;
+  }
+  exited=0
+  for attempt in 1 2 3; do
+   xdotool windowfocus "$window" || {
+    echo "BLOCKED: NeXium window focus lost before START"; exit 1;
+   }
+   xdotool keydown --clearmodifiers m
+   sleep 0.18
+   xdotool keyup m
+   echo "ROOFTOP_EXIT_ATTEMPT=$attempt"
+   prev="$(wc -l < "$guest")"
+   stable=0
+   for poll in $(seq 1 16); do
+    sleep 0.15
+    count="$(wc -l < "$guest")"
+    if [ "$count" = "$prev" ]; then
+     stable=$((stable+1))
+    else
+     stable=0
+    fi
+    prev="$count"
+    if [ "$stable" -ge 4 ] &&
+       [ "$count" -gt 2 ] && [ "$count" -lt 1000 ]; then
+     exited=1
+     echo "ROOFTOP_EXIT_CONFIRMED rows=$count"
+     break
+    fi
+   done
+   [ "$exited" = 1 ] && break
+  done
+  [ "$exited" = 1 ] || {
+   echo "BLOCKED: native ROOFTOP guest did not acknowledge START exit";
+   exit 1;
+  }
   echo "ROOFTOP_EXIT_SENT=virtual_START"
+  # END ROOFTOP START EXIT GATE
  ) > "$4" 2>&1 &
  pid=$!
  wait "$emu_pid"; emu_result=$?
@@ -119,7 +207,7 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/guest-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous guest file" > "$out/result.txt"; exit 1; }
 IFS= read -r guest < "$out/guest-paths.txt"
 cp "$guest" "$out/guest-rooftop.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_EXIT_SENT; do
+for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_GUEST_LIVE_BEFORE_EXIT ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }

@@ -3,12 +3,19 @@ on:
   pull_request:
     paths:
       - "tools/nexium_rooftop_touch_probe.sh"
+      - "tests/test_rooftop_touch_exit_gate.py"
       - "tools/verify_rooftop_touch_repeats.py"
       - ".github/workflows/nexium-rooftop-touch.yml"
       - "src/main_sdl.c"
       - "src/qs_game.c"
       - "include/**"
   workflow_dispatch:
+# Each workflow keeps only the newest PR revision. Independent workflows
+# still run separately; manual dispatches and main remain auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
@@ -50,6 +57,8 @@ jobs:
       - name: Shell and verifier syntax
         run: |
           bash -n tools/nexium_rooftop_touch_probe.sh
+          python3 tools/verify_nested_nexium_route.py tools/nexium_rooftop_touch_probe.sh
+          python3 -m unittest discover -s tests -p test_rooftop_touch_exit_gate.py
           python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_touch_trace.py tools/verify_rooftop_touch_repeats.py
       - name: Install CPU Vulkan and virtual-screen dependencies
         run: |
