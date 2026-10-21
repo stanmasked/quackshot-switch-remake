@@ -89,25 +89,43 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   done
   xdotool keyup d
   [ "$crossed" = 1 ] || { echo "BLOCKED: bridge crossing incomplete"; exit 1; }
-  # Real Start returns from ROOFTOP to the map, and the same selected
-  # stage is subsequently launched with Nintendo A. Never mutate QsGame.
-  xdotool key --clearmodifiers m
-  echo ROOFTOP_EXIT_SENT
-  sleep 0.55
-  xdotool key --clearmodifiers --delay 120 c
-  echo ROOFTOP_REENTRY_SENT
-  transition=""
-  for i in $(seq 1 100); do
-   transition="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f -name quackshot-rooftop-transitions.csv -print -quit 2>/dev/null || true)"
-   [ -n "$transition" ] && [ "$(wc -l < "$transition")" -ge 4 ] && break
-   sleep 0.1
+  # Confirm each real scene transition in guest-written CSV. Retry only the
+  # host key event, with explicit window focus; never inject or mutate guest state.
+  transition="$(find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f -name quackshot-rooftop-transitions.csv -print -quit 2>/dev/null || true)"
+  [ -n "$transition" ] || { echo "BLOCKED: missing guest transition CSV before exit"; exit 1; }
+  exit_seen=0
+  for attempt in $(seq 1 3); do
+   xdotool windowfocus "$window"; sleep 0.12
+   xdotool key --clearmodifiers m
+   echo "ROOFTOP_EXIT_SENT attempt=$attempt"
+   for i in $(seq 1 12); do
+    IFS=, read -r seq frame om os nm ns bits before after cells badge red weapon origin <<< "$(tail -n1 "$transition")"
+    if [ "$seq" = 1 ] && [ "$om" = 1 ] && [ "$os" = 2 ] && [ "$nm" = 0 ] && [ "$ns" = 2 ]; then
+     echo "ROOFTOP_EXIT_CONFIRMED_GUEST frame=$frame"; exit_seen=1; break
+    fi
+    sleep 0.1
+   done
+   [ "$exit_seen" = 1 ] && break
   done
-  [ -n "$transition" ] && [ "$(wc -l < "$transition")" -ge 4 ] || { echo "BLOCKED: guest transition evidence absent"; exit 1; }
-  IFS=, read -r seq frame om os nm ns bits before after cells badge red weapon origin <<< "$(tail -n1 "$transition")"
-  [ "$seq" = 2 ] && [ "$om" = 0 ] && [ "$nm" = 1 ] &&
-   [ "$ns" = 2 ] && [ "$before" = 1 ] && [ "$after" = 0 ] &&
-   [ "$cells" = 0 ] || { echo "BLOCKED: fresh closed bridge not observed"; exit 1; }
-  echo "ROOFTOP_REENTRY_CLOSED_GUEST frame=$frame"
+  [ "$exit_seen" = 1 ] || { echo "BLOCKED: guest did not confirm START exit after 3 attempts"; exit 1; }
+  sleep 0.55
+  reentry_seen=0
+  for attempt in $(seq 1 3); do
+   xdotool windowfocus "$window"; sleep 0.12
+   xdotool key --clearmodifiers --delay 120 c
+   echo "ROOFTOP_REENTRY_SENT attempt=$attempt"
+   for i in $(seq 1 12); do
+    IFS=, read -r seq frame om os nm ns bits before after cells badge red weapon origin <<< "$(tail -n1 "$transition")"
+    if [ "$seq" = 2 ] && [ "$om" = 0 ] && [ "$os" = 2 ] &&
+       [ "$nm" = 1 ] && [ "$ns" = 2 ] && [ "$before" = 1 ] &&
+       [ "$after" = 0 ] && [ "$cells" = 0 ]; then
+     echo "ROOFTOP_REENTRY_CLOSED_GUEST frame=$frame"; reentry_seen=1; break
+    fi
+    sleep 0.1
+   done
+   [ "$reentry_seen" = 1 ] && break
+  done
+  [ "$reentry_seen" = 1 ] || { echo "BLOCKED: fresh closed bridge not observed after 3 A attempts"; exit 1; }
   sleep 1.30
   IFS=, read -r s tick mode stage x y grounded input sx vx shotred sb sa g0 g1 tiles origin <<< "$(tail -n1 "$guest")"
   [ "$stage" = 2 ] && [ "$g1" = 0 ] && [ "$tiles" = 0 ] &&
@@ -139,9 +157,14 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/transition-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous transition CSV" > "$out/result.txt"; exit 1; }
 IFS= read -r transition < "$out/transition-paths.txt"
 cp "$transition" "$out/guest-transitions.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_FIRE_SENT ROOFTOP_BRIDGE_OPEN_GUEST ROOFTOP_BRIDGE_CROSSED_GUEST ROOFTOP_EXIT_SENT ROOFTOP_REENTRY_SENT ROOFTOP_REENTRY_CLOSED_GUEST ROOFTOP_SECOND_VISIT_SAMPLED; do
- grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
+if [ "$rc" != 0 ]; then
+ reason="$(grep '^BLOCKED:' "$out/input-injection.txt" | tail -n1 || true)"
+ [ -n "$reason" ] || reason="BLOCKED: virtual-controller session did not finish (exit=$rc)"
+ echo "$reason" > "$out/result.txt"
+ exit 1
+fi
+for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_FIRE_SENT ROOFTOP_BRIDGE_OPEN_GUEST ROOFTOP_BRIDGE_CROSSED_GUEST ROOFTOP_EXIT_SENT ROOFTOP_EXIT_CONFIRMED_GUEST ROOFTOP_REENTRY_SENT ROOFTOP_REENTRY_CLOSED_GUEST ROOFTOP_SECOND_VISIT_SAMPLED; do
+ grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing required probe marker $event" > "$out/result.txt"; exit 1; }
 done
-[ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
 python3 tools/verify_rooftop_reentry_trace.py "$out/guest-rooftop.csv" "$out/guest-transitions.csv" "$out/rooftop-reentry-summary.json"
 echo "PASS: real virtual-controller rooftop bridge rebuilt closed on reentry" > "$out/result.txt"
