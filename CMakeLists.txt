@@ -280,6 +280,9 @@ add_test(NAME reference_city_boundary_variants COMMAND qs_city_boundary_variants
 add_executable(qs_city_geometry_sensitivity_tests tests/test_reference_city_geometry_sensitivity.c)
 target_link_libraries(qs_city_geometry_sensitivity_tests PRIVATE qs_core)
 add_test(NAME reference_city_geometry_sensitivity COMMAND qs_city_geometry_sensitivity_tests)
+add_executable(qs_city_drop_height_tests tests/test_reference_city_drop_height.c)
+target_link_libraries(qs_city_drop_height_tests PRIVATE qs_core)
+add_test(NAME reference_city_drop_height_event_thresholds COMMAND qs_city_drop_height_tests)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(NAME camera_burst_protocol
