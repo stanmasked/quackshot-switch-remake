@@ -17,6 +17,29 @@ import zlib
 from bk2_reference_audit import BK2ValidationError, audit
 
 MAX_ROM_BYTES = 16 * 1024 * 1024
+SMD_BLOCK_BYTES = 16 * 1024
+SMD_HALF_BLOCK_BYTES = SMD_BLOCK_BYTES // 2
+
+
+def smd_to_linear(rom: bytes) -> bytes | None:
+    """Return candidate linear Genesis bytes only for a signed SMD image.
+
+    Legacy SMD has a 512-byte copier header whose offsets 8..9 hold AA BB,
+    then 16KiB blocks with odd output bytes followed by even output bytes.
+    This transformation is in memory only; neither form is exported.
+    """
+    if (len(rom) <= 512 or (len(rom) - 512) % SMD_BLOCK_BYTES != 0
+            or rom[8:10] != b"\xaa\xbb"):
+        return None
+    data = memoryview(rom)[512:]
+    linear = bytearray(len(data))
+    for off in range(0, len(data), SMD_BLOCK_BYTES):
+        chunk = data[off:off + SMD_BLOCK_BYTES]
+        for i in range(SMD_HALF_BLOCK_BYTES):
+            linear[off + 2 * i] = chunk[SMD_HALF_BLOCK_BYTES + i]
+            linear[off + 2 * i + 1] = chunk[i]
+    return bytes(linear)
+
 
 
 def check_rom(movie_path: Path, rom_path: Path) -> dict:
@@ -44,8 +67,18 @@ def check_rom(movie_path: Path, rom_path: Path) -> dict:
     if len(rom) < 512 or len(rom) > MAX_ROM_BYTES:
         raise BK2ValidationError("Local ROM size outside supported bounded range")
 
-    digest = digest_fn(rom) if algo == "crc32_candidate_for_8_digit_SHA1_field" else digest_fn(rom).hexdigest() if digest_fn else None
-    match = digest.casefold() == claimed.casefold() if digest is not None else None
+    variants = [("raw", rom)]
+    linear = smd_to_linear(rom)
+    if linear is not None:
+        variants.append(("smd_deinterleaved", linear))
+    matches = []
+    if digest_fn is not None:
+        for kind, data in variants:
+            digest = (digest_fn(data) if algo == "crc32_candidate_for_8_digit_SHA1_field"
+                      else digest_fn(data).hexdigest())
+            if digest.casefold() == claimed.casefold():
+                matches.append(kind)
+    match = bool(matches) if digest_fn is not None else None
     status = ("candidate_hash_match" if match is True else
               "candidate_hash_mismatch" if match is False else
               "unverifiable_movie_hash")
@@ -55,6 +88,8 @@ def check_rom(movie_path: Path, rom_path: Path) -> dict:
         "declared_hash_label": "SHA1",
         "candidate_hash_algorithm": algo,
         "candidate_digest_matches_local_rom": match,
+        "matching_rom_representation": matches[0] if matches else None,
+        "detected_smd_copier_header": linear is not None,
         "status": status,
         "rom_size_bytes": len(rom),
         "rom_hash_or_bytes_exported": False,
@@ -79,6 +114,9 @@ def main(argv=None) -> int:
         return 1
     data = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.out:
+        if args.out.resolve() in (args.bk2.resolve(), args.rom.resolve()):
+            print("BK2_ROM_MATCH_FAIL: report path would overwrite original BK2/ROM", file=sys.stderr)
+            return 2
         args.out.write_text(data, encoding="utf-8")
     else:
         sys.stdout.write(data)
