@@ -164,7 +164,12 @@ static LandmarkTimeline observe_synthetic_timeline(void) {
         CHECK(t.reverse_camera_lag > 1 && t.reverse_camera_lag < 25);
         CHECK(t.reverse_x30 < stop_x - 25.0f);
         CHECK(t.reverse_x70 < t.reverse_x30 - 40.0f);
-        CHECK(a.hero.vx < 0.0f);
+        /* After recovering LEFT, the independently authored upper
+         * platform has a vertical face at X=400. It eventually stops
+         * the hero a second time; requiring vx<0 after 70 frames
+         * incorrectly treats this valid collision as a regression. */
+        CHECK(a.hero.vx <= 0.0f);
+        CHECK(t.reverse_x70 >= 399.9f && t.reverse_x70 <= 410.0f);
         CHECK(a.camera_x < camera_at_wall);
         CHECK(a.hero.x - a.camera_x >= 122.0f);
         CHECK(a.hero.x - a.camera_x <= 124.0f);
