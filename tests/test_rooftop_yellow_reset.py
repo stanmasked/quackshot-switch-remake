@@ -103,5 +103,55 @@ class YellowBridgeResetProtocol(unittest.TestCase):
                 q=dict(w);q.update(seq=r["seq"],frame=r["frame"]);d.append(q)
         self.bad(mutate)
 
+
+class YellowResetWindowReadiness(unittest.TestCase):
+    """Fail closed until the real NeXium window and NRO guest are ready."""
+    @classmethod
+    def setUpClass(cls):
+        from tools.verify_nested_nexium_route import check_route, embedded_program
+        cls.script = ROOT / "tools" / "nexium_rooftop_yellow_reset_probe.sh"
+        cls.source = cls.script.read_text(encoding="utf-8")
+        cls.inner = embedded_program(cls.script)
+        cls.check_route = check_route
+        cls.begin = "# BEGIN YELLOW RESET WINDOW AND GAME READY GATE"
+        cls.end = "# END YELLOW RESET WINDOW AND GAME READY GATE"
+
+    def test_nested_route_and_shell_parse(self):
+        self.assertEqual(self.check_route(self.script)["status"], "PASS")
+        self.assertEqual(self.inner.count(self.begin), 1)
+        self.assertEqual(self.inner.count(self.end), 1)
+
+    def test_wait_is_bounded_and_requires_real_guest_frames(self):
+        gate = self.inner.split(self.begin, 1)[1].split(self.end, 1)[0]
+        for proof in (
+            "for startup_poll in $(seq 1 80)",
+            "for boot_poll in $(seq 1 100)",
+            'xdotool search --onlyvisible --name NeXium',
+            'grep -qF "[guest-present] queued=300"',
+            'kill -0 "$emu_pid"',
+            "NEXIUM_WINDOW_READY",
+            "NEXIUM_GUEST_FRAMES_READY",
+            "BLOCKED: no emulator window after bounded startup poll",
+            "BLOCKED: no authenticated NRO guest frames",
+        ):
+            self.assertIn(proof, gate)
+
+    def test_controller_input_cannot_precede_readiness_gate(self):
+        end = self.inner.index(self.end)
+        first_input = self.inner.index('xdotool key --clearmodifiers c')
+        self.assertLess(end, first_input)
+        self.assertIn(
+            "for event in NEXIUM_WINDOW_READY NEXIUM_GUEST_FRAMES_READY CITY_MENU_SENT",
+            self.source,
+        )
+
+    def test_old_single_lookup_failure_is_removed(self):
+        self.assertNotIn(
+            'window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"',
+            self.inner,
+        )
+
+
+
 if __name__=="__main__":
     unittest.main()
