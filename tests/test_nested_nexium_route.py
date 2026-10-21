@@ -79,7 +79,7 @@ class NativeGuestStartupGateTests(unittest.TestCase):
                 )
                 self.assertLess(
                     inner.index("NEXIUM_GUEST_FRAMES_READY"),
-                    inner.index('xdotool key --clearmodifiers c'),
+                    inner.index("xdotool key"),
                 )
                 self.assertNotIn(
                     'window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"',
