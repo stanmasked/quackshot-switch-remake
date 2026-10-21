@@ -146,7 +146,8 @@ class TouchWindowReadyTests(unittest.TestCase):
             env["SIM_VISIBLE_AFTER"] = str(visible_after)
             program = (
                 "set -euo pipefail\n"
-                "emu_pid=$\n"
+                "/bin/sleep 60 & emu_pid=$!\n"
+                "trap 'kill \"$emu_pid\" 2>/dev/null || true' EXIT\n"
                 "sleep() { :; }\n"
                 "XDG_CONFIG_HOME=" + shlex.quote(str(root)) + "\n"
                 + self.gate
