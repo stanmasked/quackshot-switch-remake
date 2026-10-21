@@ -19,6 +19,7 @@ LOG_KEY = ("LogKey:#Power|Reset|#P1 Up|" + "|".join(f"P1 {b}" for b in BUTTONS[1
            + "|#P2 Up|" + "|".join(f"P2 {b}" for b in BUTTONS[1:]) + "|")
 REQUIRED = frozenset(("Header.txt", "SyncSettings.json", "Input Log.txt"))
 MAX_UNCOMPRESSED_BYTES = 15_000_000
+MAX_ARCHIVE_BYTES = 16_000_000
 MAX_FRAMES = 500_000
 
 class BK2ValidationError(ValueError):
@@ -27,9 +28,16 @@ class BK2ValidationError(ValueError):
 def audit(path: Path) -> dict:
     path = Path(path)
     try:
+        archive_size = path.stat().st_size
+    except OSError as exc:
+        raise BK2ValidationError("Cannot inspect BK2 file") from exc
+    if archive_size > MAX_ARCHIVE_BYTES:
+        raise BK2ValidationError("BK2 compressed archive exceeds safe size bound")
+    try:
         with zipfile.ZipFile(path) as archive:
             info = archive.infolist()
             names = [x.filename for x in info]
+            starts_from_core_state = "CoreState" in names
             if len(set(names)) != len(names):
                 raise BK2ValidationError("Duplicate members are not permitted")
             if not REQUIRED.issubset(names):
@@ -116,6 +124,8 @@ def audit(path: Path) -> dict:
     return {
         "schema": "QuackShot-BK2-aggregate-v1",
         "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "core_state_in_movie": starts_from_core_state,
+        "movie_start_kind": "savestate" if starts_from_core_state else "power_on_or_reset",
         "game_name_claim": header.get("GameName", ""),
         "platform": header["Platform"],
         "bizhawk_version_claim": header.get("MovieVersion", ""),
