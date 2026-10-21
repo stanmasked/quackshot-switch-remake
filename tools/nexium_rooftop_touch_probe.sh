@@ -34,9 +34,30 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  timeout --signal=TERM --kill-after=5s 90s "$1" "$2" > "$3" 2>&1 &
  emu_pid=$!
  (
-  sleep 5
-  window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
-  [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
+  # GUI startup is asynchronous; wait for a real visible window and
+  # never send input if NeXium exits or fails to expose one.
+  window=""
+  for startup_poll in $(seq 1 80); do
+   window="$(xdotool search --onlyvisible --name NeXium 2>/dev/null | tail -n1 || true)"
+   [ -n "$window" ] && break
+   kill -0 "$emu_pid" 2>/dev/null || { echo "BLOCKED: emulator exited before visible window"; exit 1; }
+   sleep 0.25
+  done
+  [ -n "$window" ] || { echo "BLOCKED: no emulator window after bounded startup poll"; exit 1; }
+  echo "NEXIUM_WINDOW_READY"
+  # The window can appear before the NRO has produced frames. Synchronize
+  # to the guest-present marker so menu input cannot race application boot.
+  game_ready=0
+  for boot_poll in $(seq 1 100); do
+   bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
+   if [ -n "$bootlog" ] && grep -qF "[guest-present] queued=300" "$bootlog"; then
+    game_ready=1; break
+   fi
+   kill -0 "$emu_pid" 2>/dev/null || { echo "BLOCKED: emulator exited before NRO guest frames"; exit 1; }
+   sleep 0.15
+  done
+  [ "$game_ready" = 1 ] || { echo "BLOCKED: no authenticated NRO guest frames"; exit 1; }
+  echo "NEXIUM_GUEST_FRAMES_READY"
   xdotool windowfocus "$window"; sleep 0.7
   # NeXium controller_config.rs: ArrowDown=Nintendo D-pad Down,
   # while S=left-stick Y. The game menu processes D-pad, not stick Y.
