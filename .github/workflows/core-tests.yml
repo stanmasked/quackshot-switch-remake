@@ -44,6 +44,19 @@ jobs:
           assert report["original_assets_in_report"] is False
           print("CITY_EVENT_GAP_EVIDENCE_PASS: relative event intervals only")
           PY
+      - name: Audit geometry-driven event timing differences
+        run: |
+          python3 -m unittest discover -s tests -p 'test_city_geometry_sensitivity.py' -v
+          python3 tools/city_geometry_sensitivity.py --binary build-desktop/qs_city_geometry_sensitivity_tests --out city-geometry-sensitivity.json
+          python3 - <<'PY'
+          import json
+          with open("city-geometry-sensitivity.json", encoding="utf-8") as fh:
+              report = json.load(fh)
+          assert report["status"] == "SYNTHETIC_GEOMETRY_DIAGNOSTIC_NOT_ROM_PARITY"
+          assert report["original_rom_was_run"] is False
+          assert report["summary"]["tested_tile_pairs"] == 20
+          print("CITY_GEOMETRY_SENSITIVITY_EVIDENCE_PASS: 20 synthetic tile combinations")
+          PY
       - name: Record deterministic rational-timeline digest
         run: |
           ./build-desktop/qs_city_fraction_tests > timeline-digest.txt
@@ -54,6 +67,7 @@ jobs:
           path: |
             timeline-digest.txt
             city-event-gap.json
+            city-geometry-sensitivity.json
           if-no-files-found: error
   compare-city-timeline:
     needs: core
@@ -99,6 +113,29 @@ jobs:
               print(path.parent.name, "event_fingerprint=", signature)
           assert len(set(signatures)) == 1, signatures
           print("CITY_EVENT_GAP_CROSS_COMPILER_PASS: event intervals identical; ROM parity not asserted")
+          PY
+      - name: Verify cross-compiler 20-case geometry timing fingerprint
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          paths = sorted(Path("city-timeline-results").glob(
+              "city-timeline-*/city-geometry-sensitivity.json"))
+          assert len(paths) == 4, paths
+          digests = []
+          for path in paths:
+              report = json.loads(path.read_text(encoding="utf-8"))
+              assert report["status"] == "SYNTHETIC_GEOMETRY_DIAGNOSTIC_NOT_ROM_PARITY"
+              assert report["original_rom_was_run"] is False
+              rows = report["event_rows"]
+              assert len(rows) == 20
+              fingerprint = tuple((row["ledge_tile"], row["wall_tile"],
+                  row["fall"], row["land"], row["stop"],
+                  row["fall_to_land"], row["land_to_stop"]) for row in rows)
+              digests.append(fingerprint)
+              print(path.parent.name, "cases=", len(fingerprint))
+          assert len(set(digests)) == 1, "cross-compiler geometry event drift"
+          print("CITY_GEOMETRY_CROSS_COMPILER_PASS: 20 event fingerprints identical")
           PY
   sdl-desktop:
     runs-on: ubuntu-latest
