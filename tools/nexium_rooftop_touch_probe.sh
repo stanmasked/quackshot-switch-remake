@@ -100,6 +100,22 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   # Verify that native guest CSV production ACTUALLY stops; never
   # bless an unacknowledged host keypress as proof of game exit.
   # BEGIN ROOFTOP START EXIT GATE
+  # Confirm the NRO witness is advancing BEFORE attributing its later
+  # silence to a delivered START button. Host/CI stalls cannot pass.
+  before="$(wc -l < "$guest")"
+  live=0
+  for tick in $(seq 1 20); do
+   sleep 0.10
+   now="$(wc -l < "$guest")"
+   if [ "$now" -gt "$before" ]; then
+    live=1
+    echo "ROOFTOP_GUEST_LIVE_BEFORE_EXIT rows=$now"
+    break
+   fi
+  done
+  [ "$live" = 1 ] || {
+   echo "BLOCKED: no live guest frames before START"; exit 1;
+  }
   exited=0
   for attempt in 1 2 3; do
    xdotool windowfocus "$window" || {
@@ -156,7 +172,7 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/guest-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous guest file" > "$out/result.txt"; exit 1; }
 IFS= read -r guest < "$out/guest-paths.txt"
 cp "$guest" "$out/guest-rooftop.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
+for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_GUEST_LIVE_BEFORE_EXIT ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
