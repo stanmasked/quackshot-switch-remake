@@ -97,6 +97,29 @@ class OriginalVisualNumericSummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing/extra"):
             summarize(traces, reads, digests, roi, "0"*64, "1"*64)
 
+    def test_visual_payload_whitelist_and_numeric_bounds(self):
+        changes = (
+            ("raw_video_bytes", b"synthetic-not-allowed"),
+            ("blue_centroid_x_milli", "134000"),
+            ("blue_centroid_y_milli", 999999),
+            ("blue_bbox_xyxy_exclusive", [130, 150, 199, 300]),
+            ("source_collision_plane_measured", True),
+        )
+        for key, value in changes:
+            traces, reads, digests, roi = fake_samples()
+            traces["right"][2180]["visual"][key] = value
+            traces["right_repeat"][2180]["visual"][key] = value
+            with self.subTest(field=key), self.assertRaises(ValueError):
+                summarize(traces, reads, digests, roi, "0"*64, "1"*64)
+
+    def test_empty_blue_roi_never_carries_a_false_centroid(self):
+        traces, reads, digests, roi = fake_samples()
+        for key in ("right", "right_repeat"):
+            traces[key][2180]["visual"]["blue_pixel_count"] = 0
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(ValueError, "empty blue ROI"):
+                    summarize(traces, reads, digests, roi, "0"*64, "1"*64)
+
     def test_private_output_permissions_and_exclusive_create(self):
         with tempfile.TemporaryDirectory(prefix="qs-visual198-") as d:
             path = Path(d)/"numeric.json"
