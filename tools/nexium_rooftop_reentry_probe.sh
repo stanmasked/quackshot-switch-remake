@@ -34,10 +34,44 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  timeout --signal=TERM --kill-after=5s 110s "$1" "$2" > "$3" 2>&1 &
  emu_pid=$!
  (
-  sleep 5
-  window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
-  [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
-  xdotool windowfocus "$window"; sleep 0.7
+  # BEGIN YELLOW RESET WINDOW AND GAME READY GATE
+  # NeXium may create its X11 window after the guest is already running.
+  # Never fail on one early lookup: poll a bounded number of times and
+  # require the pinned emulator's real guest-present frame witness before
+  # sending any game/controller input.
+  window=""
+  for startup_poll in $(seq 1 80); do
+   window="$(xdotool search --onlyvisible --name NeXium 2>/dev/null | tail -n1 || true)"
+   [ -n "$window" ] && break
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before visible window"; exit 1;
+   }
+   sleep 0.25
+  done
+  [ -n "$window" ] || {
+   echo "BLOCKED: no emulator window after bounded startup poll"; exit 1;
+  }
+  echo NEXIUM_WINDOW_READY
+  game_ready=0
+  for boot_poll in $(seq 1 100); do
+   bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
+   if [ -n "$bootlog" ] && grep -qF "[guest-present] queued=300" "$bootlog"; then
+    game_ready=1; break
+   fi
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before NRO frames"; exit 1;
+   }
+   sleep 0.2
+  done
+  [ "$game_ready" = 1 ] || {
+   echo "BLOCKED: no authenticated NRO guest frames"; exit 1;
+  }
+  echo NEXIUM_GUEST_FRAMES_READY
+  xdotool windowfocus "$window" || {
+   echo "BLOCKED: emulator window focus failed"; exit 1;
+  }
+  sleep 0.7
+  # END YELLOW RESET WINDOW AND GAME READY GATE
   # NeXium controller_config.rs: ArrowDown=Nintendo D-pad Down,
   # while S=left-stick Y. The game menu processes D-pad, not stick Y.
   # Use two distinct rising edges, with a neutral release interval.
@@ -139,7 +173,7 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/transition-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous transition CSV" > "$out/result.txt"; exit 1; }
 IFS= read -r transition < "$out/transition-paths.txt"
 cp "$transition" "$out/guest-transitions.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_FIRE_SENT ROOFTOP_BRIDGE_OPEN_GUEST ROOFTOP_BRIDGE_CROSSED_GUEST ROOFTOP_EXIT_SENT ROOFTOP_REENTRY_SENT ROOFTOP_REENTRY_CLOSED_GUEST ROOFTOP_SECOND_VISIT_SAMPLED; do
+for event in NEXIUM_WINDOW_READY NEXIUM_GUEST_FRAMES_READY ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_FIRE_SENT ROOFTOP_BRIDGE_OPEN_GUEST ROOFTOP_BRIDGE_CROSSED_GUEST ROOFTOP_EXIT_SENT ROOFTOP_REENTRY_SENT ROOFTOP_REENTRY_CLOSED_GUEST ROOFTOP_SECOND_VISIT_SAMPLED; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
