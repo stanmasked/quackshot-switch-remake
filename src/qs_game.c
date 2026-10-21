@@ -326,10 +326,24 @@ static int hits_tiles(const QsGame *g, float x, float y, float w, float h) {
         overlaps(x,y,w,h,QS_CITY_CRATE_X,QS_CITY_CRATE_Y,
                  QS_CITY_CRATE_SIZE,QS_CITY_CRATE_SIZE))
         return 1;
+    /*
+     * Opt-in CITY TEST: a 16.16-like position may overlap a tile by
+     * much less than 0.01 px. The legacy 0.01f right/bottom inset can
+     * miss that overlap, allowing one substep to penetrate the wall.
+     * The preceding representable float models the mathematically
+     * exclusive AABB far edge without skipping positive subpixel
+     * intersections. Keep ordinary prototype collision unchanged.
+     */
+    float far_x = (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                   g->stage == 0)
+                 ? nextafterf(x + w, -INFINITY) : (x + w - 0.01f);
+    float far_y = (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                   g->stage == 0)
+                 ? nextafterf(y + h, -INFINITY) : (y + h - 0.01f);
     int x0 = (int)floorf(x / QS_TILE);
-    int x1 = (int)floorf((x + w - 0.01f) / QS_TILE);
+    int x1 = (int)floorf(far_x / QS_TILE);
     int y0 = (int)floorf(y / QS_TILE);
-    int y1 = (int)floorf((y + h - 0.01f) / QS_TILE);
+    int y1 = (int)floorf(far_y / QS_TILE);
     int row, col;
     for (row = y0; row <= y1; row++)
         for (col = x0; col <= x1; col++)
