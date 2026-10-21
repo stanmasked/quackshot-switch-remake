@@ -12,6 +12,7 @@ from tools.verify_rooftop_yellow_rearm import verify_rearm,YellowRearmError
 from tools.rooftop_yellow_guest_witness import witness
 from tools.verify_rooftop_guest_trace import COLUMNS
 from tools.verify_rooftop_red_to_yellow import WEAPON_COLUMNS
+from tools.verify_nested_nexium_route import embedded_program
 
 def fixture():
     city,roof,edges,weapon,host=reset_fixture()
@@ -255,5 +256,50 @@ class YellowRearmProtocol(unittest.TestCase):
         self.bad(lambda c,r,e,w,h:w[805].update(frame="9999"))
     def test_old_yellow_first_impact_missing(self):
         self.bad(lambda c,r,e,w,h:r[373].update(bridge_cells="0"))
+
+class Stage160HostProtocolTests(unittest.TestCase):
+    """Fail if a successful live poll disguises evidence order or metadata."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script=(ROOT/"tools/nexium_rooftop_yellow_rearm_probe.sh").read_text(encoding="utf-8")
+        cls.inner=embedded_program(cls.script)
+
+    def test_live_poll_does_not_prematurely_emit_authenticated_markers(self):
+        for observed in (
+            "ROOFTOP_YELLOW_REARM_FIRE_LIVE_POLL",
+            "ROOFTOP_YELLOW_REARM_OPEN_LIVE_POLL",
+            "ROOFTOP_YELLOW_REARM_STABLE_LIVE_POLL",
+        ):
+            self.assertIn('echo "'+observed+' frame=,self.inner)
+        for canonical in (
+            "ROOFTOP_YELLOW_REARM_FIRE_GUEST",
+            "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST",
+            "ROOFTOP_YELLOW_REARM_STABLE_GUEST",
+        ):
+            self.assertNotIn('echo "'+canonical+' frame=,self.inner)
+
+    def test_canonical_events_added_in_true_fire_open_stable_order(self):
+        marker=("for label in ROOFTOP_YELLOW_REARM_FIRE_GUEST "
+                "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST "
+                "ROOFTOP_YELLOW_REARM_STABLE_GUEST; do")
+        self.assertEqual(self.script.count(marker),1)
+        self.assertLess(self.script.index('cp "$transition" "$out/guest-transitions.csv"'),
+                        self.script.index(marker))
+        self.assertLess(self.script.index(marker),
+                        self.script.index("printf '%s frame=%s\\n' \"$label\" \"$trusted\""))
+        self.assertLess(self.script.index(marker),
+                        self.script.index("for event in CITY_MENU_SENT",self.script.index(marker)))
+        self.assertIn('"$out/rooftop-yellow-rearm-summary.json"',self.script)
+
+    def test_each_metadata_property_has_own_line(self):
+        # Cross-run verification deliberately rejects lines with >1 equals.
+        fmt="postrun_guest_fire=%s\\npostrun_guest_open=%s\\npostrun_stable=%s\\n"
+        self.assertIn(fmt,self.script)
+        self.assertNotIn("postrun_guest_fire=%s postrun_guest_open=%s",self.script)
+        fake_lines=(fmt % (1534,1545,1859)).splitlines()
+        self.assertEqual(len(fake_lines),3)
+        self.assertTrue(all(line.count("=")==1 for line in fake_lines))
+
 if __name__=="__main__":
     unittest.main()
