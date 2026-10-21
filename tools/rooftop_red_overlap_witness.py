@@ -13,7 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_rooftop_guest_trace import COLUMNS, SOURCE, TARGET_X_MILLI, TARGET_W_MILLI, SHOT_WIDTH_MILLI
 
 
-def overlap_in_guest(path):
+def overlap_in_guest(path, after_frame=0):
     try:
         with pathlib.Path(path).open(newline="", encoding="utf-8") as stream:
             reader = csv.DictReader(stream)
@@ -37,7 +37,7 @@ def overlap_in_guest(path):
                     # A partially-written last line is not a witness.
                     continue
                 nxt = shot_x + velocity
-                if (frame > 0 and mode == 1 and stage == 2 and red == active == 1
+                if (frame > after_frame and mode == 1 and stage == 2 and red == active == 1
                         and 0 < velocity <= 12000 and shot_x >= 0
                         and nxt < TARGET_X_MILLI + TARGET_W_MILLI
                         and nxt + SHOT_WIDTH_MILLI > TARGET_X_MILLI
@@ -49,9 +49,13 @@ def overlap_in_guest(path):
 
 
 def main(argv):
-    if len(argv) != 2:
-        raise SystemExit("usage: rooftop_red_overlap_witness.py GUEST.csv")
-    witness = overlap_in_guest(argv[1])
+    if len(argv) not in (2,3):
+        raise SystemExit("usage: rooftop_red_overlap_witness.py GUEST.csv [AFTER_FRAME]")
+    try:
+        after_frame = int(argv[2]) if len(argv)==3 else 0
+    except ValueError:
+        raise SystemExit('AFTER_FRAME must be an integer')
+    witness = overlap_in_guest(argv[1], after_frame)
     if witness is None:
         return 1
     print(f"{witness[0]} {witness[1]}")
