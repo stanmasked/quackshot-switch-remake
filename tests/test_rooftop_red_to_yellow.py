@@ -1,6 +1,9 @@
 """Strict synthetic protocol regressions; real acceptance needs NeXium guests."""
+import os
 import pathlib
+import subprocess
 import sys
+import tempfile
 import unittest
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -104,5 +107,66 @@ class RedToYellowProtocol(unittest.TestCase):
     def test_forged_change_event(self):self.bad(lambda c,r,e,w,h:h.replace("frame=1631","frame=9999"))
     def test_forged_bridge_event(self):self.bad(lambda c,r,e,w,h:h.replace("frame=1644","frame=9999"))
     def test_duplicate_yellow_event(self):self.bad(lambda c,r,e,w,h:h+"ROOFTOP_YELLOW_BRIDGE_OPEN_GUEST frame=1644\n")
+
+
+class NeXiumStartupWindowReadiness(unittest.TestCase):
+    """A late GUI must be found; an absent GUI may never fake game input."""
+
+    def setUp(self):
+        from tools.verify_nested_nexium_route import embedded_program
+        source=(ROOT/"tools/nexium_rooftop_red_to_yellow_probe.sh").read_text(encoding="utf-8")
+        inner=embedded_program(source)
+        begin=inner.index('  window=""\n')
+        end=inner.index("  # Map starts on CITY TEST.",begin)
+        self.window_block=inner[begin:end]
+        self.assertIn("for startup_poll in $(seq 1 80)",self.window_block)
+        self.assertIn('kill -0 "$emu_pid"',self.window_block)
+        self.assertNotIn('sleep 5\n  window=',self.window_block)
+
+    def run_startup(self,appear_at):
+        with tempfile.TemporaryDirectory() as directory:
+            directory=pathlib.Path(directory)
+            stub=directory/"xdotool"
+            stub.write_text("""#!/bin/sh
+if [ "$1" = "search" ]; then
+  n=0
+  if [ -f "$COUNT_FILE" ]; then n="$(cat "$COUNT_FILE")"; fi
+  n=$((n+1))
+  printf '%s' "$n" > "$COUNT_FILE"
+  if [ "$APPEAR_AT" -ge 1 ] && [ "$n" -ge "$APPEAR_AT" ]; then
+    printf '4242\\n'
+    exit 0
+  fi
+  exit 1
+fi
+if [ "$1" = "windowfocus" ]; then
+  [ "$2" = 4242 ]
+  exit $?
+fi
+exit 4
+""",encoding="utf-8")
+            stub.chmod(0o755)
+            env=dict(os.environ)
+            env.update(PATH=str(directory)+os.pathsep+env.get("PATH",""),
+                       COUNT_FILE=str(directory/"counts"),
+                       APPEAR_AT=str(appear_at))
+            program="set -euo pipefail\nemu_pid=$\nsleep(){ :; }\n"+self.window_block
+            result=subprocess.run(["bash","-c",program],env=env,capture_output=True,
+                                  text=True,timeout=15,check=False)
+            polls=int((directory/"counts").read_text())
+            return result,polls
+
+    def test_delayed_real_window_is_focused_without_early_failure(self):
+        result,polls=self.run_startup(6)
+        self.assertEqual(result.returncode,0,result.stderr+result.stdout)
+        self.assertIn("NEXIUM_WINDOW_READY",result.stdout)
+        self.assertEqual(polls,6)
+
+    def test_missing_window_fails_closed_after_exact_poll_budget(self):
+        result,polls=self.run_startup(-1)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn("BLOCKED: no emulator window after bounded startup poll",result.stdout)
+        self.assertEqual(polls,80)
+        self.assertNotIn("NEXIUM_WINDOW_READY",result.stdout)
 
 if __name__=="__main__":unittest.main()
