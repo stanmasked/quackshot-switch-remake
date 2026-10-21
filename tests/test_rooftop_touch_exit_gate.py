@@ -32,13 +32,14 @@ class TouchExitAckTests(unittest.TestCase):
     def test_nested_shell_syntax_and_proof_hooks(self):
         self.assertEqual(check_route(SCRIPT)["status"], "PASS")
         for witness in (
+            "ROOFTOP_GUEST_LIVE_BEFORE_EXIT",
             "ROOFTOP_EXIT_ATTEMPT=", "ROOFTOP_EXIT_CONFIRMED",
             "ROOFTOP_EXIT_SENT=virtual_START",
             "xdotool keydown --clearmodifiers m", "xdotool keyup m",
             "BLOCKED: native ROOFTOP guest did not acknowledge START exit",
         ):
             self.assertIn(witness, self.gate)
-        self.assertIn("ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do", self.source)
+        self.assertIn("ROOFTOP_GUEST_LIVE_BEFORE_EXIT ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do", self.source)
 
     def run_gate(self, acknowledge):
         with tempfile.TemporaryDirectory() as temp:
