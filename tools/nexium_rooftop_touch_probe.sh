@@ -207,7 +207,7 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/guest-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous guest file" > "$out/result.txt"; exit 1; }
 IFS= read -r guest < "$out/guest-paths.txt"
 cp "$guest" "$out/guest-rooftop.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_GUEST_LIVE_BEFORE_EXIT ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
+for event in NEXIUM_WINDOW_READY NEXIUM_GUEST_FRAMES_READY ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_GUEST_LIVE_BEFORE_EXIT ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
