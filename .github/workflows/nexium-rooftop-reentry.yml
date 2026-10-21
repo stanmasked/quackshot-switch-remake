@@ -7,6 +7,8 @@ on:
       - ".github/workflows/nexium-rooftop-reentry.yml"
       - "src/main_sdl.c"
       - "tests/test_rooftop_reentry_trace.py"
+      - "tests/test_nested_nexium_route.py"
+      - "tools/verify_nested_nexium_route.py"
       - "tools/verify_rooftop_reentry_trace.py"
       - "src/qs_game.c"
       - "include/**"
@@ -58,6 +60,8 @@ jobs:
       - name: Shell and verifier syntax
         run: |
           bash -n tools/nexium_rooftop_reentry_probe.sh
+          python3 tools/verify_nested_nexium_route.py tools/nexium_rooftop_reentry_probe.sh
+          python3 -m unittest discover -s tests -p test_nested_nexium_route.py
           python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_reentry_trace.py tools/verify_rooftop_reentry_repeats.py
       - name: Install CPU Vulkan and virtual-screen dependencies
         run: |
