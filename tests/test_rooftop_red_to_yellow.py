@@ -150,7 +150,13 @@ exit 4
             env.update(PATH=str(directory)+os.pathsep+env.get("PATH",""),
                        COUNT_FILE=str(directory/"counts"),
                        APPEAR_AT=str(appear_at))
-            program="set -euo pipefail\nemu_pid=$\nsleep(){ :; }\n"+self.window_block
+            # The real runner watches a separate long-lived emulator
+            # process, not the test shell itself.
+            program=("set -euo pipefail\n"
+                     "command sleep 60 >/dev/null 2>&1 &\n"
+                     "emu_pid=$!\n"
+                     "trap 'kill \"$emu_pid\" 2>/dev/null || true' EXIT\n"
+                     "sleep(){ :; }\n"+self.window_block)
             result=subprocess.run(["bash","-c",program],env=env,capture_output=True,
                                   text=True,timeout=15,check=False)
             polls=int((directory/"counts").read_text())
