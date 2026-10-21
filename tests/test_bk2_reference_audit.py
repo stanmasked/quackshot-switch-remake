@@ -111,20 +111,17 @@ class BK2AuditTest(unittest.TestCase):
         with ZipFile(self.path, "w", compression=ZIP_DEFLATED) as target:
             for name, payload in members.items():
                 target.writestr(name, payload)
-        # Damage compressed archive bytes after writing valid members.
+        # Flip a byte inside the compressed Input Log payload, not the
+        # central directory, so ZipFile's CRC validation must reject it.
         data = bytearray(self.path.read_bytes())
-        input_member = members["Input Log.txt"]
-        offset = data.find(input_member)
-        if offset < 0:
-            # ZIP_DEFLATED bytes need not contain the plaintext; flip a byte
-            # in the local file header's CRC field instead.
-            name_offset = data.find(b"Input Log.txt")
-            self.assertGreaterEqual(name_offset, 0)
-            local_header = name_offset - 30
-            self.assertGreaterEqual(local_header, 0)
-            data[local_header + 14] ^= 0x01
-        else:
-            data[offset] ^= 0x01
+        name_offset = data.find(b"Input Log.txt")
+        self.assertGreaterEqual(name_offset, 30)
+        local_header = name_offset - 30
+        name_len = int.from_bytes(data[local_header + 26:local_header + 28], "little")
+        extra_len = int.from_bytes(data[local_header + 28:local_header + 30], "little")
+        compressed_start = local_header + 30 + name_len + extra_len
+        self.assertLess(compressed_start, len(data))
+        data[compressed_start] ^= 0x01
         self.path.write_bytes(data)
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
