@@ -34,10 +34,44 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  timeout --signal=TERM --kill-after=5s 145s "$1" "$2" > "$3" 2>&1 &
  emu_pid=$!
  (
-  sleep 5
-  window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
-  [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
-  xdotool windowfocus "$window"; sleep 0.7
+  # BEGIN YELLOW RESET WINDOW AND GAME READY GATE
+  # NeXium may create its X11 window after the guest is already running.
+  # Never fail on one early lookup: poll a bounded number of times and
+  # require the pinned emulator's real guest-present frame witness before
+  # sending any game/controller input.
+  window=""
+  for startup_poll in $(seq 1 80); do
+   window="$(xdotool search --onlyvisible --name NeXium 2>/dev/null | tail -n1 || true)"
+   [ -n "$window" ] && break
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before visible window"; exit 1;
+   }
+   sleep 0.25
+  done
+  [ -n "$window" ] || {
+   echo "BLOCKED: no emulator window after bounded startup poll"; exit 1;
+  }
+  echo NEXIUM_WINDOW_READY
+  game_ready=0
+  for boot_poll in $(seq 1 100); do
+   bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
+   if [ -n "$bootlog" ] && grep -qF "[guest-present] queued=300" "$bootlog"; then
+    game_ready=1; break
+   fi
+   kill -0 "$emu_pid" 2>/dev/null || {
+    echo "BLOCKED: emulator exited before NRO frames"; exit 1;
+   }
+   sleep 0.2
+  done
+  [ "$game_ready" = 1 ] || {
+   echo "BLOCKED: no authenticated NRO guest frames"; exit 1;
+  }
+  echo NEXIUM_GUEST_FRAMES_READY
+  xdotool windowfocus "$window" || {
+   echo "BLOCKED: emulator window focus failed"; exit 1;
+  }
+  sleep 0.7
+  # END YELLOW RESET WINDOW AND GAME READY GATE
   # Map starts on CITY TEST. Nintendo A enters the native prototype.
   # The red weapon can only be unlocked here by a genuine jumping pickup.
   xdotool key --clearmodifiers --delay 120 c
@@ -333,7 +367,7 @@ IFS= read -r city < "$out/city-paths.txt"
 IFS= read -r transition < "$out/transition-paths.txt"
 cp "$city" "$out/guest-city-red.csv"
 cp "$transition" "$out/guest-transitions.csv"
-for event in CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST ROOFTOP_EXIT_GUEST ROOFTOP_SECOND_ENTRY_SENT ROOFTOP_REENTRY_RED_GUEST ROOFTOP_SECOND_APPROACH_GUEST ROOFTOP_SECOND_RED_FIRE_SENT ROOFTOP_SECOND_RED_SWITCH_OVERLAP_GUEST ROOFTOP_SECOND_RED_BRIDGE_CLOSED_GUEST ROOFTOP_NINTENDO_X_SENT ROOFTOP_YELLOW_SELECTED_GUEST ROOFTOP_YELLOW_FIRE_SENT ROOFTOP_YELLOW_FIRE_GUEST ROOFTOP_YELLOW_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_OPEN_STABLE_GUEST ROOFTOP_YELLOW_OPEN_EXIT_GUEST ROOFTOP_YELLOW_RESET_ENTRY_SENT ROOFTOP_YELLOW_RESET_ENTRY_GUEST ROOFTOP_YELLOW_RESET_CLOSED_GUEST; do
+for event in NEXIUM_WINDOW_READY NEXIUM_GUEST_FRAMES_READY CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST ROOFTOP_EXIT_GUEST ROOFTOP_SECOND_ENTRY_SENT ROOFTOP_REENTRY_RED_GUEST ROOFTOP_SECOND_APPROACH_GUEST ROOFTOP_SECOND_RED_FIRE_SENT ROOFTOP_SECOND_RED_SWITCH_OVERLAP_GUEST ROOFTOP_SECOND_RED_BRIDGE_CLOSED_GUEST ROOFTOP_NINTENDO_X_SENT ROOFTOP_YELLOW_SELECTED_GUEST ROOFTOP_YELLOW_FIRE_SENT ROOFTOP_YELLOW_FIRE_GUEST ROOFTOP_YELLOW_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_OPEN_STABLE_GUEST ROOFTOP_YELLOW_OPEN_EXIT_GUEST ROOFTOP_YELLOW_RESET_ENTRY_SENT ROOFTOP_YELLOW_RESET_ENTRY_GUEST ROOFTOP_YELLOW_RESET_CLOSED_GUEST; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
