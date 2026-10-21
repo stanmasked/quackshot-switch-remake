@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import zlib
 
+from genesis_blue_roi_numeric import blue_roi_numeric, validate_roi
+
 MAX_ROM_BYTES = 8 * 1024 * 1024
 MAX_FRAMES = 10000
 RETRO_MEMORY_SYSTEM_RAM = 2
@@ -126,7 +128,7 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -136,13 +138,27 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 not all(isinstance(v, int) for v in ram_window) or
                 not 0 <= ram_window[0] < ram_window[1] <= frames):
             raise ValueError("ram_window requires (start, end_exclusive) within frame count")
+    if video_roi is None:
+        if video_roi_frames:
+            raise ValueError("video ROI frames require a video_roi")
+        roi_frame_set = set()
+    else:
+        validate_roi(video_roi)
+        if (type(video_roi_frames) not in (tuple, list) or
+                not 1 <= len(video_roi_frames) <= 24 or
+                any(type(f) is not int or not 0 <= f < frames
+                    for f in video_roi_frames) or
+                len(set(video_roi_frames)) != len(video_roi_frames)):
+            raise ValueError("video ROI frames require 1..24 unique valid frame indices")
+        roi_frame_set = set(video_roi_frames)
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
              "video_callbacks_outside_retro_run": 0,
              "frames_without_video_callback": 0,
              "frames_with_multiple_video_callbacks": 0,
-             "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0}
+             "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0,
+             "video_roi_samples": [], "video_roi_error": None}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
     # This path is never printed, exported, or included in numerical evidence.
@@ -177,6 +193,26 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             state["video_callbacks_current_step"] += 1
         else:
             state["video_callbacks_outside_retro_run"] += 1
+        # Optional Stage198 numeric screen-position observation. The
+        # underlying C framebuffer bytes stay transient inside this callback.
+        # Never export them or confuse blue-pixel shape with collision size.
+        if video_roi is not None and state["frame"] in roi_frame_set:
+            try:
+                if not data or not width or not height:
+                    raise ValueError("missing ROI framebuffer callback")
+                bpp = 4 if state["pixel_format"] == 1 else 2
+                count = int(pitch) * int(height)
+                if (width > 2048 or height > 2048 or
+                        pitch < width * bpp or count > 16 * 1024 * 1024):
+                    raise ValueError("unsupported ROI frame geometry")
+                metrics = blue_roi_numeric(
+                    C.string_at(data, count), int(width), int(height),
+                    int(pitch), int(state["pixel_format"]), video_roi)
+                state["video_roi_samples"].append({
+                    "frame": state["frame"], **metrics
+                })
+            except (ValueError, OverflowError):
+                state["video_roi_error"] = "invalid private visual ROI sample"
         if not data or state["frame"] % video_stride or not width or not height:
             return
         bytes_per_pixel = 4 if state["pixel_format"] == 1 else 2
@@ -264,6 +300,11 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     "ram_changed_address_count": len(changed),
                     # Neither RAM values nor ROM bytes are exported.
                 })
+        if video_roi is not None:
+            if (state["video_roi_error"] is not None or
+                    sorted(row["frame"] for row in state["video_roi_samples"]) !=
+                    sorted(roi_frame_set)):
+                raise RuntimeError("Invalid visual ROI callback cadence or geometry")
         return {
             "schema": "private_genesis_libretro_numeric_probe_v1",
             "evidence_type": "actual_emulator_frames_numeric_metadata_only",
@@ -291,6 +332,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "input_ranges": [{"first_frame": a, "end_exclusive": b, "button": n}
                              for a, b, n in schedule],
             "video_checkpoints": state["frame_checksums"],
+            "video_roi_blue_numeric": (state["video_roi_samples"]
+                                        if video_roi is not None else None),
             "ram_checkpoints": checkpoints,
             "most_frequently_changed_ram_offsets": [
                 {"offset": f"0x{i:04X}", "checkpoints_changed": count}
