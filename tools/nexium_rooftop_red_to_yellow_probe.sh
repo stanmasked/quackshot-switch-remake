@@ -34,9 +34,36 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  timeout --signal=TERM --kill-after=5s 130s "$1" "$2" > "$3" 2>&1 &
  emu_pid=$!
  (
-  sleep 5
-  window="$(xdotool search --onlyvisible --name NeXium | tail -n1)"
-  [ -n "$window" ] || { echo "BLOCKED: no emulator window"; exit 1; }
+  # NeXium on a shared Ubuntu runner can initialize Vulkan and create
+  # its X11 window after the historical fixed 5s delay. Wait for a
+  # real visible NeXium window with a finite startup budget. If it
+  # never appears, fail closed without claiming any controller input.
+  window=""
+  for startup_poll in $(seq 1 80); do
+   window="$(xdotool search --onlyvisible --name NeXium 2>/dev/null | tail -n1 || true)"
+   [ -n "$window" ] && break
+   kill -0 "$emu_pid" 2>/dev/null || { echo "BLOCKED: emulator exited before visible window"; exit 1; }
+   sleep 0.25
+  done
+  [ -n "$window" ] || { echo "BLOCKED: no emulator window after bounded startup poll"; exit 1; }
+  echo "NEXIUM_WINDOW_READY"
+  # The GUI window can appear before the NRO has rendered its menu.
+  # An immediate Nintendo A press is then lost permanently, leaving
+  # every NRO game telemetry CSV header-only. Synchronize to actual
+  # native guest presentation instead of another guessed host delay.
+  # The pinned NeXium nightly logs [guest-present] queued=300 once
+  # the loaded NRO has submitted 300 frames. Fail closed if it does not.
+  game_ready=0
+  for boot_poll in $(seq 1 100); do
+   bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
+   if [ -n "$bootlog" ] && grep -qF "[guest-present] queued=300" "$bootlog"; then
+    game_ready=1; break
+   fi
+   kill -0 "$emu_pid" 2>/dev/null || { echo "BLOCKED: emulator exited before NRO frames"; exit 1; }
+   sleep 0.2
+  done
+  [ "$game_ready" = 1 ] || { echo "BLOCKED: no authenticated NRO guest frames"; exit 1; }
+  echo "NEXIUM_GUEST_FRAMES_READY"
   xdotool windowfocus "$window"; sleep 0.7
   # Map starts on CITY TEST. Nintendo A enters the native prototype.
   # The red weapon can only be unlocked here by a genuine jumping pickup.
