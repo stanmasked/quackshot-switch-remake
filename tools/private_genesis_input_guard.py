@@ -19,26 +19,33 @@ def require(ok, message):
 def file_snapshot(path, label):
     """Return only an in-process fingerprint; refuse symlinks and file swaps."""
     path = Path(path)
-    before = path.lstat()
-    require(stat.S_ISREG(before.st_mode), label + " is not a regular local file")
-    h = hashlib.sha256()
-    with path.open("rb") as stream:
-        opened = os.fstat(stream.fileno())
-        require(stat.S_ISREG(opened.st_mode), label + " changed file type")
-        while True:
-            block = stream.read(1024 * 1024)
-            if not block:
-                break
-            h.update(block)
-        closed = os.fstat(stream.fileno())
-    after = path.lstat()
-    fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
-    values = lambda s: tuple(getattr(s, key) for key in fields)
-    require(stat.S_ISREG(after.st_mode) and
-            values(before) == values(opened) ==
-            values(closed) == values(after),
-            label + " changed while hashing")
-    return (h.hexdigest(), values(after))
+    try:
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode),
+                label + " is not a regular local file")
+        h = hashlib.sha256()
+        with path.open("rb") as stream:
+            opened = os.fstat(stream.fileno())
+            require(stat.S_ISREG(opened.st_mode), label + " changed file type")
+            while True:
+                block = stream.read(1024 * 1024)
+                if not block:
+                    break
+                h.update(block)
+            closed = os.fstat(stream.fileno())
+        after = path.lstat()
+        fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        values = lambda s: tuple(getattr(s, key) for key in fields)
+        require(stat.S_ISREG(after.st_mode) and
+                values(before) == values(opened) ==
+                values(closed) == values(after),
+                label + " changed while hashing")
+        return (h.hexdigest(), values(after))
+    except OSError:
+        # OSError normally includes private path; do not copy it into logs.
+        raise ValueError(
+            "Private Genesis input guard: " + label +
+            " cannot be read as a stable local file") from None
 
 
 class PinnedOriginalInputs:
