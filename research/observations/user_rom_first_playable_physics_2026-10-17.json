@@ -1,0 +1,100 @@
+{
+  "schema": "quackshot_original_megadrive_first_playable_physics_v1",
+  "evidence_type": "independent_controlled_original_rom_emulator_video_and_numeric_ram",
+  "source_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "source_rom_bytes": 524288,
+  "emulator": "Genesis Plus GX libretro v1.7.4 aa74d79",
+  "compiled_emulator_sha256": "8c0dd22e79cf9db57ce8aa0d8751592ecb6f5ba88b61432bf45a0cbd0ef68c63",
+  "original_rom_in_repository": false,
+  "media_assets_in_repository": false,
+  "entry_sequence": {
+    "initial_start": [
+      {
+        "first": 450,
+        "end_exclusive": 462
+      },
+      {
+        "first": 680,
+        "end_exclusive": 692
+      },
+      {
+        "first": 850,
+        "end_exclusive": 862
+      }
+    ],
+    "intro_skip_start_pulses": [
+      1100,
+      1145,
+      1190,
+      1235,
+      1280,
+      1325,
+      1370
+    ],
+    "intro_pulse_duration_frames": 5,
+    "input_free_first_city_stage_observed": true
+  },
+  "measurement": {
+    "emulated_frames_per_run": 2320,
+    "independent_runs": 6,
+    "baseline_replay_identical_ram": true,
+    "control_frame": 2070,
+    "initial_world_coordinate_px": {
+      "x": 61,
+      "y": 176
+    },
+    "coordinate_word_storage": "16-bit little-endian within emulated RAM",
+    "coordinates": {
+      "world_x_ram_offset": "0xA2D0",
+      "world_y_ram_offset": "0xA2D4",
+      "screen_x_candidate_offset": "0x8F58",
+      "screen_y_candidate_offset": "0x8F54",
+      "horizontal_velocity_integer_part_candidate": "0xA2D8",
+      "vertical_velocity_integer_part_candidate": "0xA2DC",
+      "plunger_slot_activity_candidate": "0x9C00"
+    },
+    "right": {
+      "button": "RIGHT",
+      "held_frames": 120,
+      "x_at_frame_2090": 87,
+      "x_at_frame_2160": 201,
+      "measured_steady_world_px_per_frame": 1.628571,
+      "measured_frames": 70,
+      "active_input_reads": 120
+    },
+    "left": {
+      "button": "LEFT",
+      "held_frames": 120,
+      "world_x_minimum": 16,
+      "active_input_reads": 120
+    },
+    "jump": {
+      "button": "A",
+      "held_frames": 50,
+      "apex_y_world_px": 111,
+      "apex_frame": 2097,
+      "rise_world_px": 65,
+      "landing_frame": 2126,
+      "airborne_frames": 56,
+      "active_input_reads": 50
+    },
+    "plunger": {
+      "button": "B",
+      "held_frames": 50,
+      "first_active_slot_frame": 2071,
+      "first_activity_relative_frame": 1,
+      "active_input_reads": 50
+    }
+  },
+  "limits": [
+    "Direct numeric measurements cover one playable city-stage spawn and one input window, not other levels.",
+    "All screenshot inspection and raw 64-KiB RAM comparisons happened locally; original data not published.",
+    "Screen position may be affected by scrolling and sprite anchor; world coordinates are validated by independent directions and jump.",
+    "Original and Switch prototype differ in coordinate conventions, collision modeling and timing; do not directly copy constants without alignment.",
+    "Buttons A and B are the Genesis original game's input names, not Nintendo Switch button mapping."
+  ],
+  "reference_correlated_tools": [
+    "tools/genesis_libretro_probe.py",
+    "tools/genesis_playable_physics.py"
+  ]
+}

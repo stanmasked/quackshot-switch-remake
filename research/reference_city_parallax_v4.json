@@ -1,0 +1,56 @@
+{
+  "schema": "quackshot_switch_procedural_parallax_v4",
+  "stage": 18,
+  "evidence_scope": "own_original_free_geometry_and_measured_first_city_vdp_ratio",
+  "origin_reference": {
+    "rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+    "source_branch": "feature/rom-reference-inspector",
+    "source_path": "research/observations/user_rom_vdp_hscroll_2026-10-18.json",
+    "vdp_reg11": 0,
+    "vdp_reg13": 52,
+    "vdp_hscroll_base_hex": "0xD000",
+    "original_planeA_formula": "-S",
+    "original_planeB_formula": "-floor(S/2)",
+    "original_s": "u16le(RAM[0x852C])",
+    "reference_correlations": 15280,
+    "copyrighted_payload_in_this_repo": false
+  },
+  "prototype": {
+    "opt_in": "R + A while entering synthetic CITY TEST from the map",
+    "implementation_files": [
+      "include/qs_parallax.h",
+      "src/qs_parallax.c",
+      "src/main_sdl.c"
+    ],
+    "rendered_objects": [
+      "artificial far building silhouettes",
+      "artificial near building silhouettes",
+      "independently authored tiles"
+    ],
+    "foreground_scroll_px": "truncate(nonnegative camera_x)",
+    "background_scroll_px": "floor(foreground_scroll_px/2)",
+    "old_other_stages_scroll": "floor(foreground_scroll_px/3), no renderer changes",
+    "foreground_draw_order": "behind world tiles and sprites",
+    "camera_reverse_band": "123..141 experimental city model from stage17"
+  },
+  "reproduction_acceptance": {
+    "unit_tests": "tests/test_parallax.c: 5 numeric cases",
+    "pixel_test": "SDL2 headless --parallax-smoke: shift camera +2 and require far scanline shift +1 and near scanline shift +2",
+    "guest_trace_event": 12,
+    "guest_event_detail_encoding": "(foreground_pixels << 16) | distant_pixels",
+    "guest_required": "5+ records, actual foreground camera scroll >= 10, distant >= 5, exact integer half ratio in each record",
+    "actions": [
+      "Portable gameplay core",
+      "Nintendo Switch NRO (prototype)",
+      "NeXium Switch Emulator Runtime"
+    ]
+  },
+  "limits": [
+    "Procedural test blocks and colors only, not protected game levels or art",
+    "Main game CPU remains C99 simulation, not original Mega Drive machine code",
+    "Half-speed original VDP plane-B behavior only verified for one original city level",
+    "Actual original camera render-buffer lag at 0x852C vs 0x8524 not modeled in Switch",
+    "No original ROM/VRAM/pixels/audio or commercial assets shipped",
+    "Physical Nintendo Switch hardware untested"
+  ]
+}

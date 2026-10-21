@@ -1,0 +1,134 @@
+{
+  "schema": "quackshot_genesis_input_causality_observation_v1",
+  "reference_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "original_rom_bytes": 524288,
+  "emulator": "Genesis Plus GX libretro v1.7.4",
+  "compiled_emulator_sha256": "8c0dd22e79cf9db57ce8aa0d8751592ecb6f5ba88b61432bf45a0cbd0ef68c63",
+  "platform": "private local Linux x86_64 Genesis emulator",
+  "experiment_kind": "independent baseline vs exactly one extra input window",
+  "baseline_input": {
+    "button": "START",
+    "first_frame": 450,
+    "end_exclusive": 465
+  },
+  "video_crc_mode": "entire-libretro-frame pitch-inclusive CRC32, sampled at 1-frame intervals in precise trials",
+  "ram_crc_mode": "64KiB libretro work RAM CRC32, sampled every 60 frames",
+  "observations": [
+    {
+      "test": "RIGHT_at_1300",
+      "extra_input": "RIGHT",
+      "first_frame": 1300,
+      "end_exclusive": 1370,
+      "video_frames_compared": 1600,
+      "changed_video_frames": 0,
+      "ram_snapshots_compared": 27,
+      "changed_ram_snapshots": 0,
+      "extra_pressed_state_reads": 70
+    },
+    {
+      "test": "B_at_1300",
+      "extra_input": "B",
+      "first_frame": 1300,
+      "end_exclusive": 1370,
+      "video_frames_compared": 1600,
+      "changed_video_frames": 0,
+      "ram_snapshots_compared": 27,
+      "changed_ram_snapshots": 0,
+      "extra_pressed_state_reads": 70
+    },
+    {
+      "test": "A_at_1300",
+      "extra_input": "A",
+      "first_frame": 1300,
+      "end_exclusive": 1370,
+      "video_frames_compared": 1600,
+      "changed_video_frames": 0,
+      "ram_snapshots_compared": 27,
+      "changed_ram_snapshots": 0,
+      "extra_pressed_state_reads": 70
+    },
+    {
+      "test": "LEFT_at_3200",
+      "extra_input": "LEFT",
+      "first_frame": 3200,
+      "end_exclusive": 3320,
+      "video_frames_compared": 3330,
+      "changed_video_frames": 0,
+      "ram_snapshots_compared": 56,
+      "changed_ram_snapshots": 0,
+      "extra_pressed_state_reads": 120
+    },
+    {
+      "test": "START_at_3200",
+      "extra_input": "START",
+      "first_frame": 3200,
+      "end_exclusive": 3215,
+      "video_frames_compared": 3330,
+      "changed_video_frames": 128,
+      "first_changed_video_frame": 3202,
+      "ram_snapshots_compared": 56,
+      "changed_ram_snapshots": 2,
+      "first_changed_ram_snapshot": 3240,
+      "extra_pressed_state_reads": 15
+    }
+  ],
+  "independent_longer_window_checks": {
+    "frames_per_run": 3700,
+    "base_repeat_consistent": true,
+    "right_1300_changed_sixty_frame_video_or_ram_checkpoints": 0,
+    "B_1300_changed_sixty_frame_video_or_ram_checkpoints": 0,
+    "A_1300_changed_sixty_frame_video_or_ram_checkpoints": 0,
+    "RIGHT_3200_changed_sixty_frame_video_or_ram_checkpoints": 0,
+    "LEFT_3200_changed_sixty_frame_video_or_ram_checkpoints": 0,
+    "START_3200_changed_sixty_frame_video_checkpoints": 8,
+    "START_3200_first_coarse_changed_frame": 3240
+  },
+  "visual_observation_not_uploaded": "Following START at 3200, SEGA splash appears in privately inspected screenshots; a new boot-like sequence follows.",
+  "accuracy_limits": [
+    "Button presses were read by libretro callbacks; lack of observed state divergence does not prove zero internal CPU response at unobserved RAM instants.",
+    "Frames showing Donald in a stage may be an attract sequence; they are not yet validated as player-controlled.",
+    "Strong START effect cannot be interpreted as jump or walk physics.",
+    "Original graphics, ROM bytes, screenshot pixels and RAM bytes remain local; only numeric metadata is public."
+  ],
+  "additional_right_window_scan": {
+    "method": "Independent Start450 baseline versus one 60-frame RIGHT hold per run; CRC32 sampled every 10 emulator frames",
+    "tested_first_frames": [
+      300,
+      550,
+      700,
+      850,
+      1000,
+      1150,
+      1450,
+      1750,
+      2050,
+      2350,
+      2650,
+      2950,
+      3450,
+      3900,
+      4350
+    ],
+    "hold_frames_per_run": 60,
+    "extra_pressed_input_reads_per_run": 60,
+    "changed_video_checkpoints_per_run": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "ran_with_private_rom_only": true,
+    "coverage_limit": "Only 15 completed windows. The wider candidate sweep was interrupted after the fifteenth; it is NOT evidence of all gameplay states or every possible time."
+  }
+}

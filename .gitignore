@@ -1,13 +1,29 @@
-# Never commit original game binaries, movies, saves or compressed captures.
+# Keep all original copyrighted game material out of version control.
+/roms/
+/original/
+/private/
+/assets/original/
 *.gen
 *.smd
+*.32x
 *.bin
 *.rom
-*.bk2
-*.fm2
+*.cue
+*.iso
+*.chd
+*.srm
 *.sav
 *.state
+*.bk2
+*.fm2
 *.zip
 *.gz
 __pycache__/
 .pytest_cache/
+*.pyc
+.venv/
+build/
+build-*/
+*.elf
+*.nro
+*.nacp

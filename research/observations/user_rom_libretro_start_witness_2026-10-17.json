@@ -1,0 +1,66 @@
+{
+  "schema": "quackshot_original_genesis_runtime_input_witness_v1",
+  "source_type": "private_user_ROM_emulated_locally_not_uploaded",
+  "date": "2026-10-17",
+  "reference_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "reference_rom_bytes": 524288,
+  "emulation_core": "Genesis Plus GX libretro v1.7.4",
+  "emulation_upstream_commit": "aa74d79634cd230f65cce4180e92688e53883d2f",
+  "local_compiled_core_sha256": "8c0dd22e79cf9db57ce8aa0d8751592ecb6f5ba88b61432bf45a0cbd0ef68c63",
+  "core_artifact": "https://github.com/stanmasked/quackshot-switch-remake/actions/runs/39062308613/artifacts/12111802717",
+  "runs": [
+    {
+      "name": "idle",
+      "frames_emulated": 1800,
+      "video_callbacks": 1800,
+      "libretro_input_polls": 1800,
+      "input_state_reads": 28800,
+      "pressed_input_reads": 0
+    },
+    {
+      "name": "start_450_to_465",
+      "frames_emulated": 1800,
+      "video_callbacks": 1800,
+      "libretro_input_polls": 1800,
+      "input_state_reads": 28800,
+      "pressed_input_reads": 15
+    }
+  ],
+  "timing": {
+    "reported_frames_per_second": 59.922743,
+    "work_ram_bytes": 65536,
+    "video_checksum_interval_frames": 60
+  },
+  "causal_screen_difference": {
+    "compared_video_checkpoints": 30,
+    "differing_video_checkpoints": 22,
+    "first_differing_checkpoint_frame": 480,
+    "pressed_button": "START",
+    "inclusive_pressed_frame": 450,
+    "exclusive_end_frame": 465,
+    "frame_480_is_coarse_sampling_only": true
+  },
+  "local_visual_context": [
+    "title screen observed around frame 600",
+    "game-level imagery observed around frames 1200 and 1500"
+  ],
+  "interpretation_limits": [
+    "A changed framebuffer CRC32 proves that the START input changed output, not that user-controllable gameplay began.",
+    "Separate right/jump/attack input variants at later frames did not yet show distinct video or RAM outcomes; the game may be in a scripted attract/demo phase.",
+    "Observed RAM changes are not independently identified as Donald's coordinates or velocity.",
+    "Source images, audio, raw ROM and original game RAM bytes were never transferred to GitHub."
+  ],
+  "frame_exact_comparison": {
+    "evidence_type": "independent_idle_vs_START_per_frame_video_crc32",
+    "frames_compared": 600,
+    "video_stride": 1,
+    "scripted_start_inclusive_frame": 450,
+    "scripted_end_exclusive_frame": 465,
+    "frame_before_action_matching": 449,
+    "first_differing_frame": 450,
+    "differing_frame_count": 141,
+    "last_compared_frame": 599,
+    "observed_libretro_nonzero_start_reads": 15,
+    "qualification": "Same-frame output change establishes observable response but does not identify a player-controlled state or gameplay movement."
+  }
+}

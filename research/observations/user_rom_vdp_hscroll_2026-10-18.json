@@ -1,0 +1,134 @@
+{
+  "schema": "quackshot_megadrive_actual_vdp_hscroll_v1",
+  "evidence_type": "direct_end_of_frame_internal_VDP_VRAM_HScroll_table_numeric_observation",
+  "reference_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "source_ROM_bytes": 524288,
+  "emulator": "Genesis Plus GX libretro v1.7.4 aa74d79",
+  "upstream_emulator_commit": "aa74d79634cd230f65cce4180e92688e53883d2f",
+  "rom_free_instrumented_core_sha256": "4e3381cf5bfa7ff387bbe6887e7e31453bf4c8c85b295aa66d6d07d415dde7aa",
+  "instrumentation_source": "tools/genesis_vdp_hscroll_export.c",
+  "analysis_source": "tools/genesis_vdp_scroll_probe.py",
+  "original_rom_in_public_repository": false,
+  "original_vram_ram_pixels_audio_exported": false,
+  "measurement": {
+    "independent_emulations": 5,
+    "frames_per_run": 2550,
+    "dense_measured_frame_window": [
+      2069,
+      2451
+    ],
+    "unique_numeric_frames_per_run": 382,
+    "total_observed_frame_states": 1910,
+    "sampled_vdp_scanlines": [
+      0,
+      64,
+      128,
+      192
+    ],
+    "total_per_plane_scanline_samples": 7640,
+    "total_plane_word_comparisons": 15280,
+    "identical_right_replays": true,
+    "VDP_register_11": 0,
+    "VDP_register_13": 52,
+    "HScroll_VRAM_table_base": "0xD000",
+    "hscroll_scanline_mask": 0,
+    "hscroll_mode": "full-screen (identical table entry across four sampled scanlines)",
+    "software_RAM_camera_offset": "0x8524",
+    "software_RAM_hscroll_render_buffer_offset": "0x852C",
+    "plane_A_HScroll_signed_11bit_formula": "-u16le(RAM[0x852C])",
+    "plane_B_HScroll_signed_11bit_formula": "-floor(u16le(RAM[0x852C])/2)",
+    "all_checked_samples_match_exactly": true
+  },
+  "keyframes": [
+    {
+      "frame": 2069,
+      "world_x": 61,
+      "ram_camera": 0,
+      "ram_hscroll_buffer": 0,
+      "plane_a": 0,
+      "plane_b": 0
+    },
+    {
+      "frame": 2180,
+      "world_x": 233,
+      "ram_camera": 92,
+      "ram_hscroll_buffer": 90,
+      "plane_a": -90,
+      "plane_b": -45
+    },
+    {
+      "frame": 2220,
+      "world_x": 298,
+      "ram_camera": 157,
+      "ram_hscroll_buffer": 155,
+      "plane_a": -155,
+      "plane_b": -77
+    },
+    {
+      "frame": 2300,
+      "world_x": 428,
+      "ram_camera": 287,
+      "ram_hscroll_buffer": 285,
+      "plane_a": -285,
+      "plane_b": -142
+    },
+    {
+      "frame": 2400,
+      "world_x": 498,
+      "ram_camera": 358,
+      "ram_hscroll_buffer": 358,
+      "plane_a": -358,
+      "plane_b": -179
+    }
+  ],
+  "reverse_keyframes": [
+    {
+      "frame": 2360,
+      "world_x": 498,
+      "ram_camera": 358,
+      "ram_hscroll_buffer": 358,
+      "plane_a": -358,
+      "plane_b": -179
+    },
+    {
+      "frame": 2375,
+      "world_x": 480,
+      "ram_camera": 357,
+      "ram_hscroll_buffer": 358,
+      "plane_a": -358,
+      "plane_b": -179
+    },
+    {
+      "frame": 2380,
+      "world_x": 472,
+      "ram_camera": 349,
+      "ram_hscroll_buffer": 351,
+      "plane_a": -351,
+      "plane_b": -175
+    },
+    {
+      "frame": 2390,
+      "world_x": 455,
+      "ram_camera": 333,
+      "ram_hscroll_buffer": 335,
+      "plane_a": -335,
+      "plane_b": -167
+    },
+    {
+      "frame": 2430,
+      "world_x": 397,
+      "ram_camera": 273,
+      "ram_hscroll_buffer": 273,
+      "plane_a": -273,
+      "plane_b": -136
+    }
+  ],
+  "limitations": [
+    "Values read from emulated VDP HScroll table after each rendered frame, not from original Motorola 68000 write-instruction trace",
+    "Horizontal scroll mode 0 (full-screen) and four sampled lines checked for this one original level; no other scenes or modes inferred",
+    "Faster layer B here is actually half-speed background parallax (1:2 A:B), not guaranteed in all game stages",
+    "16-bit game RAM fields are decoded little-endian; original Motorola 68000 CPU remains big-endian",
+    "Patched open-source emulator is for private noncommercial research only; it is not embedded in Nintendo Switch NRO",
+    "No copyrighted assets, original ROM bytes, raw VRAM/RAM, screenshot pixels, save states or original sound are published"
+  ]
+}

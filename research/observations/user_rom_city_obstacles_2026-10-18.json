@@ -1,0 +1,90 @@
+{
+  "schema": "quackshot_genesis_city_obstacles_v1",
+  "evidence_type": "actual_private_original_genesis_emulator_causal_numeric_observations",
+  "reference_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "reference_rom_bytes": 524288,
+  "genesis_plus_gx_core_sha256": "8c0dd22e79cf9db57ce8aa0d8751592ecb6f5ba88b61432bf45a0cbd0ef68c63",
+  "emulator": "Genesis Plus GX libretro v1.7.4",
+  "original_content_in_repository": false,
+  "independent_trials": [
+    {
+      "name": "idle",
+      "frames": 2600,
+      "input": "none",
+      "position_xy": [
+        61,
+        176
+      ]
+    },
+    {
+      "name": "right_450",
+      "frames": 2600,
+      "input": "RIGHT [2070,2520)",
+      "active_reads": 450
+    },
+    {
+      "name": "near_wall_jump",
+      "frames": 2550,
+      "input": "RIGHT [2070,2510); Genesis A [2310,2350)",
+      "active_reads": 480
+    },
+    {
+      "name": "early_jump",
+      "frames": 2550,
+      "input": "RIGHT [2070,2510); Genesis A [2275,2315)",
+      "active_reads": 480
+    },
+    {
+      "name": "reverse_from_wall",
+      "frames": 2550,
+      "input": "RIGHT [2070,2360); LEFT [2360,2430)",
+      "active_reads": 360
+    }
+  ],
+  "ledge": {
+    "first_falling_frame": 2281,
+    "world_x_at_frame_2280": 396,
+    "world_y_upper_floor": 176,
+    "first_lower_floor_frame": 2297,
+    "lower_floor_world_xy": [
+      423,
+      208
+    ],
+    "drop_pixels": 32
+  },
+  "wall": {
+    "world_xy": [
+      498,
+      208
+    ],
+    "horizontal_velocity_zero_first_frame": 2344,
+    "right_held_stop_continues_through_frame": 2510,
+    "reverse_x_at_2390": 455,
+    "reverse_x_at_2430": 397,
+    "near_jump_starts": 2310,
+    "near_jump_x_at_2350": 505,
+    "near_jump_x_at_2500": 700,
+    "early_jump_starts": 2275,
+    "early_jump_x_at_2400": 499
+  },
+  "camera_heuristic": {
+    "source": "Private rendered frames, bounding RGB/blue-tone pixel subset; no framebuffer bytes included",
+    "world_x_at_2220": 298,
+    "world_x_at_2400": 498,
+    "screen_palette_blue_centroid_x_at_2220": 134.72,
+    "screen_palette_blue_centroid_x_at_2400": 134.164,
+    "palette_pixel_counts": [
+      175,
+      171
+    ],
+    "world_x_delta": 200,
+    "screen_centroid_delta": -0.556,
+    "interpretation": "camera appears to track character while world X rises; hardware scroll register not identified"
+  },
+  "limitations": [
+    "One private first-city state only; no proof about all stages",
+    "Exact original tile and collision-hitbox geometry not recovered",
+    "Screen blue-pixel centroid is a heuristic, not decoded camera register",
+    "No original RAM bytes, screenshot pixels, ROM bytes, graphics, audio or commercial assets included"
+  ]
+}

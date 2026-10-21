@@ -1,0 +1,14 @@
+{
+  "container_format": "linear",
+  "raw_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "linear_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "rom_size_bytes": 524288,
+  "console": "SEGA MEGA DRIVE",
+  "domestic_title": "I LOVE DONALD DUCK GURUZIA OH NOHIHOU",
+  "overseas_title": "QUACK SHOT STARRING DONALD DUCK RUSSIAN",
+  "product_code": "GM 00004054-00",
+  "region": "C",
+  "header_checksum": "B499",
+  "calculated_checksum": "B499",
+  "checksum_matches": true
+}
