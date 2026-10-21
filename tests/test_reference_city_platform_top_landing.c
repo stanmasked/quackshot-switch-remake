@@ -187,7 +187,7 @@ int main(void) {
         }
     }
     CHECK(natural_cases == 32);
-    CHECK(edge_drops == 8);
+    CHECK(edge_drops == 16);
     printf("STAGE174_PLATFORM_TOP_LANDING_PASS jump_traces=%d "
            "fractional_edge_drops=%d original_assets=none\n",
            natural_cases, edge_drops);
