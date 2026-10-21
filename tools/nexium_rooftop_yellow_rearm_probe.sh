@@ -399,7 +399,7 @@ cp "$transition" "$out/guest-transitions.csv"
 # files, not a transient unsynchronized host poll. Never assert host PASS
 # from a mere controller command: if the true fire/open/terrain evidence
 # is absent, this block fails before any event is appended.
-reset_frame="$(sed -n 's/^ROOFTOP_YELLOW_RESET_ENTRY_GUEST frame=\\([0-9][0-9]*\\)$/\\1/p' "$out/input-injection.txt")"
+reset_frame="$(sed -n 's/^ROOFTOP_YELLOW_RESET_ENTRY_GUEST frame=\([0-9][0-9]*\)$/\1/p' "$out/input-injection.txt")"
 [[ "$reset_frame" =~ ^[0-9]+$ ]] || { echo "BLOCKED: reset frame missing" > "$out/result.txt"; exit 1; }
 fire_frame="$(python3 tools/rooftop_yellow_guest_witness.py "$out/guest-rooftop.csv" "$out/guest-weapon.csv" fire "$reset_frame")" || { echo "BLOCKED: post-run third YELLOW FIRE not in paired NRO logs" > "$out/result.txt"; exit 1; }
 open_frame="$(python3 tools/rooftop_yellow_guest_witness.py "$out/guest-rooftop.csv" "$out/guest-weapon.csv" bridge "$fire_frame")" || { echo "BLOCKED: post-run second bridge activation not in paired NRO logs" > "$out/result.txt"; exit 1; }
@@ -415,16 +415,16 @@ for label in ROOFTOP_YELLOW_REARM_FIRE_GUEST ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GU
     ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST) trusted="$open_frame";;
     ROOFTOP_YELLOW_REARM_STABLE_GUEST) trusted="$final_frame";;
   esac
-  existing="$(sed -n "s/^$label frame=\\([0-9][0-9]*\\)$/\\1/p" "$out/input-injection.txt")"
+  existing="$(sed -n "s/^$label frame=\([0-9][0-9]*\)$/\1/p" "$out/input-injection.txt")"
   if [ -n "$existing" ]; then
     if [ "$label" != ROOFTOP_YELLOW_REARM_STABLE_GUEST ] && [ "$existing" != "$trusted" ]; then
       echo "BLOCKED: live witness disagrees with final paired NRO state" > "$out/result.txt"; exit 1
     fi
   else
-    printf '%s frame=%s\\n' "$label" "$trusted" >> "$out/input-injection.txt"
+    printf '%s frame=%s\n' "$label" "$trusted" >> "$out/input-injection.txt"
   fi
 done
-printf 'postrun_guest_fire=%s postrun_guest_open=%s postrun_stable=%s\\n' "$fire_frame" "$open_frame" "$final_frame" >> "$out/metadata.txt"
+printf 'postrun_guest_fire=%s postrun_guest_open=%s postrun_stable=%s\n' "$fire_frame" "$open_frame" "$final_frame" >> "$out/metadata.txt"
 for event in CITY_MENU_SENT CITY_RED_JUMP_APPROACH CITY_RED_JUMP_SENT CITY_RED_PICKUP_GUEST CITY_EXIT_GUEST CITY_EXIT_SENT ROOFTOP_MENU_SENT ROOFTOP_RED_UNLOCKED_GUEST ROOFTOP_RED_APPROACH_GUEST ROOFTOP_RED_FIRE_SENT ROOFTOP_RED_SWITCH_OVERLAP_GUEST ROOFTOP_RED_BRIDGE_CLOSED_GUEST ROOFTOP_EXIT_GUEST ROOFTOP_SECOND_ENTRY_SENT ROOFTOP_REENTRY_RED_GUEST ROOFTOP_SECOND_APPROACH_GUEST ROOFTOP_SECOND_RED_FIRE_SENT ROOFTOP_SECOND_RED_SWITCH_OVERLAP_GUEST ROOFTOP_SECOND_RED_BRIDGE_CLOSED_GUEST ROOFTOP_NINTENDO_X_SENT ROOFTOP_YELLOW_SELECTED_GUEST ROOFTOP_YELLOW_FIRE_SENT ROOFTOP_YELLOW_FIRE_GUEST ROOFTOP_YELLOW_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_OPEN_STABLE_GUEST ROOFTOP_YELLOW_OPEN_EXIT_GUEST ROOFTOP_YELLOW_RESET_ENTRY_SENT ROOFTOP_YELLOW_RESET_ENTRY_GUEST ROOFTOP_YELLOW_RESET_CLOSED_GUEST ROOFTOP_YELLOW_REARM_APPROACH_GUEST ROOFTOP_YELLOW_REARM_FIRE_SENT ROOFTOP_YELLOW_REARM_FIRE_GUEST ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST ROOFTOP_YELLOW_REARM_STABLE_GUEST; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
