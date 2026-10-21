@@ -94,10 +94,47 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
    exit 1
   fi
   echo "ROOFTOP_NO_BRIDGE_GUEST frame=$frame x_milli=$x"
-  # Leave the guest stage using the ACTUAL controller Start; this also
-  # prevents late enemy contact from contaminating the negative probe.
-  xdotool key --clearmodifiers m
+  # Leave the guest stage with a genuine held START input. A
+  # millisecond-scale xdotool tap can fall BETWEEN 60 Hz guest polls,
+  # silently keeping ROOFTOP active until the game later respawns.
+  # Verify that native guest CSV production ACTUALLY stops; never
+  # bless an unacknowledged host keypress as proof of game exit.
+  # BEGIN ROOFTOP START EXIT GATE
+  exited=0
+  for attempt in 1 2 3; do
+   xdotool windowfocus "$window" || {
+    echo "BLOCKED: NeXium window focus lost before START"; exit 1;
+   }
+   xdotool keydown --clearmodifiers m
+   sleep 0.18
+   xdotool keyup m
+   echo "ROOFTOP_EXIT_ATTEMPT=$attempt"
+   prev="$(wc -l < "$guest")"
+   stable=0
+   for poll in $(seq 1 16); do
+    sleep 0.15
+    count="$(wc -l < "$guest")"
+    if [ "$count" = "$prev" ]; then
+     stable=$((stable+1))
+    else
+     stable=0
+    fi
+    prev="$count"
+    if [ "$stable" -ge 4 ] &&
+       [ "$count" -gt 2 ] && [ "$count" -lt 1000 ]; then
+     exited=1
+     echo "ROOFTOP_EXIT_CONFIRMED rows=$count"
+     break
+    fi
+   done
+   [ "$exited" = 1 ] && break
+  done
+  [ "$exited" = 1 ] || {
+   echo "BLOCKED: native ROOFTOP guest did not acknowledge START exit";
+   exit 1;
+  }
   echo "ROOFTOP_EXIT_SENT=virtual_START"
+  # END ROOFTOP START EXIT GATE
  ) > "$4" 2>&1 &
  pid=$!
  wait "$emu_pid"; emu_result=$?
@@ -119,7 +156,7 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
 [ "$(wc -l < "$out/guest-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous guest file" > "$out/result.txt"; exit 1; }
 IFS= read -r guest < "$out/guest-paths.txt"
 cp "$guest" "$out/guest-rooftop.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_EXIT_SENT; do
+for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_EXIT_CONFIRMED ROOFTOP_EXIT_SENT; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
