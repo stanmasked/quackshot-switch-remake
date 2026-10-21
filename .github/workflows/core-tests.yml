@@ -71,6 +71,21 @@ jobs:
           assert len(report["rows"]) == 20
           print("CITY_DROP_HEIGHT_EVIDENCE_PASS: 20 synthetic drop cases")
           PY
+      - name: Validate original fractional-witness comparison without running ROM
+        run: |
+          python3 -m unittest discover -s tests -p 'test_city_fractional_witness_comparison.py' -v
+          python3 tools/city_fractional_witness_comparison.py --synthetic-report city-drop-height.json --out city-fractional-baseline.json
+          python3 - <<'PY'
+          import json
+          with open("city-fractional-baseline.json", encoding="utf-8") as fp:
+              report = json.load(fp)
+          assert report["status"] == "NO_NEW_ORIGINAL_FRACTIONAL_MEASUREMENTS"
+          assert report["original_fractional_threshold_intervals"] is None
+          assert report["original_rom_executed_by_this_comparison"] is False
+          assert report["authored_switch_32px_threshold_intervals"] == {
+              "above_0p01": 17, "above_0p25": 16, "above_1p0": 15}
+          print("STAGE189_CI_SYNTHETIC_ALIGNMENT_PASS: numeric baseline only")
+          PY
       - name: Record deterministic rational-timeline digest
         run: |
           ./build-desktop/qs_city_fraction_tests > timeline-digest.txt
@@ -83,6 +98,7 @@ jobs:
             city-event-gap.json
             city-geometry-sensitivity.json
             city-drop-height.json
+            city-fractional-baseline.json
           if-no-files-found: error
   compare-city-timeline:
     needs: core
@@ -176,6 +192,22 @@ jobs:
               print(path.parent.name, "height_cases=", len(signature))
           assert len(set(signatures)) == 1, "cross-compiler drop event drift"
           print("CITY_DROP_HEIGHT_CROSS_COMPILER_PASS: 20 event traces identical")
+          PY
+      - name: Assert four compilers agree on original-unknown fractional baseline
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files=sorted(Path("city-timeline-results").glob(
+              "city-timeline-*/city-fractional-baseline.json"))
+          assert len(files)==4, files
+          data=[json.loads(f.read_text(encoding="utf-8")) for f in files]
+          for item in data:
+              assert item["status"]=="NO_NEW_ORIGINAL_FRACTIONAL_MEASUREMENTS"
+              assert item["original_fractional_threshold_intervals"] is None
+              assert item["original_rom_executed_by_this_comparison"] is False
+          assert all(item==data[0] for item in data[1:])
+          print("STAGE189_CROSS_COMPILER_PASS: no spurious original ROM claims")
           PY
   sdl-desktop:
     runs-on: ubuntu-latest
