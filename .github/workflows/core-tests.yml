@@ -57,6 +57,20 @@ jobs:
           assert report["summary"]["tested_tile_pairs"] == 20
           print("CITY_GEOMETRY_SENSITIVITY_EVIDENCE_PASS: 20 synthetic tile combinations")
           PY
+      - name: Audit vertical drop-height and event-threshold definitions
+        run: |
+          python3 -m unittest discover -s tests -p 'test_city_drop_height_audit.py' -v
+          python3 tools/city_drop_height_audit.py --binary build-desktop/qs_city_drop_height_tests --out city-drop-height.json
+          python3 - <<'PY'
+          import json
+          with open("city-drop-height.json", encoding="utf-8") as source:
+              report = json.load(source)
+          assert report["status"] == "SYNTHETIC_DROP_EXPERIMENT_NOT_ROM_PARITY"
+          assert report["original_rom_was_run"] is False
+          assert report["original_assets_in_report"] is False
+          assert len(report["rows"]) == 20
+          print("CITY_DROP_HEIGHT_EVIDENCE_PASS: 20 synthetic drop cases")
+          PY
       - name: Record deterministic rational-timeline digest
         run: |
           ./build-desktop/qs_city_fraction_tests > timeline-digest.txt
@@ -68,6 +82,7 @@ jobs:
             timeline-digest.txt
             city-event-gap.json
             city-geometry-sensitivity.json
+            city-drop-height.json
           if-no-files-found: error
   compare-city-timeline:
     needs: core
@@ -136,6 +151,31 @@ jobs:
               print(path.parent.name, "cases=", len(fingerprint))
           assert len(set(digests)) == 1, "cross-compiler geometry event drift"
           print("CITY_GEOMETRY_CROSS_COMPILER_PASS: 20 event fingerprints identical")
+          PY
+      - name: Compare vertical drop event thresholds across compiler matrix
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = sorted(Path("city-timeline-results").glob(
+              "city-timeline-*/city-drop-height.json"))
+          assert len(files) == 4, files
+          signatures = []
+          for path in files:
+              record = json.loads(path.read_text(encoding="utf-8"))
+              assert record["status"] == "SYNTHETIC_DROP_EXPERIMENT_NOT_ROM_PARITY"
+              assert record["original_rom_was_run"] is False
+              rows = record["rows"]
+              assert len(rows) == 20
+              signature = tuple((
+                  row["drop_height_px"], row["ledge_column"],
+                  row["unsupported"], row["fall_0p01"],
+                  row["fall_0p25"], row["fall_1px"], row["landing"],
+                  row["fall_to_land_frames"]) for row in rows)
+              signatures.append(signature)
+              print(path.parent.name, "height_cases=", len(signature))
+          assert len(set(signatures)) == 1, "cross-compiler drop event drift"
+          print("CITY_DROP_HEIGHT_CROSS_COMPILER_PASS: 20 event traces identical")
           PY
   sdl-desktop:
     runs-on: ubuntu-latest
