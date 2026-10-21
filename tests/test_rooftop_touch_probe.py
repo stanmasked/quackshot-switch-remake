@@ -1,0 +1,37 @@
+"""Regression checks for fail-closed NeXium startup in the no-fire touch probe."""
+from pathlib import Path
+import sys
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tools.verify_nested_nexium_route import embedded_program, check_route
+
+SCRIPT_PATH = ROOT / "tools/nexium_rooftop_touch_probe.sh"
+SCRIPT = SCRIPT_PATH.read_text(encoding="utf-8")
+INNER = embedded_program(SCRIPT)
+
+
+class RooftopTouchStartupTest(unittest.TestCase):
+    def test_window_appearing_late_is_polled_with_a_finite_budget(self):
+        self.assertIn('for startup_poll in $(seq 1 80)', INNER)
+        self.assertIn('xdotool search --onlyvisible --name NeXium 2>/dev/null', INNER)
+        self.assertIn('kill -0 "$emu_pid"', INNER)
+        self.assertIn('BLOCKED: no emulator window after bounded startup poll', INNER)
+        self.assertNotIn('sleep 5\\n  window=', INNER)
+
+    def test_menu_input_waits_for_authenticated_guest_frames(self):
+        self.assertIn('for boot_poll in $(seq 1 100)', INNER)
+        self.assertIn('[guest-present] queued=300', INNER)
+        self.assertIn('NEXIUM_GUEST_FRAMES_READY', INNER)
+        self.assertIn('BLOCKED: no authenticated NRO guest frames', INNER)
+        self.assertLess(INNER.index('NEXIUM_GUEST_FRAMES_READY'),
+                        INNER.index('xdotool key --clearmodifiers --delay 120 c'))
+
+    def test_nested_shell_remains_valid(self):
+        verdict = check_route(SCRIPT_PATH)
+        self.assertEqual(verdict["status"], "PASS")
+
+
+if __name__ == "__main__":
+    unittest.main()
