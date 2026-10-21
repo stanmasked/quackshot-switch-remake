@@ -1,0 +1,33 @@
+name: Reference evidence integrity (ROM-free)
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate previously measured numerical observations
+        run: python3 tools/reference_evidence_integrity.py --out evidence-summary.json
+      - name: Test fail-closed provenance and measurement guards
+        run: python3 -m unittest discover -s tests -p 'test_reference_evidence_integrity.py' -v
+      - name: Show data-only proof metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          with open('evidence-summary.json', encoding='utf-8') as f:
+              result = json.load(f)
+          assert result['status'] == 'CONSISTENT'
+          assert result['original_rom_was_run_by_this_audit'] is False
+          assert result['measured_wall_x'] == 498
+          print('REFERENCE_EVIDENCE_CONSISTENT: numeric records only; no private ROM')
+          PY
