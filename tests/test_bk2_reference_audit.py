@@ -72,6 +72,27 @@ class BK2AuditTest(unittest.TestCase):
         movie(self.path, frames=["|..|UD..........|............|"])
         self.assertEqual(audit(self.path)["opposing_up_down_frames"], 1)
 
+    def test_valid_system_power_reset_columns(self):
+        # Genesis BK2 system field is [Power, Reset], in that order.
+        flags = ("..", "P.", ".R", "PR")
+        movie(self.path, frames=[
+            f"|{system}|............|............|" for system in flags
+        ])
+        result = audit(self.path)
+        self.assertEqual(result["frame_count"], len(flags))
+        self.assertEqual(result["system_active_frames"], 3)
+        self.assertEqual(result["controller1_unique_states"], 1)
+
+    def test_misplaced_system_flags_fail_closed(self):
+        # The old permissive set check incorrectly accepted these pairs.
+        for invalid in (".P", "R.", "PP", "RR", "RP", "PRR", "p."):
+            with self.subTest(system=invalid):
+                movie(self.path, frames=[
+                    f"|{invalid}|............|............|"
+                ])
+                with self.assertRaises(BK2ValidationError):
+                    audit(self.path)
+
     def test_missing_input_fails(self):
         with ZipFile(self.path, "w") as z:
             z.writestr("Header.txt", "Platform GEN\n")
