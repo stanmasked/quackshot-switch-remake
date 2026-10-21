@@ -1,6 +1,5 @@
 """ROM-free, synthetic regression checks for Stage165 cold-boot comparisons."""
 import copy
-import json
 import sys
 import unittest
 from pathlib import Path
@@ -31,7 +30,8 @@ class MotionRepeatabilityTests(unittest.TestCase):
         self.assertEqual(result["observed_frames_per_scenario"], 122)
         self.assertEqual(len(result["scenario_digests"]), 9)
         self.assertEqual(result["metrics"]["jump"]["tap_1"]["elapsed_to_landing_frames"], 30)
-        self.assertNotIn("traces", json.dumps(result))
+        self.assertNotIn("traces", result)
+        self.assertNotIn("reads", result)
 
     def test_single_subpixel_change_is_rejected_with_location(self):
         a, b = independent_fixture(), independent_fixture()
