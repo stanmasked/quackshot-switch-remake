@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import zlib
 
 from bk2_reference_audit import BK2ValidationError, audit
 
@@ -22,7 +23,10 @@ def check_rom(movie_path: Path, rom_path: Path) -> dict:
     """Compare declared movie digest to local ROM, without disclosing digests."""
     summary = audit(Path(movie_path))
     claimed = summary["rom_hash_claim"]
-    if re.fullmatch(r"[a-fA-F0-9]{32}", claimed):
+    if re.fullmatch(r"[a-fA-F0-9]{8}", claimed):
+        algo = "crc32_candidate_for_8_digit_SHA1_field"
+        digest_fn = lambda data: format(zlib.crc32(data) & 0xffffffff, "08x")
+    elif re.fullmatch(r"[a-fA-F0-9]{32}", claimed):
         algo = "md5_candidate_for_32_digit_SHA1_field"
         digest_fn = hashlib.md5  # legacy identity check only; not secure signing
     elif re.fullmatch(r"[a-fA-F0-9]{40}", claimed):
@@ -40,7 +44,8 @@ def check_rom(movie_path: Path, rom_path: Path) -> dict:
     if len(rom) < 512 or len(rom) > MAX_ROM_BYTES:
         raise BK2ValidationError("Local ROM size outside supported bounded range")
 
-    match = digest_fn(rom).hexdigest().casefold() == claimed.casefold() if digest_fn else None
+    digest = digest_fn(rom) if algo == "crc32_candidate_for_8_digit_SHA1_field" else digest_fn(rom).hexdigest() if digest_fn else None
+    match = digest.casefold() == claimed.casefold() if digest is not None else None
     status = ("candidate_hash_match" if match is True else
               "candidate_hash_mismatch" if match is False else
               "unverifiable_movie_hash")
@@ -55,7 +60,7 @@ def check_rom(movie_path: Path, rom_path: Path) -> dict:
         "rom_hash_or_bytes_exported": False,
         "replay_compatibility_verified": False,
         "notes": (
-            "MD5 is a legacy candidate identity comparison only; collisions exist."
+            "CRC32 and MD5 are legacy candidate identity comparisons only; collisions exist."
             " Matching hashes do not establish emulator timing or input replay synchronization."
         ),
     }
