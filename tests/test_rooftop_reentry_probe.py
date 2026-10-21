@@ -22,7 +22,10 @@ class RooftopReentryHostProbeTest(unittest.TestCase):
             '[ "$seq" = 2 ] && [ "$om" = 0 ] && [ "$os" = 2 ] &&',
             SCRIPT,
         )
-        self.assertIn('[ "$before" = 1 ] && [ "$after" = 0 ] && [ "$cells" = 0 ]', SCRIPT)
+        # The guest guard is intentionally wrapped across shell lines;
+        # assert each required state field instead of one formatting layout.
+        self.assertIn('[ "$before" = 1 ] &&', SCRIPT)
+        self.assertIn('[ "$after" = 0 ] && [ "$cells" = 0 ]; then', SCRIPT)
 
     def test_original_blocked_reason_is_not_masked(self):
         self.assertIn(
