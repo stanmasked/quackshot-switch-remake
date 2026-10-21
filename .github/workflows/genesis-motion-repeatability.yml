@@ -22,6 +22,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_genesis_city_fractional_fall_probe.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_checkpoint_phase_contract.py' -v
           python3 -m unittest discover -s tests -p 'test_private_genesis_input_guard.py' -v
+          python3 -m unittest discover -s tests -p 'test_private_genesis_report_output.py' -v
           python3 -m unittest discover -s tests -p 'test_city_fractional_witness_comparison.py' -v
           python3 tools/city_fractional_witness_comparison.py --out city-fractional-baseline.json
           python3 - <<'PY'
