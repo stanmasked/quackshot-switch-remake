@@ -95,8 +95,8 @@ def analyze(right, right_repeat, idle, input_deltas):
     fractional_at_2280 = right[2280]["y_fraction"]
     return {
         "schema": "quackshot_genesis_fractional_fall_event_v1",
-        "status": "PRIVATE_ORIGINAL_EMULATION_NUMERIC_ONLY",
-        "original_rom_executed_locally": True,
+        "status": "NUMERIC_SERIES_ANALYSIS_UNVERIFIED",
+        "original_rom_executed_locally": False,
         "raw_ram_saved": False,
         "raw_frames_saved": False,
         "rom_or_emulator_payload_in_report": False,
@@ -162,6 +162,8 @@ def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
     summary = analyze(traces["right"], traces["right_repeat"],
                       traces["idle"], deltas)
     summary["reference_sha256"] = verified_sha
+    summary["status"] = "PRIVATE_ORIGINAL_EMULATION_NUMERIC_ONLY"
+    summary["original_rom_executed_locally"] = True
     summary["emulator"] = (
         metadata["library_name"] + " " + metadata["library_version"]
     )
