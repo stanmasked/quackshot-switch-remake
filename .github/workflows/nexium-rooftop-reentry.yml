@@ -7,6 +7,7 @@ on:
       - ".github/workflows/nexium-rooftop-reentry.yml"
       - "src/main_sdl.c"
       - "tests/test_rooftop_reentry_trace.py"
+      - "tests/test_rooftop_reentry_probe.py"
       - "tools/verify_rooftop_reentry_trace.py"
       - "src/qs_game.c"
       - "include/**"
@@ -59,6 +60,7 @@ jobs:
         run: |
           bash -n tools/nexium_rooftop_reentry_probe.sh
           python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_reentry_trace.py tools/verify_rooftop_reentry_repeats.py
+          python3 -m unittest discover -s tests -p 'test_rooftop_reentry_probe.py' -v
       - name: Install CPU Vulkan and virtual-screen dependencies
         run: |
           sudo apt-get update -qq
