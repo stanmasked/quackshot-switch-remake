@@ -47,6 +47,17 @@ class DropHeightAuditTests(unittest.TestCase):
                           for x in data["height_summaries"]], [12,17,21,24])
         self.assertEqual(data["height_summaries"][1][
             "difference_to_original_32px_interval_frames"], 1)
+        comparison = data["baseline_32px_threshold_comparison"]
+        self.assertEqual(comparison["synthetic_intervals_frames"],
+                         {"first_unsupported": 17,
+                          "first_y_gt_0p01": 17,
+                          "first_y_gt_0p25": 16,
+                          "first_y_gt_1px": 15})
+        self.assertEqual(comparison["synthetic_minus_original_frames"],
+                         {"first_unsupported": 1,
+                          "first_y_gt_0p01": 1,
+                          "first_y_gt_0p25": 0,
+                          "first_y_gt_1px": -1})
 
     def test_missing_duplicate_and_unrecognized_rows_fail_closed(self):
         good = example_trace()
