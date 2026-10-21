@@ -150,6 +150,10 @@ def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
         )
         require(result["frames_video_callbacks"] == TOTAL,
                 "original emulator stopped early")
+        require(result.get("ram_checkpoint_phase") ==
+                "post_retro_run_before_next_input" and
+                result.get("video_callback_phase") == "during_retro_run",
+                "emulator checkpoint phase contract is absent or incompatible")
         traces[name] = series
         videos[name] = result["video_checkpoints"]
         read_counts[name] = result["input_nonzero_reads"]
@@ -168,6 +172,8 @@ def measure(core, metadata, private_rom_path, rom_bytes, verified_sha):
         metadata["library_name"] + " " + metadata["library_version"]
     )
     summary["independent_original_runs"] = 3
+    summary["ram_checkpoint_phase"] = "post_retro_run_before_next_input"
+    summary["video_callback_phase"] = "during_retro_run"
     return summary
 
 

@@ -25,7 +25,8 @@ WITNESS_FIELDS = {
     "fractional_y_units_at_integer_176_frame_2280",
     "fall_duration_by_threshold_frames", "frame_label_caveat", "scope",
     "reference_sha256", "core_binary_sha256", "emulator",
-    "independent_original_runs",
+    "independent_original_runs", "ram_checkpoint_phase",
+    "video_callback_phase",
 }
 DURATION_FIELDS = {
     "positive_subpixel_to_integer_floor": "first_y_positive_subpixel_frame",
@@ -63,6 +64,10 @@ def validate_witness(witness, provenance, original):
             "Genesis Plus GX binary SHA256 does not match numeric evidence")
     exact_integer(witness["independent_original_runs"],
                   "independent_original_runs", 3, 3)
+    require(witness["ram_checkpoint_phase"] ==
+            "post_retro_run_before_next_input" and
+            witness["video_callback_phase"] == "during_retro_run",
+            "private measurement callback phase contract differs")
     require(witness["world_y_integer_upper"] == 176 and
             witness["world_y_integer_lower"] == 208,
             "source-original world Y anchors differ")
