@@ -271,13 +271,13 @@ class Stage160HostProtocolTests(unittest.TestCase):
             "ROOFTOP_YELLOW_REARM_OPEN_LIVE_POLL",
             "ROOFTOP_YELLOW_REARM_STABLE_LIVE_POLL",
         ):
-            self.assertIn('echo "'+observed+' frame=,self.inner)
+            self.assertIn('echo "'+observed+' frame='+chr(36),self.inner)
         for canonical in (
             "ROOFTOP_YELLOW_REARM_FIRE_GUEST",
             "ROOFTOP_YELLOW_REARM_BRIDGE_OPEN_GUEST",
             "ROOFTOP_YELLOW_REARM_STABLE_GUEST",
         ):
-            self.assertNotIn('echo "'+canonical+' frame=,self.inner)
+            self.assertNotIn('echo "'+canonical+' frame='+chr(36),self.inner)
 
     def test_canonical_events_added_in_true_fire_open_stable_order(self):
         marker=("for label in ROOFTOP_YELLOW_REARM_FIRE_GUEST "
@@ -297,7 +297,7 @@ class Stage160HostProtocolTests(unittest.TestCase):
         fmt="postrun_guest_fire=%s\\npostrun_guest_open=%s\\npostrun_stable=%s\\n"
         self.assertIn(fmt,self.script)
         self.assertNotIn("postrun_guest_fire=%s postrun_guest_open=%s",self.script)
-        fake_lines=(fmt % (1534,1545,1859)).splitlines()
+        fake_lines=(fmt.replace(chr(92)+'n',chr(10)) % (1534,1545,1859)).splitlines()
         self.assertEqual(len(fake_lines),3)
         self.assertTrue(all(line.count("=")==1 for line in fake_lines))
 
