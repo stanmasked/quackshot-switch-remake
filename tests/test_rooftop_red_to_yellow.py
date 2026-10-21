@@ -118,8 +118,8 @@ class NeXiumStartupWindowReadiness(unittest.TestCase):
         inner=embedded_program(source)
         begin=inner.index('  window=""\n')
         end=inner.index("  # The GUI window can appear before",begin)
-        self.window_block=inner[begin:end]+'  xdotool windowfocus "$window"; sleep 0.7\\n'
-        guest_begin=inner.index("  game_ready=0\\n",end)
+        self.window_block=inner[begin:end]+'  xdotool windowfocus "$window"; sleep 0.7\n'
+        guest_begin=inner.index("  game_ready=0\n",end)
         guest_end=inner.index("  xdotool windowfocus",guest_begin)
         self.guest_block=inner[guest_begin:guest_end]
         self.assertIn('[guest-present] queued=300',self.guest_block)
