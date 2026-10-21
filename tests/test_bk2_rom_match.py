@@ -11,7 +11,7 @@ from zipfile import ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from bk2_reference_audit import BK2ValidationError, LOG_KEY
-from bk2_rom_match import check_rom, MAX_ROM_BYTES
+from bk2_rom_match import check_rom, MAX_ROM_BYTES, smd_to_linear, main as match_main
 
 
 def synth_movie(path, claim):
@@ -61,6 +61,38 @@ class LocalROMMatchTests(unittest.TestCase):
         declared = "00000000" if (zlib.crc32(self.bytes) & 0xffffffff) else "11111111"
         synth_movie(self.movie, declared)
         self.assertEqual(check_rom(self.movie, self.rom)["status"], "candidate_hash_mismatch")
+
+    def test_signed_smd_movie_digest_matches_deinterleaved_bytes(self):
+        # Build a synthetic one-block SMD from linear dummy bytes.
+        linear = bytes(i % 251 for i in range(16 * 1024))
+        header = bytearray(512)
+        header[8:10] = b"\xaa\xbb"
+        block = linear[1::2] + linear[0::2]
+        self.rom.write_bytes(header + block)
+        self.assertEqual(smd_to_linear(self.rom.read_bytes()), linear)
+        synth_movie(self.movie, hashlib.md5(linear).hexdigest())
+        result = check_rom(self.movie, self.rom)
+        self.assertEqual(result["status"], "candidate_hash_match")
+        self.assertEqual(result["matching_rom_representation"], "smd_deinterleaved")
+        self.assertTrue(result["detected_smd_copier_header"])
+        self.assertFalse(result["replay_compatibility_verified"])
+
+    def test_unsigned_header_no_implicit_normalization(self):
+        header = bytearray(512)
+        self.rom.write_bytes(header + bytes(range(256)) * 64)
+        synth_movie(self.movie, hashlib.md5(self.rom.read_bytes()[512:]).hexdigest())
+        result = check_rom(self.movie, self.rom)
+        self.assertFalse(result["detected_smd_copier_header"])
+        self.assertEqual(result["status"], "candidate_hash_mismatch")
+
+    def test_rom_output_never_overwrites_local_bk2_or_original_rom(self):
+        synth_movie(self.movie, hashlib.md5(self.bytes).hexdigest())
+        before_rom = self.rom.read_bytes()
+        before_movie = self.movie.read_bytes()
+        self.assertEqual(match_main([str(self.movie), str(self.rom), "--out", str(self.rom)]), 2)
+        self.assertEqual(match_main([str(self.movie), str(self.rom), "--out", str(self.movie)]), 2)
+        self.assertEqual(self.rom.read_bytes(), before_rom)
+        self.assertEqual(self.movie.read_bytes(), before_movie)
 
     def test_32_hex_claim_mismatch(self):
         synth_movie(self.movie, "0" * 32)
