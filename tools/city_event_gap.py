@@ -94,9 +94,14 @@ def build_report(marker, original, evidence_report):
     for event in ("fall", "land", "wall"):
         require(marker[event + "_delta"] == marker[event] - original[event],
                 event + " marker delta contradicts source JSON")
-    for event in ("reverse_lag", "reverse_x30", "reverse_x70"):
-        require(marker["original_" + event] == original[event],
-                event + " original marker contradicts source JSON")
+    original_marker_fields = {
+        "reverse_lag": "reverse_camera_lag",
+        "reverse_x30": "reverse_x30",
+        "reverse_x70": "reverse_x70",
+    }
+    for marker_field, evidence_field in original_marker_fields.items():
+        require(marker["original_" + marker_field] == original[evidence_field],
+                marker_field + " original marker contradicts source JSON")
 
     original_intervals = {
         "fall_to_land": original["land"] - original["fall"],
