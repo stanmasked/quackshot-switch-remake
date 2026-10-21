@@ -106,5 +106,86 @@ class TouchExitAckTests(unittest.TestCase):
         self.assertNotIn("ROOFTOP_EXIT_SENT=virtual_START", result.stdout)
 
 
+class TouchWindowReadyTests(unittest.TestCase):
+    """Only synthetic host stubs: no emulator, no ROM and no state injection."""
+    @classmethod
+    def setUpClass(cls):
+        body = embedded_program(SCRIPT.read_text(encoding="utf-8"))
+        begin = "# BEGIN ROOFTOP WINDOW AND GAME READY GATE"
+        end = "# END ROOFTOP WINDOW AND GAME READY GATE"
+        assert body.count(begin) == 1 and body.count(end) == 1
+        cls.gate = body.split(begin, 1)[1].split(end, 1)[0]
+
+    def run_window_gate(self, visible_after, guest_ready):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            bindir = root / "bin"
+            bindir.mkdir()
+            xdotool = bindir / "xdotool"
+            xdotool.write_text(
+                "#!/bin/sh\n"
+                'if [ "$1" = search ]; then\n'
+                ' n=0; [ -f "$SIM_WINDOW_COUNT" ] && n=$(cat "$SIM_WINDOW_COUNT")\n'
+                ' n=$((n+1)); printf "%s" "$n" > "$SIM_WINDOW_COUNT"\n'
+                ' [ "$SIM_VISIBLE_AFTER" -gt 0 ] && [ "$n" -ge "$SIM_VISIBLE_AFTER" ] && echo 42\n'
+                ' exit 0\n'
+                'fi\n'
+                'exit 0\n',
+                encoding="utf-8",
+            )
+            xdotool.chmod(0o755)
+            logs = root / "NeXium" / "logs"
+            logs.mkdir(parents=True)
+            if guest_ready:
+                (logs / "nexium-test.log").write_text(
+                    "[guest-present] queued=300\n", encoding="utf-8",
+                )
+            env = dict(os.environ)
+            env["PATH"] = str(bindir) + os.pathsep + env.get("PATH", "")
+            env["SIM_WINDOW_COUNT"] = str(root / "count.txt")
+            env["SIM_VISIBLE_AFTER"] = str(visible_after)
+            program = (
+                "set -euo pipefail\n"
+                "emu_pid=$\n"
+                "sleep() { :; }\n"
+                "XDG_CONFIG_HOME=" + shlex.quote(str(root)) + "\n"
+                + self.gate
+            )
+            result = subprocess.run(
+                ["bash", "-c", program],
+                capture_output=True, text=True, timeout=12, env=env,
+            )
+            count_file = root / "count.txt"
+            count = int(count_file.read_text()) if count_file.exists() else 0
+            return result, count
+
+    def test_window_delayed_and_guest_frames_ready(self):
+        result, polls = self.run_window_gate(6, True)
+        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        self.assertEqual(polls, 6)
+        self.assertIn("NEXIUM_WINDOW_READY", result.stdout)
+        self.assertIn("NEXIUM_GUEST_FRAMES_READY", result.stdout)
+
+    def test_no_window_never_sends_inputs(self):
+        result, polls = self.run_window_gate(0, True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(polls, 80)
+        self.assertIn(
+            "BLOCKED: no emulator window after bounded startup poll",
+            result.stdout,
+        )
+        self.assertNotIn("NEXIUM_GUEST_FRAMES_READY", result.stdout)
+
+    def test_visible_window_without_nro_frames_blocks(self):
+        result, polls = self.run_window_gate(1, False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(polls, 1)
+        self.assertIn("NEXIUM_WINDOW_READY", result.stdout)
+        self.assertIn(
+            "BLOCKED: no authenticated NRO guest frames", result.stdout,
+        )
+        self.assertNotIn("NEXIUM_GUEST_FRAMES_READY", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
