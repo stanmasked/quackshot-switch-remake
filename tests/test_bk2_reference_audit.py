@@ -8,7 +8,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from bk2_reference_audit import audit, BK2ValidationError, LOG_KEY
+from bk2_reference_audit import audit, BK2ValidationError, LOG_KEY, main as audit_main
 
 def movie(path, frames=None, logkey=LOG_KEY, platform="GEN", members=None):
     if frames is None:
@@ -112,6 +112,12 @@ class BK2AuditTest(unittest.TestCase):
             stream.write(b"x")
         with self.assertRaises(BK2ValidationError):
             audit(self.path)
+
+    def test_audit_output_never_overwrites_local_bk2(self):
+        movie(self.path)
+        original = self.path.read_bytes()
+        self.assertEqual(audit_main([str(self.path), "--out", str(self.path)]), 2)
+        self.assertEqual(self.path.read_bytes(), original)
 
     def test_oversized_payload_fails(self):
         movie(self.path, members={"padding.bin": "x" * 15_000_001})
