@@ -90,6 +90,13 @@ def analyze(right, right_repeat, idle, input_deltas):
             "exact lower-floor state precedes integer contact")
     require(all(raw_y16(right[f]) <= lower for f in range(2260, 2300)),
             "unexpected penetration below the lower floor")
+    # For this scripted ledge fall, Y must not turn upward between the
+    # approach and the first lower-floor integer observation. Without
+    # this causal property, a threshold's first occurrence does not
+    # determine its state at frame 2280.
+    require(all(raw_y16(right[f]) >= raw_y16(right[f - 1])
+                for f in range(2261, lower_integer + 1)),
+            "falling Y must be nondecreasing through lower-floor contact")
 
     # A single integer Y=176 frame may still have a nonzero 16.16
     # fraction. Publishing the scalar alone does not publish RAM bytes.
