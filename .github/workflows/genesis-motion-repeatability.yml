@@ -19,5 +19,6 @@ jobs:
       - name: Original-free fixed-point and repeatability regression suite
         run: |
           python3 -m unittest discover -s tests -p 'test_genesis_fixedpoint_motion.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_city_fractional_fall_probe.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_motion_repeatability.py' -v
           echo 'MOTION_REPEATABILITY_SYNTHETIC_PASS: no private ROM or original assets'
