@@ -45,7 +45,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   [ -n "$window" ] || { echo "BLOCKED: no emulator window after bounded startup poll"; exit 1; }
   echo "NEXIUM_WINDOW_READY"
   # A visible window does not prove the NRO has rendered; wait for the
-  # emulator's authenticated guest-present marker before sending input.
+  # authenticated guest-present marker from NeXium before sending input.
   game_ready=0
   for boot_poll in $(seq 1 100); do
    bootlog="$(find "$XDG_CONFIG_HOME/NeXium/logs" -maxdepth 1 -type f -name "nexium-*.log" -print -quit 2>/dev/null || true)"
