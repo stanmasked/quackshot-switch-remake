@@ -61,6 +61,8 @@ def simulated_external_witness(ref):
         "core_binary_sha256": ref["genesis_core_sha256"],
         "emulator": "Genesis Plus GX libretro v1.7.4",
         "independent_original_runs": 3,
+        "ram_checkpoint_phase": "post_retro_run_before_next_input",
+        "video_callback_phase": "during_retro_run",
     }
 
 
@@ -95,6 +97,14 @@ class FractionalWitnessComparisonTests(unittest.TestCase):
         self.assertNotIn("positive_subpixel_synthetic_minus_private_numeric",
                          result["strictly_comparable_threshold_deltas"])
         self.assertNotIn("fractional_y_units_at_integer_176_frame_2280", result)
+
+    def test_wrong_phase_cannot_be_mistaken_for_original_timing(self):
+        for key in ("ram_checkpoint_phase", "video_callback_phase"):
+            fake = simulated_external_witness(self.ref)
+            fake[key] = "unknown_original_instruction_phase"
+            with self.subTest(field=key), self.assertRaisesRegex(
+                    ValueError, "phase contract"):
+                compare(self.obs, self.source, authored_32px_report(), fake)
 
     def test_unverified_offline_stage188_analysis_cannot_escalate(self):
         fake = simulated_external_witness(self.ref)
