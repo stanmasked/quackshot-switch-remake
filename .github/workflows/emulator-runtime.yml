@@ -1,0 +1,149 @@
+name: NeXium Switch Emulator Runtime
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "Makefile"
+      - "tools/nexium_ci_probe.sh"
+      - "tools/verify_guest_route.py"
+      - "tools/verify_live_control.py"
+      - "tools/verify_live_timeline.py"
+      - "tools/verify_obstacle_route.py"
+      - "tools/verify_postcheck.py"
+      - "tools/verify_finish_route.py"
+      - "tools/verify_nexium_repeats.py"
+      - "tools/verify_input_latency.py"
+      - "tools/verify_guest_edge_response.py"
+      - "tools/verify_guest_button_pulses.py"
+      - "tools/verify_jump_arc.py"
+      - "tools/verify_nro.py"
+      - ".github/workflows/emulator-runtime.yml"
+  workflow_dispatch:
+
+
+# Keep the newest PR revision moving instead of queueing every obsolete
+# intermediate commit. Separate groups per workflow (not globally)
+# preserve parallel core, NRO, and NeXium checks for the same HEAD.
+# Default-branch pushes are not cancelled so the main build remains auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  cross-build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure devkitPro tools
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build Switch homebrew from this commit
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexium-probe-homebrew-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+
+  emulate:
+    needs: cross-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repeat: 1
+            input_delay_ms: 0
+            poll_ms: 85
+          - repeat: 2
+            input_delay_ms: 25
+            poll_ms: 90
+          - repeat: 3
+            input_delay_ms: 45
+            poll_ms: 95
+    env:
+      QS_REPEAT_ID: ${{ matrix.repeat }}
+      QS_INPUT_DELAY_MS: ${{ matrix.input_delay_ms }}
+      QS_POLL_MS: ${{ matrix.poll_ms }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nexium-probe-homebrew-nro
+          path: emulator-input
+      - name: Validate nested emulator shell script syntax
+        run: bash -n tools/nexium_ci_probe.sh
+      - name: Install headless Vulkan and UI dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 \
+            libgl1 libpulse0
+      - name: Start verified NeXium and examine real guest trace
+        run: bash tools/nexium_ci_probe.sh emulator-input/quackshot-prototype.nro emulator-evidence
+      - name: Preserve full outcome and emulator logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexium-emulation-evidence-run-${{ matrix.repeat }}
+          path: |
+            emulator-evidence/*.txt
+            emulator-evidence/*.log
+            emulator-evidence/xdg-config/NeXium/logs/*.log
+            emulator-evidence/guest-runtime.csv
+            emulator-evidence/guest-motion.csv
+            emulator-evidence/guest-route.csv
+            emulator-evidence/guest-live-control.csv
+            emulator-evidence/live-control-summary.txt
+            emulator-evidence/live-timeline-summary.txt
+            emulator-evidence/guest-obstacle.csv
+            emulator-evidence/obstacle-summary.txt
+            emulator-evidence/guest-edge-response-summary.txt
+            emulator-evidence/guest-button-pulse-summary.txt
+            emulator-evidence/guest-jump-arc-summary.txt
+            emulator-evidence/guest-postcheck.csv
+            emulator-evidence/postcheck-summary.txt
+            emulator-evidence/guest-finish.csv
+            emulator-evidence/finish-summary.txt
+            emulator-evidence/route-summary.txt
+            emulator-evidence/motion-summary.txt
+            emulator-evidence/parallax-summary.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+  compare-independent-runs:
+    needs: emulate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nexium-emulation-evidence-run-*
+          path: repeat-evidence
+          merge-multiple: false
+      - name: Verify three independent guest-controller clears
+        run: |
+          python3 tools/verify_nexium_repeats.py repeat-evidence repeat-summary.txt
+      - name: Preserve cross-run stability analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexium-three-run-reproducibility
+          path: repeat-summary.txt
+          retention-days: 7
+          if-no-files-found: warn

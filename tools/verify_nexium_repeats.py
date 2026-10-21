@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+"""Stage 94: independently verify three live NeXium emulator runs.
+
+A directory named nexium-emulation-evidence-run-N must come from the
+corresponding CI matrix job. Each was produced by a separate emulator
+process with a fresh, isolated virtual SD. The scripted Stage 88 guest
+self-test is NOT evidence of live controller input or full completion.
+"""
+import json
+import pathlib
+import re
+import sys
+
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
+from tools.verify_obstacle_route import verify as verify_obstacle
+from tools.verify_postcheck import verify as verify_postcheck, load as load_postcheck
+from tools.verify_finish_route import verify as verify_finish, load as load_finish, FIELDS as FINISH_COLUMNS
+from tools.verify_live_control import check as verify_live, load as load_live
+from tools.verify_live_timeline import validate_timeline, read_csv, MOTION_COLUMNS
+from tools.verify_input_latency import verify_latency_profile, PROFILES
+from tools.verify_guest_edge_response import verify_edge_responses
+from tools.verify_guest_button_pulses import verify_pulses
+from tools.verify_jump_arc import verify_jump_arcs
+
+EXPECTED_IDS=(1,2,3)
+EVENT_KEYS=("pit_jump_tick","pit_cross_tick","roof_jump_tick",
+            "wall_cross_tick","checkpoint_tick","shot_tick",
+            "crate_broken_tick","spring_tick","heart_tick",
+            "ledge_tick","best_clear_frames")
+LIMITS={
+  "pit_jump_tick":80,"pit_cross_tick":80,"roof_jump_tick":80,
+  "wall_cross_tick":80,"checkpoint_tick":80,"shot_tick":100,
+  "crate_broken_tick":100,"spring_tick":100,"heart_tick":100,
+  "ledge_tick":100,"best_clear_frames":120
+}
+
+def _metadata(path):
+    lines=path.read_text(encoding="utf-8").splitlines()
+    data={}
+    for line in lines:
+        if "=" not in line:
+            raise ValueError("corrupted CI run metadata")
+        k,v=line.split("=",1)
+        if k in data or not k or not v:
+            raise ValueError("duplicate/empty CI metadata")
+        data[k]=v
+    return data
+
+def _guest_rows(path):
+    import csv
+    with path.open(encoding="utf-8",newline="") as fp:
+        return list(csv.DictReader(fp))
+
+
+def _align_jump_milestone(edge, milestone_tick, obstacle, lower_x, upper_x):
+    """Match a real NRO B edge to the first X-threshold sample of SAME hold.
+
+    The obstacle observer samples every three frames plus input changes.
+    When B becomes visible slightly before X reaches its landmark,
+    the first landmark witness can be up to one 3-frame sample later.
+    Never infer an input edge from position alone or span a button release.
+    """
+    pressed_tick=edge["nro_stage_tick"]
+    lag=milestone_tick-pressed_tick
+    if not 0<=lag<=4:
+        raise ValueError("NRO first-button frames contradict actual world events")
+    witnessed=[r for r in obstacle
+               if pressed_tick<=int(r["attempt"])<=milestone_tick]
+    if (not witnessed or int(witnessed[0]["attempt"])!=pressed_tick or
+        int(witnessed[0]["frame"])!=edge["nro_first_button_frame"] or
+        int(witnessed[-1]["attempt"])!=milestone_tick or
+        not lower_x<=int(witnessed[-1]["x_milli"])<=upper_x or
+        any(not (int(r["input_bits"])&4) for r in witnessed)):
+        raise ValueError("NRO first-button frames contradict actual world events")
+    return lag
+
+
+def _verify_spring_heart_nudge(actions, finish):
+    """Bind an optional one-shot host RIGHT pulse to real NRO movement.
+
+    The injection log alone cannot prove the guest received the key.
+    A witness row must show the exact pre-pulse airborne position, then
+    the guest must record RIGHT before (or on) heart collection.
+    """
+    lines=actions.splitlines()
+    pulses=[(i,s) for i,s in enumerate(lines)
+            if s.startswith("SPRING_HEART_ALIGN_GUEST")]
+    if not pulses:
+        return False
+    if len(pulses)!=1:
+        raise ValueError("spring heart RIGHT pulse repeated")
+    index,line=pulses[0]
+    match=re.fullmatch(
+        r"SPRING_HEART_ALIGN_GUEST frame=(\d+) x_milli=(\d+) y_milli=(\d+)",
+        line)
+    if match is None:
+        raise ValueError("malformed spring heart alignment marker")
+    frame,x,y=map(int,match.groups())
+    if not (1137000<=x<=1141000 and 50000<=y<=160000):
+        raise ValueError("spring alignment outside measured heart approach")
+    if (not any(s.startswith("SPRING_REACHED_GUEST ") for s in lines[:index]) or
+        not any(s.startswith("AIR_HEART_COLLECTED_GUEST ") for s in lines[index+1:])):
+        raise ValueError("spring alignment not bracketed by spring and heart")
+    if not any(int(row["frame"])==frame and
+               int(row["x_milli"])==x and int(row["y_milli"])==y and
+               int(row["heart"])==0 and int(row["mode"])==1 and
+               int(row["grounded"])==0 for row in finish):
+        raise ValueError("spring alignment lacks matching airborne NRO witness")
+    first_heart=min((int(row["frame"]) for row in finish
+                     if int(row["heart"])==1 and int(row["mode"])==1),
+                    default=None)
+    if first_heart is None or first_heart<=frame:
+        raise ValueError("spring alignment did not precede real heart pickup")
+    if not any(frame<int(row["frame"])<=min(first_heart,frame+30) and
+               int(row["input_bits"])&2 and int(row["x_milli"])>x
+               for row in finish):
+        raise ValueError("spring RIGHT pulse has no timely guest movement witness")
+    return True
+
+def collect(root,run_id):
+    directory=root/f"nexium-emulation-evidence-run-{run_id}"
+    if not directory.is_dir():
+        raise ValueError(f"missing independently uploaded NeXium run {run_id}")
+    required=("metadata.txt","checksum.txt","guest-obstacle.csv",
+              "guest-postcheck.csv","guest-finish.csv",
+              "guest-runtime.csv","guest-motion.csv",
+              "guest-live-control.csv","finish-summary.txt",
+              "obstacle-summary.txt","postcheck-summary.txt",
+              "input-injection.txt","result.txt","live-timeline-summary.txt",
+              "guest-edge-response-summary.txt","guest-button-pulse-summary.txt",
+              "guest-jump-arc-summary.txt")
+    if any(not (directory/name).is_file() for name in required):
+        raise ValueError(f"incomplete evidence in independent run {run_id}")
+    meta=_metadata(directory/"metadata.txt")
+    if meta.get("ci_repeat_id")!=str(run_id):
+        raise ValueError("matrix job ID does not match guest evidence")
+    digest=meta.get("nro_sha256","")
+    if not re.fullmatch(r"[0-9a-f]{64}",digest):
+        raise ValueError("invalid NRO identity in guest metadata")
+    check=(directory/"checksum.txt").read_text(encoding="utf-8")
+    if "OK" not in check:
+        raise ValueError("pinned NeXium binary checksum was not verified")
+    if not (directory/"result.txt").read_text(encoding="utf-8").startswith("PASS: guest NRO"):
+        raise ValueError("guest first-frame/controller stage verification failed")
+    actions=(directory/"input-injection.txt").read_text(encoding="utf-8")
+    if "OBSTACLE_INPUT_STEP=10" not in actions or "LIVE_STAGE_CLEAR_GUEST" not in actions:
+        raise ValueError("virtual controller did not independently reach map clear")
+    latency=verify_latency_profile(meta,actions,run_id)
+    edge_summary=(directory/"guest-edge-response-summary.txt").read_text(encoding="utf-8")
+    if not edge_summary.startswith("NEXIUM_GUEST_INPUT_EDGES_PASS "):
+        raise ValueError("no verified first NRO B/Y input-recognition evidence")
+    pulses_summary=(directory/"guest-button-pulse-summary.txt").read_text(encoding="utf-8")
+    if not pulses_summary.startswith("NEXIUM_GUEST_BUTTON_PULSES_PASS "):
+        raise ValueError("missing guest B/Y releases or unexplained button repetition")
+    arcs_summary=(directory/"guest-jump-arc-summary.txt").read_text(encoding="utf-8")
+    if not arcs_summary.startswith("NEXIUM_LIVE_JUMP_ARCS_PASS "):
+        raise ValueError("no measured B jump ascent/apex/landing witness")
+    if not (directory/"finish-summary.txt").read_text(encoding="utf-8").startswith("LIVE_FULL_CITY_GUEST_PASS "):
+        raise ValueError("missing guest-generated complete-city proof")
+    if not (directory/"obstacle-summary.txt").read_text(encoding="utf-8").startswith("LIVE_OBSTACLE_GUEST_PASS "):
+        raise ValueError("missing real-control pit/checkpoint proof")
+    if not (directory/"postcheck-summary.txt").read_text(encoding="utf-8").startswith("LIVE_POSTCHECK_GUEST_PASS "):
+        raise ValueError("missing live crate/spring proof")
+
+    obstacle=_guest_rows(directory/"guest-obstacle.csv")
+    post=load_postcheck(directory/"guest-postcheck.csv")
+    finish=load_finish(directory/"guest-finish.csv",FINISH_COLUMNS)
+    edges=verify_edge_responses(actions,obstacle)
+    pulses=verify_pulses(actions,obstacle)
+    arcs=verify_jump_arcs(actions,obstacle)
+    prev=verify_obstacle(obstacle)
+    mid=verify_postcheck(post,obstacle)
+    end=verify_finish(finish,post,obstacle)
+    spring_nudge=_verify_spring_heart_nudge(actions,finish)
+    verify_live(directory/"guest-live-control.csv",
+                directory/"guest-runtime.csv",
+                directory/"guest-motion.csv")
+    validate_timeline(read_csv(directory/"guest-motion.csv",MOTION_COLUMNS),
+                      load_live(directory/"guest-live-control.csv"))
+    edge_events=edges["events"]
+    jump_alignment={
+        "pit":_align_jump_milestone(edge_events["pit"],prev["pit_jump_tick"],
+                                    obstacle,275000,309000),
+        "roof":_align_jump_milestone(edge_events["roof"],prev["roof_jump_tick"],
+                                     obstacle,390000,437000),
+    }
+    if not 0<=mid["shot_tick"]-edge_events["crate"]["nro_stage_tick"]<=6:
+        raise ValueError("NRO first-button frames contradict actual world events")
+    if (mid["checkpoint_tick"]!=prev["checkpoint_tick"] or
+        mid["spring_tick"]!=end["spring_tick"] or
+        end["heart_tick"]>=end["ledge_tick"] or
+        end["best_clear_frames"]<=end["ledge_tick"]):
+        raise ValueError("gameplay milestones disagree within the same emulator run")
+    return {
+        "run_id":run_id,"nro_sha256":digest,
+        "input_delay_ms":latency["input_delay_ms"],
+        "poll_interval_ms":latency["poll_interval_ms"],
+        "edge_elapsed_ms":latency["edge_elapsed_ms"],
+        "guest_hold_frames":{key:[p["observed_hold_frames"] for p in value]
+                              for key,value in pulses["pulses"].items()},
+        "guest_jump_arcs":arcs["arcs"],
+        "roof_path":arcs["roof_path"],
+        "wall_recovery_arc":arcs["wall_recovery"],
+        "wall_recovery_used":pulses["wall_recovery"] is not None,
+        "spring_heart_alignment_used":spring_nudge,
+        "guest_frame_windows":{name:event["guest_frame_window"]
+                                for name,event in edge_events.items()},
+        "jump_edge_to_landmark_frames":jump_alignment,
+        "pit_jump_tick":prev["pit_jump_tick"],
+        "pit_cross_tick":prev["pit_cross_tick"],
+        "roof_jump_tick":prev["roof_jump_tick"],
+        "wall_cross_tick":prev["wall_cross_tick"],
+        "checkpoint_tick":prev["checkpoint_tick"],
+        "shot_tick":mid["shot_tick"],
+        "crate_broken_tick":mid["crate_broken_tick"],
+        "spring_tick":mid["spring_tick"],
+        "heart_tick":end["heart_tick"],
+        "ledge_tick":end["ledge_tick"],
+        "best_clear_frames":end["best_clear_frames"],
+        "heart_and_ledge_samples":end["guest_samples"],
+        "checkpoint_x_px":prev["checkpoint_x_px"],
+        "spring_x_px":mid["spring_x_px"],
+        "ledge_x_px":end["ledge_x_px"],
+        "source":"live NeXium controller; independent CI guest NRO"
+    }
+
+def compare(runs):
+    ids=[r.get("run_id") for r in runs]
+    if len(runs)!=3 or sorted(ids)!=list(EXPECTED_IDS) or len(set(ids))!=3:
+        raise ValueError("three DISTINCT CI matrix runs are mandatory")
+    for run in runs:
+        expected_delay,expected_poll=PROFILES[run["run_id"]]
+        if (run.get("input_delay_ms")!=expected_delay or
+            run.get("poll_interval_ms")!=expected_poll):
+            raise ValueError("replay timing profiles missing or interchanged")
+    digests={r.get("nro_sha256") for r in runs}
+    if len(digests)!=1 or not re.fullmatch(r"[0-9a-f]{64}",next(iter(digests)) or ""):
+        raise ValueError("NRO digest differs across independent runs")
+    for run in runs:
+        ticks=[run[k] for k in EVENT_KEYS]
+        if not all(isinstance(v,int) and not isinstance(v,bool) for v in ticks):
+            raise ValueError("milestone not a numeric simulation tick")
+        if not (0<run["pit_jump_tick"]<run["pit_cross_tick"]<
+                run["roof_jump_tick"]<run["wall_cross_tick"]<
+                run["checkpoint_tick"]<run["shot_tick"]<
+                run["crate_broken_tick"]<run["spring_tick"]<
+                run["heart_tick"]<run["ledge_tick"]<
+                run["best_clear_frames"]<=1400):
+            raise ValueError("impossible live controller milestone chronology")
+        if not 600<=run["best_clear_frames"]<=1100:
+            raise ValueError("finish tick outside plausible CITY TEST run")
+        if not 628<=run["checkpoint_x_px"]<=660 or not 1120<=run["spring_x_px"]<=1180 or not 1164<=run["ledge_x_px"]<=1204:
+            raise ValueError("physical checkpoint/spring/ledge position differs")
+        arcs=run.get("guest_jump_arcs")
+        if not isinstance(arcs,dict) or set(arcs)!={"pit","roof"}:
+            raise ValueError("missing complete guest jump arcs")
+        def arc_ok(item,xlo,xhi,ylo,yhi,hlo=61,hhi=68):
+            return (isinstance(item,dict) and
+                type(item.get("rise_px")) in (int,float) and
+                type(item.get("flight_frames")) is int and
+                type(item.get("landing_x_px")) in (int,float) and
+                type(item.get("landing_y_px")) in (int,float) and
+                hlo<=item["rise_px"]<=hhi and
+                20<=item["flight_frames"]<=80 and
+                xlo<=item["landing_x_px"]<=xhi and
+                ylo<=item["landing_y_px"]<=yhi)
+        if not arc_ok(arcs["pit"],365,415,182,193):
+            raise ValueError("invalid physical pit flight or landing")
+        path=run.get("roof_path")
+        recovery=run.get("wall_recovery_arc")
+        if path=="direct_sky_ledge":
+            if not arc_ok(arcs["roof"],415,475,123.5,125):
+                raise ValueError("invalid direct roof landing")
+            if recovery is not None or run.get("wall_recovery_used"):
+                raise ValueError("direct roof cannot contain wall recovery")
+        elif path=="ground_then_wall_recovery":
+            if (not arc_ok(arcs["roof"],440,495,182,193,18,45) or
+                not arc_ok(recovery,600,660,182,193) or
+                recovery["pressed_frame"]<=arcs["roof"]["landing_frame"]):
+                raise ValueError("blocked roof lacks physical full wall recovery")
+        else:
+            raise ValueError("unknown roof jump route")
+        if (recovery is not None and
+            (not arc_ok(recovery,600,660,182,193) or
+             recovery["pressed_frame"]<=arcs["roof"]["landing_frame"])):
+            raise ValueError("unverified wall recovery landing")
+        if bool(recovery)!=bool(run.get("wall_recovery_used")):
+            raise ValueError("wall recovery mismatch with B input evidence")
+        holds=run.get("guest_hold_frames")
+        if (not isinstance(holds,dict) or set(holds)!={"B","Y"} or
+            len(holds["B"]) not in (2,3) or len(holds["Y"])!=1 or
+            any(type(x) is not int or not 7<=x<=40 for v in holds.values() for x in v) or
+            bool(run.get("wall_recovery_used"))!=(len(holds["B"])==3)):
+            raise ValueError("missing or unverified full B/Y button pulses")
+        if type(run.get("spring_heart_alignment_used")) is not bool:
+            raise ValueError("missing authenticated spring alignment status")
+        windows=run.get("guest_frame_windows")
+        if (not isinstance(windows,dict) or set(windows)!={"pit","roof","crate"} or
+            any(type(v) is not int or not 1<=v<=24 for v in windows.values())):
+            raise ValueError("missing NRO-observed button recognition frame windows")
+        if run.get("source")!="live NeXium controller; independent CI guest NRO":
+            raise ValueError("non-live or unverified guest source")
+    spreads={}
+    for key in EVENT_KEYS:
+        values=[r[key] for r in runs]
+        spread=max(values)-min(values)
+        if spread>LIMITS[key]:
+            raise ValueError(f"unstable {key}: spread={spread} frames, max={LIMITS[key]}")
+        spreads[key]=spread
+    grouped_arcs={
+        "pit":[r["guest_jump_arcs"]["pit"] for r in runs],
+        "roof_direct":[r["guest_jump_arcs"]["roof"] for r in runs
+                       if r["roof_path"]=="direct_sky_ledge"],
+        "roof_blocked":[r["guest_jump_arcs"]["roof"] for r in runs
+                        if r["roof_path"]=="ground_then_wall_recovery"],
+        "wall_recovery":[r["wall_recovery_arc"] for r in runs
+                         if r["wall_recovery_arc"] is not None],
+    }
+    jump_spreads={}
+    for jump,items in grouped_arcs.items():
+        jump_spreads[jump]={}
+        if not items:
+            continue
+        for key,bound in (("rise_px",2.0),("flight_frames",12),
+                          ("landing_x_px",20.0)):
+            values=[r[key] for r in items]
+            spread=round(max(values)-min(values),3)
+            if spread>bound:
+                raise ValueError(f"unstable {jump} {key}: spread={spread}, max={bound}")
+            jump_spreads[jump][key]=spread
+    return {
+        "guest_jump_arc_spreads":jump_spreads,
+        "roof_path_counts":{
+            "direct_sky_ledge":sum(r["roof_path"]=="direct_sky_ledge" for r in runs),
+            "ground_then_wall_recovery":sum(r["roof_path"]=="ground_then_wall_recovery" for r in runs)},
+        "spring_heart_alignment_runs":sum(r["spring_heart_alignment_used"] for r in runs),
+        "repetitions":3,
+        "status":"PASS",
+        "guest_button_hold_frames_by_run":{
+             str(r["run_id"]):r["guest_hold_frames"] for r in runs},
+        "guest_input_frame_window_spreads":{
+             name:max(r["guest_frame_windows"][name] for r in runs)-
+                  min(r["guest_frame_windows"][name] for r in runs)
+             for name in ("pit","roof","crate")},
+        "profiles_ms":{str(r["run_id"]):{"input_delay":r["input_delay_ms"],
+                     "poll_interval":r["poll_interval_ms"]}
+                       for r in runs},
+        "source":"three independent NeXium CI jobs with live controller inputs",
+        "nro_sha256":next(iter(digests)),
+        "max_completion_spread_frames":LIMITS["best_clear_frames"],
+        "finish_ticks":[r["best_clear_frames"] for r in sorted(runs,key=lambda r:r["run_id"])],
+        "milestone_spreads_frames":spreads,
+        "runs":sorted(runs,key=lambda r:r["run_id"])
+    }
+
+def main(args):
+    if len(args)!=3:
+        raise SystemExit("usage: verify_nexium_repeats.py <artifact-root> <summary.txt>")
+    destination=pathlib.Path(args[2])
+    try:
+        root=pathlib.Path(args[1])
+        expected={f"nexium-emulation-evidence-run-{i}" for i in EXPECTED_IDS}
+        actual={p.name for p in root.iterdir() if p.is_dir()}
+        if actual!=expected:
+            raise ValueError(f"expected three separate artifact folders; found {sorted(actual)}")
+        report=compare([collect(root,i) for i in EXPECTED_IDS])
+    except (OSError,ValueError,TypeError,KeyError) as exc:
+        destination.write_text("FAIL: independent NeXium replay: "+str(exc)+"\n",encoding="utf-8")
+        raise SystemExit("FAIL: independent NeXium replay: "+str(exc))
+    output="NEXIUM_THREE_LIVE_REPLAYS_PASS "+json.dumps(report,sort_keys=True)+"\n"
+    destination.write_text(output,encoding="utf-8")
+    print(output,end="")
+
+if __name__=="__main__":
+    main(sys.argv)
+

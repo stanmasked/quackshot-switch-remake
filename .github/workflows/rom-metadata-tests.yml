@@ -1,0 +1,16 @@
+name: Reference ROM metadata tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  metadata-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test synthetic ROM metadata, exception vectors and I/O patterns
+        run: python -m unittest discover -s tests -p 'test_rom*.py' -v

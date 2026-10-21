@@ -1,0 +1,55 @@
+{
+  "schema": "quackshot_reference_city_envelope_v1",
+  "kind": "experimental opt_in_approximation_not_original_disassembly",
+  "provenance": {
+    "source": "Independent numeric-only measurements of privately emulated user-owned Mega Drive ROM",
+    "rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+    "reference_repo": "stanmasked/quackshot-switch-remake",
+    "reference_pr": 1,
+    "reference_witness_path": "research/observations/user_rom_first_playable_physics_2026-10-17.json",
+    "emulator": "Genesis Plus GX libretro v1.7.4",
+    "original_game_content_in_this_branch": false
+  },
+  "original_observations": {
+    "control_frame": 2070,
+    "initial_world_x": 61,
+    "initial_world_y": 176,
+    "world_x_at_frame_2090": 87,
+    "world_x_at_frame_2160": 201,
+    "observed_steady_velocity_px_per_frame": 1.6285714285714286,
+    "peak_jump_rise_pixels": 65,
+    "apex_frame": 2097,
+    "landing_frame": 2126,
+    "airborne_frames": 56,
+    "plunger_active_at_frame": 2071
+  },
+  "model": {
+    "prototype_default_unchanged": true,
+    "activation": "City stage on map, hold R and press A (SDL dash+select)",
+    "activation_scope": "Synthetic city stage 0 only",
+    "horizontal_model": "vx_next = vx + response * (requested_speed - vx); x_next = x + vx_next",
+    "fitted_requested_walk_speed": 1.6315692,
+    "fitted_response": 0.161471675,
+    "fitted_walk_anchor_steps": [
+      21,
+      91
+    ],
+    "fitted_walk_anchor_dx": [
+      26,
+      140
+    ],
+    "jump_model": "vy0 = -28.5*g; vy_next = vy + g; y_next = y + vy_next",
+    "g_pixels_per_step_squared": 0.16581632653061223,
+    "initial_jump_velocity": -4.725765306122448,
+    "modeled_apex_step": 28,
+    "modeled_flight_steps": 56,
+    "one_frame_delayed_projectile_activation": true
+  },
+  "scope_limits": [
+    "Model acceleration and ballistic gravity fitted to sparse observations: not recovered Genesis opcodes or exact fixed-point physics",
+    "Switch synthetic stage coordinate origin and floor layout differ from original city level",
+    "Uncalibrated features include dash, red plunger, collisions, wall slides, pickups, enemy behavior and camera",
+    "No original ROM bytes, sprites, music or RAM contents embedded",
+    "Physical Nintendo Switch hardware untested"
+  ]
+}

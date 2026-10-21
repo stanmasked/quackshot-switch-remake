@@ -1,0 +1,117 @@
+name: NeXium ROOFTOP Yellow Bridge Reset
+on:
+  pull_request:
+    paths:
+      - "tools/nexium_rooftop_yellow_reset_probe.sh"
+      - "tools/rooftop_red_overlap_witness.py"
+      - "tools/verify_nested_nexium_route.py"
+      - "tests/test_nested_nexium_route.py"
+      - "tools/verify_rooftop_yellow_reset_repeats.py"
+      - "tools/verify_rooftop_second_red_trace.py"
+      - "tools/verify_rooftop_red_to_yellow.py"
+      - "tools/rooftop_yellow_guest_witness.py"
+      - "tools/verify_rooftop_second_red_trace.py"
+      - ".github/workflows/nexium-rooftop-yellow-reset.yml"
+      - "src/main_sdl.c"
+      - "tests/test_rooftop_yellow_reset.py"
+      - "CMakeLists.txt"
+      - "tools/verify_rooftop_yellow_reset.py"
+      - "tests/test_rooftop_yellow_reset.py"
+      - "src/qs_game.c"
+      - "include/**"
+  workflow_dispatch:
+# Each workflow keeps only the newest PR revision. Independent workflows
+# still run separately; manual dispatches and main remain auditable.
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure toolchain
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build real Switch homebrew
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-yellow-reset-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+  guest:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 19
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1,2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rooftop-yellow-reset-nro
+          path: emulator-input
+      - name: Shell and verifier syntax
+        run: |
+          bash -n tools/nexium_rooftop_yellow_reset_probe.sh
+          python3 tools/verify_nested_nexium_route.py tools/nexium_rooftop_yellow_reset_probe.sh
+          python3 -m unittest discover -s tests -p test_nested_nexium_route.py
+          python3 -m py_compile tools/verify_rooftop_guest_trace.py tools/verify_rooftop_red_trace.py tools/verify_rooftop_second_red_trace.py tools/verify_rooftop_red_to_yellow.py tools/verify_rooftop_yellow_reset.py tools/verify_rooftop_yellow_reset_repeats.py tools/rooftop_red_overlap_witness.py tools/rooftop_yellow_guest_witness.py
+          python3 -m unittest discover -s tests -p test_rooftop_yellow_reset.py
+      - name: Install CPU Vulkan and virtual-screen dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 libgl1 libpulse0
+      - name: Drive real yellow-open bridge to map then reset on ROOFTOP reentry
+        run: bash tools/nexium_rooftop_yellow_reset_probe.sh emulator-input/quackshot-prototype.nro rooftop-reset-evidence ${{ matrix.repeat }}
+      - name: Preserve evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-yellow-reset-evidence-${{ matrix.repeat }}
+          path: |
+            rooftop-reset-evidence/*.txt
+            rooftop-reset-evidence/*.log
+            rooftop-reset-evidence/guest-rooftop.csv
+            rooftop-reset-evidence/guest-weapon.csv
+            rooftop-reset-evidence/guest-city-red.csv
+            rooftop-reset-evidence/guest-transitions.csv
+            rooftop-reset-evidence/rooftop-yellow-reset-summary.json
+            rooftop-reset-evidence/xdg-config/NeXium/logs/*.log
+          retention-days: 7
+          if-no-files-found: warn
+  compare:
+    needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rooftop-yellow-reset-evidence-*
+          path: rooftop-reset-evidence
+      - name: Authenticate real YELLOW bridge opening and reset on third entry
+        run: python3 tools/verify_rooftop_yellow_reset_repeats.py rooftop-reset-evidence rooftop-yellow-reset-repeat-summary.json
+      - name: Save cross-run comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooftop-yellow-reset-repeat-summary
+          path: rooftop-yellow-reset-repeat-summary.json
+          retention-days: 7
+          if-no-files-found: warn

@@ -1,0 +1,75 @@
+{
+  "schema": "quackshot_stage10_bounded_boot_probe_witness_v1",
+  "reference_rom_sha256": "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34",
+  "reference_rom_size_bytes": 524288,
+  "emulation_status": "not_a_full_emulator",
+  "evidence_type": "limited_original_cpu_prefix_with_synthetic_hardware_values",
+  "scenarios": [
+    {
+      "name": "both_io_zero",
+      "mock_registers": {
+        "0xA10008": "0x00000000",
+        "0xA1000C": "0x00000000",
+        "0xC00004": "0x00000000"
+      },
+      "executed_instruction_count": 4,
+      "pcs": [
+        "0x000206",
+        "0x00020C",
+        "0x00020E",
+        "0x000214"
+      ],
+      "branch_decisions": [
+        {
+          "pc": "0x00020C",
+          "taken": false
+        },
+        {
+          "pc": "0x000214",
+          "taken": false
+        }
+      ],
+      "stop_pc": "0x000216",
+      "stop_reason": "unsupported_opcode"
+    },
+    {
+      "name": "first_io_nonzero",
+      "mock_registers": {
+        "0xA10008": "0x00000001",
+        "0xA1000C": "0x00000000",
+        "0xC00004": "0x00000000"
+      },
+      "executed_instruction_count": 5,
+      "pcs": [
+        "0x000206",
+        "0x00020C",
+        "0x000214",
+        "0x000292",
+        "0x000300"
+      ],
+      "branch_decisions": [
+        {
+          "pc": "0x00020C",
+          "taken": true
+        },
+        {
+          "pc": "0x000214",
+          "taken": true
+        },
+        {
+          "pc": "0x000292",
+          "taken": true
+        }
+      ],
+      "stop_pc": "0x000306",
+      "stop_reason": "unsupported_opcode"
+    }
+  ],
+  "scope_limits": [
+    "MMIO values were deliberately synthetic and not measured from Sega hardware or emulator.",
+    "Interpreter supports only TST absolute, BRA, BNE, BEQ and NOP instructions.",
+    "No graphics, VBlank, controller state, game frames, Donald physics, or actual gameplay were emulated.",
+    "Execution stops on first unsupported instruction; no values were inferred beyond the stop."
+  ],
+  "copyright": "Numeric instruction addresses and branch choices only; no original ROM bytes or assets."
+}
