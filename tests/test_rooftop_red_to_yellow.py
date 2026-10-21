@@ -117,8 +117,12 @@ class NeXiumStartupWindowReadiness(unittest.TestCase):
         source=(ROOT/"tools/nexium_rooftop_red_to_yellow_probe.sh").read_text(encoding="utf-8")
         inner=embedded_program(source)
         begin=inner.index('  window=""\n')
-        end=inner.index("  # Map starts on CITY TEST.",begin)
-        self.window_block=inner[begin:end]
+        end=inner.index("  # The GUI window can appear before",begin)
+        self.window_block=inner[begin:end]+'  xdotool windowfocus "$window"; sleep 0.7\\n'
+        guest_begin=inner.index("  game_ready=0\\n",end)
+        guest_end=inner.index("  xdotool windowfocus",guest_begin)
+        self.guest_block=inner[guest_begin:guest_end]
+        self.assertIn('[guest-present] queued=300',self.guest_block)
         self.assertIn("for startup_poll in $(seq 1 80)",self.window_block)
         self.assertIn('kill -0 "$emu_pid"',self.window_block)
         self.assertNotIn('sleep 5\n  window=',self.window_block)
@@ -174,5 +178,47 @@ exit 4
         self.assertIn("BLOCKED: no emulator window after bounded startup poll",result.stdout)
         self.assertEqual(polls,80)
         self.assertNotIn("NEXIUM_WINDOW_READY",result.stdout)
+
+    def test_nro_guest_frames_gate_passes_only_with_real_present_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory)
+            logs=root/"NeXium"/"logs"
+            logs.mkdir(parents=True)
+            log=logs/"nexium-test.log"
+            log.write_text("[nexium] NRO boot initiated\n"
+                           "[nexium_kernel::kernel::svc] [guest-present] queued=300\n",
+                           encoding="utf-8")
+            # The runner's exact finite polling logic executes against an
+            # actual on-disk log, without launching NeXium or creating data.
+            script=("set -euo pipefail\n"
+                    "XDG_CONFIG_HOME="+str(root)+"\n"
+                    "command sleep 60 >/dev/null 2>&1 &\n"
+                    "emu_pid=$!\n"
+                    "trap 'kill \"$emu_pid\" 2>/dev/null || true' EXIT\n"
+                    "sleep(){ :; }\n"+self.guest_block)
+            result=subprocess.run(["bash","-c",script],capture_output=True,
+                                  text=True,timeout=15,check=False)
+            self.assertEqual(result.returncode,0,result.stderr+result.stdout)
+            self.assertIn("NEXIUM_GUEST_FRAMES_READY",result.stdout)
+
+    def test_nro_guest_frames_gate_rejects_header_only_boot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=pathlib.Path(directory)
+            logs=root/"NeXium"/"logs"
+            logs.mkdir(parents=True)
+            (logs/"nexium-test.log").write_text(
+                "[nexium] NRO boot initiated\n[guest-present] queued=200\n",
+                encoding="utf-8")
+            script=("set -euo pipefail\n"
+                    "XDG_CONFIG_HOME="+str(root)+"\n"
+                    "command sleep 60 >/dev/null 2>&1 &\n"
+                    "emu_pid=$!\n"
+                    "trap 'kill \"$emu_pid\" 2>/dev/null || true' EXIT\n"
+                    "sleep(){ :; }\n"+self.guest_block)
+            result=subprocess.run(["bash","-c",script],capture_output=True,
+                                  text=True,timeout=15,check=False)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn("BLOCKED: no authenticated NRO guest frames",result.stdout)
+            self.assertNotIn("NEXIUM_GUEST_FRAMES_READY",result.stdout)
 
 if __name__=="__main__":unittest.main()
