@@ -20,6 +20,10 @@ class NestedGuestShellTests(unittest.TestCase):
         self.assertEqual(verdict["status"], "PASS")
         self.assertGreater(verdict["inner_script_lines"], 75)
 
+    def test_path_object_is_rejected_with_clear_error(self):
+        with self.assertRaisesRegex(RouteSyntaxError, "source must be text"):
+            embedded_program(ROOT / "tools/nexium_rooftop_red_probe.sh")
+
     def test_missing_embedded_route(self):
         with self.assertRaises(RouteSyntaxError):
             embedded_program("bash -n tools/runner.sh")
