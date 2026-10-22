@@ -154,6 +154,26 @@ class PrivateBundleLauncherTests(unittest.TestCase):
             guard.assert_not_called()
         self.assertFalse((checkout / "private-leak.json").exists())
 
+    def test_independent_checkout_also_rejects_private_rom_or_result(self):
+        unrelated_checkout = self.home / "different-public-project"
+        unrelated_checkout.mkdir()
+        (unrelated_checkout / ".git").mkdir()
+        bad_rom = unrelated_checkout / "quackshot-original.gen"
+        bad_rom.write_bytes(b"FAKE_ONLY")
+        safe_rom = self.home / "private-original.gen"
+        safe_rom.write_bytes(b"FAKE_ONLY")
+        with mock.patch.object(launcher, "preflight", return_value={}), \
+             mock.patch.object(launcher, "PinnedOriginalInputs") as guard:
+            with self.assertRaisesRegex(ValueError, "public git checkout"):
+                launcher.prepare_run(
+                    self.bundle_dir, bad_rom, self.home / "safe-report.json",
+                    (100,80,85,140), "bracket")
+            with self.assertRaisesRegex(ValueError, "public git checkout"):
+                launcher.prepare_run(
+                    self.bundle_dir, safe_rom, unrelated_checkout / "output.json",
+                    (100,80,85,140), "bracket")
+            guard.assert_not_called()
+
     def test_unknown_modes_and_invalid_roi_refused_before_core(self):
         source=self.home/"original-private.gen"
         source.write_bytes(b"FAKE")
