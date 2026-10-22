@@ -4,6 +4,11 @@ on:
     paths:
       - ".github/workflows/genesis-libretro-core.yml"
       - "tools/genesis_libretro_probe.py"
+      - "tools/genesis_blue_roi_numeric.py"
+      - "tools/genesis_vdp_hscroll_export.c"
+      - "tools/genesis_city_video_vdp_bracket_probe.py"
+      - "tools/ci_genesis_vdp_video_callback_smoke.py"
+      - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
       - "tools/genesis_camera_phase_model.py"
@@ -130,12 +135,27 @@ jobs:
           assert all(0 <= x <= 65535 and 0 <= y <= 65535 for _,x,y in observed)
           print('GENESIS_DENSE_RAM_PROBE_SYNTHETIC_PASS: per-frame window through real core')
           PY
+          python3 -m unittest discover -s tests -p 'test_ci_genesis_vdp_video_callback_smoke.py' -v
+          python3 tools/ci_genesis_vdp_video_callback_smoke.py \
+            --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen
           rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
       - name: Package licensed emulator only
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
+          (
+            cd rom-free-emulator
+            python3 - <<'PY'
+          import genesis_libretro_probe
+          import genesis_blue_roi_numeric
+          import genesis_vdp_scroll_probe
+          import genesis_input_causality
+          import genesis_city_obstacle_probe
+          print('STAGE202_EMULATOR_PACKAGE_PYTHON_IMPORTS_PASS')
+          PY
+          )
           cp emulator-sha256.txt rom-free-emulator/
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
