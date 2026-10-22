@@ -16,6 +16,7 @@ on:
       - "tests/test_build_genesis_private_bundle.py"
       - "tools/genesis_private_bundle_launcher.py"
       - "tests/test_genesis_private_bundle_launcher.py"
+      - "tests/test_genesis_private_color_launcher.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -176,6 +177,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p 'test_build_genesis_private_bundle.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_private_bundle_launcher.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_private_color_launcher.py' -v
           python3 tools/build_genesis_private_bundle.py --build --destination rom-free-emulator
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
           (
