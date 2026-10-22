@@ -260,8 +260,8 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
-            'PC trace records selected PCs and A0/CCR; SAT and object APIs return decoded numeric metadata only.' \
-            'Object snapshots expose selected fields at 0xFFA2C0; neither API exports raw RAM/VRAM bytes.' \
+            'PC trace records selected PCs and A0/CCR; at PC 0x00B866 it accepts aligned object-pool A0 slots to identify the event writer.' \
+            'SAT and object APIs return decoded numeric metadata only; no raw RAM/VRAM bytes are exported.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
             'See LICENSE.txt; modified upstream source is included in the source archive.' \
@@ -282,8 +282,12 @@ jobs:
           data[0x18e:0x190] = (0x207c).to_bytes(2, 'big')
           data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
           data[0x1f0:0x1f1] = b'U'
-          data[0x200:0x20e] = bytes.fromhex('207c00ffa2c033fc123400ffa2e6')
-          data[0x20e:0x210] = bytes.fromhex('60fe')
+          data[0x200:0x206] = bytes.fromhex('207c00ffa300')
+          data[0x206:0x20e] = bytes.fromhex('33fc123400ffa2e6')
+          data[0x20e:0x214] = bytes.fromhex('4ef90000b860')
+          data[0xB860:0xB866] = bytes.fromhex('4e714e714e71')
+          data[0xB866:0xB86c] = bytes.fromhex('11fc00ffee09')
+          data[0xB86c:0xB86e] = bytes.fromhex('60fe')
           Path('ci-only-cpu-trace.gen').write_bytes(data)
           PY
           python3 tools/genesis_libretro_probe.py \
@@ -300,23 +304,30 @@ jobs:
           assert trace['schema'] == 'quackshot_private_m68k_cpu_write_trace_v1', trace
           assert trace['status'] == 'COMPLETE' and trace['overflow_count'] == 0, trace
           assert trace['frame_window_inclusive'] == [0, 89], trace
-          assert trace['event_count'] == 1 and len(trace['events']) == 1, trace
-          event = trace['events'][0]
-          assert event == {
+          assert trace['event_count'] == 2 and len(trace['events']) == 2, trace
+          timer_event = next(e for e in trace['events'] if e['cpu_address'] == 0xFFA2E6)
+          assert timer_event == {
               'frame': 0, 'instruction_pc': 0x206, 'cpu_address': 0xFFA2E6,
               'ram_offset': 0xA2E6, 'width_bytes': 2, 'write_value': 0x1234
-          }, event
+          }, timer_event
+          event_flag = next(e for e in trace['events'] if e['cpu_address'] == 0xFFEE09)
+          assert event_flag == {
+              'frame': 0, 'instruction_pc': 0xB866, 'cpu_address': 0xFFEE09,
+              'ram_offset': 0xEE09, 'width_bytes': 1, 'write_value': 0xFF
+          }, event_flag
           assert trace['raw_rom_exported'] is False, trace
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace
           pc_trace = report['cpu_control_flow_trace']
-          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v1', pc_trace
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
           assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
           assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
           assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
           pc_event = pc_trace['events'][0]
-          assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0x206, pc_event
-          assert pc_event['a0_address'] == 0xFFA2C0, pc_event
+          assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0xB866, pc_event
+          assert pc_event['a0_address'] == 0xFFA300, pc_event
+          assert pc_trace['collision_event_writer_pc'] == '0x00B866', pc_trace
+          assert 'any A0 value' in pc_trace['object_pointer_filter'], pc_trace
           assert 0 <= pc_event['ccr_low5'] <= 0x1F, pc_event
           assert pc_trace['raw_rom_exported'] is False, pc_trace
           assert pc_trace['raw_ram_exported'] is False, pc_trace
@@ -341,7 +352,7 @@ jobs:
               assert sprite['priority'] in (0, 1) and sprite['hflip'] in (0, 1) and sprite['vflip'] in (0, 1), sprite
               assert 0 <= sprite['next_link'] < 80, sprite
           obj = report['object_record_trace']
-          assert obj['schema'] == 'quackshot_private_object_record_numeric_v1', obj
+          assert obj['schema'] == 'quackshot_private_object_record_numeric_v2', obj
           assert obj['status'] == 'COMPLETE', obj
           assert obj['frame_indices_requested'] == [0, 89], obj
           assert len(obj['frames']) == 2, obj
@@ -352,6 +363,9 @@ jobs:
             assert snapshot['object_cpu_address'] == '0xFFA2C0', snapshot
             assert snapshot['timer_26'] == 0x1234, snapshot
             assert snapshot['animation_pointer'] == '0x00000000', snapshot
+            assert snapshot['global_event_ee08'] == '0x00', snapshot
+            assert snapshot['global_event_ee09'] == '0xFF', snapshot
+            assert snapshot['global_collision_gate_ee62'] == '0x00', snapshot
             assert 0 <= snapshot['state_code'] <= 0x7FFF, snapshot
             assert 0 <= snapshot['world_x_fixed16_16'] <= 0xFFFFFFFF, snapshot
             assert 0 <= snapshot['world_y_fixed16_16'] <= 0xFFFFFFFF, snapshot
@@ -359,6 +373,7 @@ jobs:
           print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
           print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
           print('STAGE225_SYNTHETIC_OBJECT_RECORD_SNAPSHOT_PASS')
+          print('STAGE227_SYNTHETIC_COLLISION_EVENT_WRITER_TRACE_PASS')
           PY
           rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json
           find cpu-trace-emulator -type f -print0 | xargs -0 file

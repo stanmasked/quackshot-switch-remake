@@ -214,6 +214,7 @@ CPU_PC_TRACE_RANGES = (
     (0x5E90, 0x5F80),  # animation/state helper
     (0x6A40, 0x6B80),  # candidate countdown and its branches
     (0x94C0, 0x94E4),  # fixed-size state copy helper
+    (0xB866, 0xB868),  # one instruction that raises the collision/event flag
 )
 
 
@@ -325,7 +326,7 @@ def _collect_cpu_pc_trace(api, window):
             "ccr_low5": ccr,
         })
     return {
-        "schema": "quackshot_private_m68k_control_flow_trace_v1",
+        "schema": "quackshot_private_m68k_control_flow_trace_v2",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
         "pc_ranges": [
@@ -333,7 +334,12 @@ def _collect_cpu_pc_trace(api, window):
              "end_exclusive": f"0x{end:06X}"}
             for start, end in CPU_PC_TRACE_RANGES
         ],
-        "object_pointer_filter": "A0 low 24 bits equal 0xFFA2C0",
+        "object_pointer_filter": (
+            "A0 equals 0xFFA2C0 for player-state ranges; for the single "
+            "collision-event writer PC 0x00B866, any A0 value is captured as "
+            "numeric context"
+        ),
+        "collision_event_writer_pc": "0x00B866",
         "event_count": count,
         "overflow_count": overflow,
         "events": events,
@@ -464,6 +470,9 @@ def _collect_object_record_snapshot(ram, frame):
         "timer_26": _ram_word_swapped(ram, base + 0x26),
         "global_gate_ee03": f"0x{global_gate:02X}",
         "global_gate_bit7": (global_gate >> 7) & 1,
+        "global_event_ee08": f"0x{_ram_byte_swapped(ram, 0xEE08):02X}",
+        "global_event_ee09": f"0x{_ram_byte_swapped(ram, 0xEE09):02X}",
+        "global_collision_gate_ee62": f"0x{_ram_byte_swapped(ram, 0xEE62):02X}",
     }
 
 def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_record_snapshot_frames=()):
@@ -817,7 +826,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 "sprite_identity_verified": False,
             } if sat_frame_set else None),
             "object_record_trace": ({
-                "schema": "quackshot_private_object_record_numeric_v1",
+                "schema": "quackshot_private_object_record_numeric_v2",
                 "status": "COMPLETE",
                 "frame_indices_requested": sorted(object_frame_set),
                 "max_frames": MAX_OBJECT_SNAPSHOT_FRAMES,

@@ -90,7 +90,8 @@ static int quackshot_cpu_pc_trace_watched(unsigned int pc)
         quackshot_cpu_trace_overlaps(pc, 1, 0x006100U, 0x006160U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x005E90U, 0x005F80U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x006A40U, 0x006B80U) ||
-        quackshot_cpu_trace_overlaps(pc, 1, 0x0094C0U, 0x0094E4U);
+        quackshot_cpu_trace_overlaps(pc, 1, 0x0094C0U, 0x0094E4U) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x00B866U, 0x00B868U);
 }
 
 static void quackshot_cpu_trace_hook(hook_type_t type, int width,
@@ -109,7 +110,11 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
             quackshot_cpu_pc_trace_watched(pc))
         {
             unsigned int a0 = m68k_get_reg(M68K_REG_A0) & 0xFFFFFFU;
-            if (a0 == 0xFFA2C0U)
+            int player_record = (a0 == 0xFFA2C0U);
+            int collision_event_writer =
+                quackshot_cpu_trace_overlaps(pc, 1, 0x00B866U, 0x00B868U);
+            /* Only at this one writer PC, preserve any A0 value as numeric context. */
+            if (player_record || collision_event_writer)
             {
                 if (quackshot_cpu_pc_trace_count_value >= QS_CPU_PC_TRACE_MAX_EVENTS)
                 {

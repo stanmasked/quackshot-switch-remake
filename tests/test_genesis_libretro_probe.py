@@ -208,6 +208,9 @@ class GenesisFrontendTests(unittest.TestCase):
         put_long(base + 0x20, 0x21372)
         put_word(base + 0x26, 30)
         put_byte(0xEE03, 0xA3)
+        put_byte(0xEE08, 0x11)
+        put_byte(0xEE09, 0xFF)
+        put_byte(0xEE62, 0x80)
         result = probe._collect_object_record_snapshot(bytes(ram), 2354)
         self.assertEqual(result["state_word"], "0x801A")
         self.assertEqual(result["state_code"], 26)
@@ -219,6 +222,10 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertEqual(result["animation_pointer"], "0x00021372")
         self.assertEqual(result["timer_26"], 30)
         self.assertEqual(result["global_gate_ee03"], "0xA3")
+        self.assertEqual(result["global_event_ee08"], "0x11")
+        self.assertEqual(result["global_event_ee09"], "0xFF")
+        self.assertEqual(result["global_collision_gate_ee62"], "0x80")
+        self.assertIn((0xB866, 0xB868), probe.CPU_PC_TRACE_RANGES)
         self.assertFalse(any("raw" in key or "bytes" in key for key in result))
 
     def test_run_core_rejects_invalid_object_record_snapshot_frames_before_core_access(self):
