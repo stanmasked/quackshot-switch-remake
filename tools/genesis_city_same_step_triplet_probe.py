@@ -13,7 +13,8 @@ from pathlib import Path
 from genesis_blue_roi_numeric import validate_roi
 from genesis_city_obstacle_probe import RUNS, TOTAL
 from genesis_city_visual_roi_probe import (DEFAULT_ROI, EXPECTED_Y,
-                                           MARKERS, private_write)
+                                           MARKERS, private_write,
+                                           validate_component_sample)
 from genesis_libretro_probe import parse_script, run_core, safe_rom, setup_core
 from genesis_playable_physics import DEFAULT_ENTRY
 from genesis_vdp_scroll_probe import (SCANLINES, bind_vdp_probe,
@@ -197,11 +198,13 @@ def validate_triplet(traces, reads, video_digests, roi, *, rom_sha, core_sha):
     }
 
 
-def collect(core, metadata, rom_path, rom_data, roi, verify_inputs):
+def collect(core, metadata, rom_path, rom_data, roi, verify_inputs,
+            *, component_candidates=False):
     """Take independent private observations; return no ROM/RAM/pixel arrays."""
+    require(type(component_candidates) is bool, "component selector must be boolean")
     hook = bind_vdp_probe(core)
     intro = parse_script(DEFAULT_ENTRY)
-    traces, reads, video_digests = {}, {}, {}
+    traces, reads, video_digests, candidate_runs = {}, {}, {}, {}
     for name in ("idle", "right", "right_repeat"):
         snapshots = {}
         def on_private_ram(frame, ram):
@@ -225,7 +228,8 @@ def collect(core, metadata, rom_path, rom_data, roi, verify_inputs):
                 intro + RUNS[name], private_rom_path=rom_path,
                 ram_window=(MARKERS[0], MARKERS[-1]+1),
                 checkpoint_sink=on_private_ram, video_stride=60,
-                video_roi=roi, video_roi_frames=MARKERS)
+                video_roi=roi, video_roi_frames=MARKERS,
+                video_roi_components=component_candidates)
         finally:
             verify_inputs()
         require(result.get("frames_video_callbacks") == TOTAL and
@@ -250,9 +254,36 @@ def collect(core, metadata, rom_path, rom_data, roi, verify_inputs):
         traces[name] = snapshots
         reads[name] = result["input_nonzero_reads"]
         video_digests[name] = result["video_checkpoints"]
-    return validate_triplet(
+        if component_candidates:
+            source = result.get("video_roi_components_numeric")
+            require(type(source) is list and len(source) == len(MARKERS),
+                    "private connected-color samples incomplete")
+            candidates = {}
+            for row in source:
+                require(type(row) is dict and
+                        type(row.get("frame")) is int and
+                        row["frame"] in MARKERS and
+                        row["frame"] not in candidates,
+                        "private connected-color frames missing or duplicate")
+                frame = row["frame"]
+                fields = {k: v for k, v in row.items() if k != "frame"}
+                candidates[frame] = validate_component_sample(
+                    fields, roi, snapshots[frame]["blue_visual"]["blue_pixel_count"])
+            require(set(candidates) == set(MARKERS),
+                    "private connected-color frame count differs")
+            candidate_runs[name] = candidates
+    report = validate_triplet(
         traces, reads, video_digests, roi,
         rom_sha=ROM_SHA, core_sha=INSTRUMENTED_CORE_SHA)
+    if component_candidates:
+        require(candidate_runs["right"] == candidate_runs["right_repeat"],
+                "private color components not reproducible")
+        report["visual_component_candidates"] = [
+            {"frame": frame, **candidate_runs["right"][frame]}
+            for frame in MARKERS]
+        report["component_identity_unverified"] = True
+        report["safe_to_modify_switch_physics"] = False
+    return report
 
 
 def main():
@@ -262,6 +293,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--roi", type=int, nargs=4, default=DEFAULT_ROI,
                         metavar=("X", "Y", "WIDTH", "HEIGHT"))
+    parser.add_argument("--component-candidates", action="store_true",
+                        help="Numeric blue connected groups, not original hitbox")
     args = parser.parse_args()
     try:
         root = Path(__file__).resolve().parents[1]
@@ -282,7 +315,8 @@ def main():
         raw_rom, sha = safe_rom(args.rom, ROM_SHA)
         require(sha == ROM_SHA, "private original source SHA mismatch")
         guard()
-        report = collect(core, metadata, args.rom, raw_rom, roi, guard)
+        report = collect(core, metadata, args.rom, raw_rom, roi, guard,
+                         component_candidates=args.component_candidates)
         guard()
         private_write(report, args.output, root)
     except OSError:

@@ -5,6 +5,10 @@ on:
       - ".github/workflows/genesis-libretro-core.yml"
       - "tools/genesis_libretro_probe.py"
       - "tools/genesis_blue_roi_numeric.py"
+      - "tools/genesis_blue_roi_components.py"
+      - "tests/test_genesis_blue_roi_components.py"
+      - "tests/test_genesis_blue_roi_components_witness.py"
+      - "tests/test_genesis_blue_roi_components_triplet.py"
       - "tools/genesis_vdp_hscroll_export.c"
       - "tools/genesis_city_video_vdp_bracket_probe.py"
       - "tools/ci_genesis_vdp_video_callback_smoke.py"
@@ -148,12 +152,13 @@ jobs:
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
           (
             cd rom-free-emulator
             PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
           import genesis_libretro_probe
           import genesis_blue_roi_numeric
+          import genesis_blue_roi_components
           import genesis_vdp_scroll_probe
           import genesis_input_causality
           import genesis_city_obstacle_probe
