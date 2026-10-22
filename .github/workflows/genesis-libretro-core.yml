@@ -276,7 +276,8 @@ jobs:
           data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
           data[0x1f0:0x1f1] = b'U'
           data[0x200:0x208] = bytes.fromhex('33fc123400ffa2e6')
-          data[0x208:0x20a] = bytes.fromhex('60fe')
+          data[0x208:0x20e] = bytes.fromhex('303900ffa2e6')
+          data[0x20e:0x210] = bytes.fromhex('60fe')
           Path('ci-only-cpu-trace.gen').write_bytes(data)
           PY
           python3 tools/genesis_libretro_probe.py \
@@ -287,16 +288,22 @@ jobs:
           import json
           from pathlib import Path
           report = json.loads(Path('ci-only-cpu-trace-observation.json').read_text())
-          trace = report['cpu_write_trace']
-          assert trace['schema'] == 'quackshot_private_m68k_cpu_write_trace_v1', trace
+          trace = report['cpu_access_trace']
+          assert trace['schema'] == 'quackshot_private_m68k_cpu_access_trace_v2', trace
           assert trace['status'] == 'COMPLETE' and trace['overflow_count'] == 0, trace
           assert trace['frame_window_inclusive'] == [0, 89], trace
-          assert trace['event_count'] == 1 and len(trace['events']) == 1, trace
-          event = trace['events'][0]
-          assert event == {
+          assert trace['event_count'] == 2 and len(trace['events']) == 2, trace
+          write_event, read_event = trace['events']
+          assert write_event == {
               'frame': 0, 'instruction_pc': 0x200, 'cpu_address': 0xFFA2E6,
-              'ram_offset': 0xA2E6, 'width_bytes': 2, 'write_value': 0x1234
-          }, event
+              'ram_offset': 0xA2E6, 'width_bytes': 2, 'access_kind': 'W',
+              'access_value': 0x1234, 'write_value': 0x1234
+          }, write_event
+          assert read_event == {
+              'frame': 0, 'instruction_pc': 0x208, 'cpu_address': 0xFFA2E6,
+              'ram_offset': 0xA2E6, 'width_bytes': 2, 'access_kind': 'R',
+              'access_value': 0x1234
+          }, read_event
           assert trace['raw_rom_exported'] is False, trace
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace

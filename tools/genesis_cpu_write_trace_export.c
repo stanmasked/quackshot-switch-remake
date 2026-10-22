@@ -19,6 +19,7 @@ typedef struct
     unsigned int address;
     unsigned int width;
     unsigned int value;
+    unsigned int kind; /* 1 = selected read, 2 = selected write */
 } quackshot_cpu_trace_event;
 
 static quackshot_cpu_trace_event quackshot_cpu_trace_events[QS_CPU_TRACE_MAX_EVENTS];
@@ -54,19 +55,43 @@ static int quackshot_cpu_trace_watched(unsigned int address, int width)
     return
         quackshot_cpu_trace_overlaps(offset, w, 0x8F28U, 0x8F32U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x8F52U, 0x8F5AU) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0x8F94U, 0x8F9AU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x9025U, 0x9029U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x904EU, 0x9052U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xA2C8U, 0xA2CEU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xA2D0U, 0xA2E8U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xEE3FU, 0xEE43U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xEE56U, 0xEE5AU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xEF00U, 0xEF04U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xF374U, 0xF378U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xFEE8U, 0xFEF0U);
+}
+
+
+
+static int quackshot_cpu_trace_read_watched(unsigned int address, int width)
+{
+    unsigned int offset;
+    unsigned int w;
+
+    if ((address & 0xFF0000U) != 0xFF0000U || width <= 0 || width > 4)
+        return 0;
+
+    offset = address & 0xFFFFU;
+    w = (unsigned int)width;
+
+    return
+        quackshot_cpu_trace_overlaps(offset, w, 0x8F94U, 0x8F9AU) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xA2C8U, 0xA2CEU) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xA2E4U, 0xA2E8U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xEE56U, 0xEE5AU);
 }
 
 static void quackshot_cpu_trace_hook(hook_type_t type, int width,
                                      unsigned int address, unsigned int value)
 {
     quackshot_cpu_trace_event *event;
+    unsigned int kind;
 
     if (type == HOOK_M68K_E)
     {
@@ -74,10 +99,16 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
         return;
     }
 
-    if (!quackshot_cpu_trace_active || type != HOOK_M68K_W ||
+    if (!quackshot_cpu_trace_active ||
         quackshot_cpu_trace_current_frame < quackshot_cpu_trace_first_frame ||
-        quackshot_cpu_trace_current_frame > quackshot_cpu_trace_last_frame ||
-        !quackshot_cpu_trace_watched(address, width))
+        quackshot_cpu_trace_current_frame > quackshot_cpu_trace_last_frame)
+        return;
+
+    if (type == HOOK_M68K_W && quackshot_cpu_trace_watched(address, width))
+        kind = 2U;
+    else if (type == HOOK_M68K_R && quackshot_cpu_trace_read_watched(address, width))
+        kind = 1U;
+    else
         return;
 
     if (quackshot_cpu_trace_count_value >= QS_CPU_TRACE_MAX_EVENTS)
@@ -97,6 +128,7 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
     event->address = address & 0xFFFFFFU;
     event->width = (unsigned int)width;
     event->value = value;
+    event->kind = kind;
 }
 
 int quackshot_research_cpu_trace_reset(unsigned int first_frame,
@@ -143,12 +175,13 @@ int quackshot_research_cpu_trace_read(unsigned int index,
                                       unsigned int *pc,
                                       unsigned int *address,
                                       unsigned int *width,
-                                      unsigned int *value)
+                                      unsigned int *value,
+                                      unsigned int *kind)
 {
     const quackshot_cpu_trace_event *event;
 
     if (index >= quackshot_cpu_trace_count_value ||
-        !frame || !pc || !address || !width || !value)
+        !frame || !pc || !address || !width || !value || !kind)
         return 0;
 
     event = &quackshot_cpu_trace_events[index];
@@ -157,5 +190,6 @@ int quackshot_research_cpu_trace_read(unsigned int index,
     *address = event->address;
     *width = event->width;
     *value = event->value;
+    *kind = event->kind;
     return 1;
 }
