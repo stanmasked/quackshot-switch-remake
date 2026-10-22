@@ -4,6 +4,9 @@ on:
     paths:
       - ".github/workflows/genesis-libretro-core.yml"
       - "tools/genesis_libretro_probe.py"
+      - "docs/GENESIS_ANIMATION_DESCRIPTOR_STAGE226_RU.md"
+      - "tests/test_genesis_quackshot_animation_table_audit.py"
+      - "tools/quackshot_animation_table_audit.py"
       - "tools/genesis_blue_roi_numeric.py"
       - "tools/genesis_blue_roi_components.py"
       - "tests/test_genesis_blue_roi_components.py"
