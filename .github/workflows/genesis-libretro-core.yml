@@ -233,6 +233,11 @@ jobs:
         run: |
           cp -a emulator-core emulator-core-trace
           cat tools/genesis_cpu_write_trace_export.c >> emulator-core-trace/libretro/libretro.c
+          # The pinned upstream hook header used a tentative global definition,
+          # which modern -fno-common linkers reject across translation units.
+          # Keep the single definition in cpuhook.c and make the header declaration external.
+          sed -i 's/^void (\*cpu_hook)/extern void (*cpu_hook)/' emulator-core-trace/core/debug/cpuhook.h
+          grep -q '^extern void (\*cpu_hook)' emulator-core-trace/core/debug/cpuhook.h
           sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*;/' emulator-core-trace/libretro/link.T
           grep -q 'quackshot_research_cpu_trace_reset' emulator-core-trace/libretro/libretro.c
           grep -Fq 'quackshot_research_cpu_trace_*' emulator-core-trace/libretro/link.T
@@ -250,6 +255,7 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write tracing.' \
+            'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM dump, instruction bytes, framebuffer, graphics or audio included.' \
             'See LICENSE.txt; modified upstream source is included in the source archive.' \
             > cpu-trace-emulator/BUILD_PROVENANCE.txt
