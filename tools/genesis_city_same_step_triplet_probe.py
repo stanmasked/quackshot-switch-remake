@@ -25,6 +25,31 @@ from reference_evidence_integrity import read_inputs, validate
 ROM_SHA = "30581220f6c914709853828811fe143e283896189a64eedf1444dc908b5cac34"
 INSTRUMENTED_CORE_SHA = "4e3381cf5bfa7ff387bbe6887e7e31453bf4c8c85b295aa66d6d07d415dde7aa"
 EXPECTED_X = {2180: 233, 2220: 298, 2280: 396, 2297: 423, 2350: 498}
+VDP_ARCHIVE_PATH = "research/observations/user_rom_vdp_hscroll_2026-10-18.json"
+
+
+def validate_instrumented_vdp_archive(vdp):
+    """Bind this SHA-pinned hook to previously observed numeric hardware data."""
+    require(type(vdp) is dict and
+            vdp.get("schema") == "quackshot_megadrive_actual_vdp_hscroll_v1" and
+            vdp.get("reference_rom_sha256") == ROM_SHA and
+            vdp.get("rom_free_instrumented_core_sha256") ==
+            INSTRUMENTED_CORE_SHA and
+            vdp.get("original_rom_in_public_repository") is False and
+            vdp.get("original_vram_ram_pixels_audio_exported") is False,
+            "original VDP archive provenance does not match pinned hook")
+    measured = vdp.get("measurement")
+    require(type(measured) is dict and
+            measured.get("independent_emulations") == 5 and
+            measured.get("identical_right_replays") is True and
+            measured.get("all_checked_samples_match_exactly") is True and
+            measured.get("sampled_vdp_scanlines") == list(SCANLINES) and
+            measured.get("HScroll_VRAM_table_base") == "0xD000" and
+            measured.get("VDP_register_11") == 0 and
+            measured.get("VDP_register_13") == 52,
+            "original VDP archive hardware contract differs")
+    return None
+
 FIELDS = {
     "player_world_x", "player_world_y", "camera_ram", "render_buffer_ram",
     "vdp_scanlines", "blue_visual"
@@ -232,6 +257,11 @@ def main():
         prior = validate(*read_inputs(root))
         require(prior["rom_sha256"] == ROM_SHA,
                 "source ROM numeric provenance mismatch")
+        # The special VDP-capable binary has a different SHA from the
+        # ordinary Genesis Plus GX binary used by Stage188.
+        archived_vdp = json.loads((root / VDP_ARCHIVE_PATH).read_text(
+            encoding="utf-8"))
+        validate_instrumented_vdp_archive(archived_vdp)
         guard = PinnedOriginalInputs(
             args.rom, args.core, ROM_SHA, INSTRUMENTED_CORE_SHA)
         guard()
