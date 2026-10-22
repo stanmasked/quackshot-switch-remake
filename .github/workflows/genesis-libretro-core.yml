@@ -8,6 +8,8 @@ on:
       - "tools/genesis_vdp_hscroll_export.c"
       - "tools/genesis_city_video_vdp_bracket_probe.py"
       - "tools/ci_genesis_vdp_video_callback_smoke.py"
+      - "tools/build_genesis_private_bundle.py"
+      - "tests/test_build_genesis_private_bundle.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -163,6 +165,22 @@ jobs:
             'For private local inspection only. No game ROM or assets included.' \
             'Genesis Plus GX license: non-commercial redistribution; consult LICENSE.txt.' \
             > rom-free-emulator/BUILD_PROVENANCE.txt
+      - name: Audit and package full private numeric research closure (no original ROM)
+        run: |
+          python3 -m unittest discover -s tests -p 'test_build_genesis_private_bundle.py' -v
+          python3 tools/build_genesis_private_bundle.py --build --destination rom-free-emulator
+          python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
+          (
+            cd rom-free-emulator
+            PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools python3 - <<'PY'
+          import genesis_city_video_vdp_bracket_probe
+          import genesis_city_same_step_triplet_probe
+          import genesis_city_visual_roi_probe
+          import genesis_vdp_scroll_probe
+          print('STAGE203_FULL_PRIVATE_RESEARCH_MODULE_IMPORTS_PASS')
+          PY
+          )
+          python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
       - uses: actions/upload-artifact@v4
         with:
           name: genesis-plus-gx-rom-free-linux-x64
