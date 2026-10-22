@@ -114,12 +114,82 @@ def summarize(traces, read_counts, video_digests, roi, sha, core_sha):
     }
 
 
+COMPONENT_KEYS = {
+    "schema", "roi", "pixel_format", "connectivity",
+    "min_component_pixels", "blue_pixel_count",
+    "all_blue_component_count", "eligible_component_count",
+    "reported_component_count", "largest_component_dominates_by_2x",
+    "components", "selected_component_is_proven_player",
+    "original_sprite_hitbox_or_contact_verified",
+    "safe_to_modify_switch_physics",
+}
+COMPONENT_ITEM_KEYS = {
+    "blue_pixels", "blue_centroid_x_milli", "blue_centroid_y_milli",
+    "blue_bbox_xyxy_exclusive", "touches_roi_boundary",
+}
+
+
+def validate_component_sample(sample, roi, blue_total):
+    """Prevent RGB, RAM, VDP or other raw data from entering private output."""
+    require(type(sample) is dict and set(sample) == COMPONENT_KEYS and
+            sample["schema"] == "quackshot_genesis_blue_components_numeric_v1" and
+            sample["roi"] == list(roi) and
+            sample["pixel_format"] in ("0RGB1555", "XRGB8888", "RGB565") and
+            sample["connectivity"] == 4 and
+            sample["min_component_pixels"] == 5 and
+            type(sample["blue_pixel_count"]) is int and
+            sample["blue_pixel_count"] == blue_total and
+            all(sample[k] is False for k in (
+                "selected_component_is_proven_player",
+                "original_sprite_hitbox_or_contact_verified",
+                "safe_to_modify_switch_physics")),
+            "component evidence provenance or privacy mismatch")
+    total = sample["all_blue_component_count"]
+    eligible = sample["eligible_component_count"]
+    selected = sample["reported_component_count"]
+    require(all(type(n) is int for n in (total, eligible, selected)) and
+            0 <= selected <= eligible <= total <= blue_total and
+            selected <= 4 and
+            type(sample["largest_component_dominates_by_2x"]) is bool and
+            type(sample["components"]) is list and
+            len(sample["components"]) == selected,
+            "component counts inconsistent")
+    areas = []
+    for component in sample["components"]:
+        require(type(component) is dict and
+                set(component) == COMPONENT_ITEM_KEYS and
+                type(component["blue_pixels"]) is int and
+                component["blue_pixels"] >= 5 and
+                type(component["touches_roi_boundary"]) is bool and
+                type(component["blue_centroid_x_milli"]) is int and
+                type(component["blue_centroid_y_milli"]) is int and
+                type(component["blue_bbox_xyxy_exclusive"]) is list and
+                len(component["blue_bbox_xyxy_exclusive"]) == 4 and
+                all(type(v) is int for v in
+                    component["blue_bbox_xyxy_exclusive"]),
+                "component contains invalid or forbidden fields")
+        xmin, ymin, xmax, ymax = component["blue_bbox_xyxy_exclusive"]
+        require(roi[0] <= xmin < xmax <= roi[0] + roi[2] and
+                roi[1] <= ymin < ymax <= roi[1] + roi[3] and
+                xmin * 1000 <= component["blue_centroid_x_milli"] <
+                xmax * 1000 and
+                ymin * 1000 <= component["blue_centroid_y_milli"] <
+                ymax * 1000,
+                "component numeric bounds outside ROI")
+        areas.append(component["blue_pixels"])
+    require(areas == sorted(areas, reverse=True) and
+            sum(areas) <= blue_total,
+            "component pixel areas impossible or out of order")
+    return sample
+
+
 def measure(core, metadata, rompath, rom_bytes, sha, core_sha, roi, *,
-            verify_inputs):
+            verify_inputs, components=False):
     require(callable(verify_inputs), "pinned input guard is required")
+    require(type(components) is bool, "component selection flag must be boolean")
     validate_roi(roi)
     intro = parse_script(DEFAULT_ENTRY)
-    traces, read_counts, digests = {}, {}, {}
+    traces, read_counts, digests, candidate_runs = {}, {}, {}, {}
     for name in ("idle", "right", "right_repeat"):
         ram_y = {}
 
@@ -136,7 +206,8 @@ def measure(core, metadata, rompath, rom_bytes, sha, core_sha, roi, *,
                 private_rom_path=rompath, video_stride=60,
                 ram_window=(MARKERS[0], MARKERS[-1] + 1),
                 checkpoint_sink=on_ram,
-                video_roi=roi, video_roi_frames=MARKERS)
+                video_roi=roi, video_roi_frames=MARKERS,
+                video_roi_components=components)
         finally:
             verify_inputs()
         require(out["frames_video_callbacks"] == TOTAL and
@@ -158,7 +229,37 @@ def measure(core, metadata, rompath, rom_bytes, sha, core_sha, roi, *,
         traces[name] = {frame: {
             "player_ram_y": ram_y[frame], "visual": visual[frame]}
             for frame in MARKERS}
-    return summarize(traces, read_counts, digests, roi, sha, core_sha)
+        if components:
+            rows = out.get("video_roi_components_numeric")
+            require(type(rows) is list and len(rows) == len(MARKERS),
+                    "missing or repeated component callback")
+            candidates = {}
+            for row in rows:
+                require(type(row) is dict and "frame" in row and
+                        type(row["frame"]) is int and
+                        row["frame"] in MARKERS and
+                        row["frame"] not in candidates,
+                        "invalid original component sample frame")
+                frame = row["frame"]
+                data = {k: v for k, v in row.items() if k != "frame"}
+                candidates[frame] = validate_component_sample(
+                    data, roi, visual[frame]["blue_pixel_count"])
+            require(set(candidates) == set(MARKERS),
+                    "missing original component marker")
+            candidate_runs[name] = candidates
+    result = summarize(traces, read_counts, digests, roi, sha, core_sha)
+    if components:
+        require(candidate_runs["right"] == candidate_runs["right_repeat"],
+                "original visual components not reproducible")
+        result["visual_component_candidates"] = [
+            {"frame": frame, **candidate_runs["right"][frame]}
+            for frame in MARKERS
+        ]
+        result["component_identity_unverified"] = True
+        result["original_collision_plane_verified"] = False
+        result["original_sprite_identity_proven_from_blue_pixels"] = False
+        result["safe_to_modify_switch_physics"] = False
+    return result
 
 
 def private_write(report, destination, root):
@@ -192,6 +293,8 @@ def main():
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--roi", type=int, nargs=4, default=DEFAULT_ROI,
                    metavar=("X", "Y", "WIDTH", "HEIGHT"))
+    p.add_argument("--component-candidates", action="store_true",
+                   help="Private numeric 4-connected color groups, not hitbox data")
     args = p.parse_args()
     try:
         root = Path(__file__).resolve().parents[1]
@@ -207,7 +310,8 @@ def main():
         guard()
         report = measure(core, metadata, args.rom, rom_data, sha,
                          provenance["genesis_core_sha256"], roi,
-                         verify_inputs=guard)
+                         verify_inputs=guard,
+                         components=args.component_candidates)
         guard()
         private_write(report, args.output, root)
     except OSError:
