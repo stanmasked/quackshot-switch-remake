@@ -110,6 +110,34 @@ class GenesisFrontendTests(unittest.TestCase):
                     probe.run_core(None, {"need_fullpath": False},
                                    b"", "mock", 2, [], video_stride=stride)
 
+
+    def test_frame_digest_hashes_visible_rows_separately_from_padding(self):
+        payload = b"abcdPAD1efghPAD2"
+        result = probe.frame_digest_numeric(payload, 2, 2, 8, 2)
+        self.assertEqual(result["sha256"], hashlib.sha256(payload).hexdigest())
+        self.assertEqual(result["visible_sha256"], hashlib.sha256(b"abcdefgh").hexdigest())
+        self.assertEqual(result["byte_count"], 16)
+        self.assertEqual(result["visible_byte_count"], 8)
+
+    def test_frame_digest_rejects_bad_geometry(self):
+        for args in ((b"abc", 2, 2, 4, 2), (b"abcdefgh", 2, 2, 3, 2),
+                     (b"abcd", 2, 1, 4, 7)):
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                probe.frame_digest_numeric(*args)
+
+    def test_parse_frame_indices_is_strict_and_sorted(self):
+        self.assertEqual(probe.parse_frame_indices("3,1,2", 4), [1, 2, 3])
+        self.assertEqual(probe.parse_frame_indices("", 4), [])
+        for spec in ("1,1", "-1,2", "1,4", "x,2", " 1,2"):
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                probe.parse_frame_indices(spec, 4)
+
+    def test_run_core_rejects_duplicate_or_out_of_range_digest_frames(self):
+        for frames in ([0, 0], [2], [-1]):
+            with self.subTest(frames=frames), self.assertRaisesRegex(ValueError, "video_digest_frames"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               video_digest_frames=frames)
+
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json
         root = Path(__file__).resolve().parents[1]
