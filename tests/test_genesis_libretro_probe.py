@@ -183,22 +183,25 @@ class GenesisFrontendTests(unittest.TestCase):
         def put_word(offset, value):
             start = probe.CANDIDATE_OBJECT_RAM_OFFSET + offset
             ram[start:start + 2] = value.to_bytes(2, "little")
-        put_word(0x08, 0x0108)
+        put_word(0x04, 0x001B)
+        put_word(0x06, 0x000C)
+        put_word(0x08, 0x0508)
         put_word(0x10, 61)
         put_word(0x12, 0x8000)
         put_word(0x14, 176)
         put_word(0x16, 0x4000)
-        put_word(0x1E, 0xABCD)
-        put_word(0x24, 0x0101)
-        put_word(0x26, 0x1234)
+        put_word(0x20, 0x0002)
+        put_word(0x22, 0x1372)
         result = probe._collect_candidate_object_state(bytes(ram), 7)
         self.assertEqual(result["frame"], 7)
         self.assertEqual(result["world_x"], {
             "integer": 61, "fraction_u16": 0x8000, "fixed_16_16": 61.5})
         self.assertEqual(result["world_y"], {
             "integer": 176, "fraction_u16": 0x4000, "fixed_16_16": 176.25})
-        self.assertEqual(result["selected_words"], {
-            "0x08": 0x0108, "0x1E": 0xABCD, "0x24": 0x0101, "0x26": 0x1234})
+        self.assertEqual(result["selected_words"], {"0x04": 0x001B, "0x06": 0x000C})
+        self.assertEqual(result["selected_bytes"], {"0x08": 0x05, "0x09": 0x08})
+        self.assertEqual(result["pointer_0x20"], {
+            "value_u32": 0x00021372, "hex": "0x00021372"})
         self.assertNotIn("raw_ram", result)
         self.assertNotIn("bytes", result)
 

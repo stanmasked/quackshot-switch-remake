@@ -23,7 +23,9 @@ MAX_SAT_SPRITES = 80
 MAX_OBJECT_STATE_SNAPSHOT_FRAMES = 128
 CANDIDATE_OBJECT_RAM_OFFSET = 0xA2C0
 CANDIDATE_OBJECT_RECORD_BYTES = 0x40
-CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS = (0x08, 0x1E, 0x24, 0x26)
+CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS = (0x04, 0x06)
+CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS = (0x08, 0x09)
+CANDIDATE_OBJECT_POINTER_OFFSET = 0x20
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -436,6 +438,8 @@ def _collect_candidate_object_state(ram_bytes, frame):
         ram_bytes[CANDIDATE_OBJECT_RAM_OFFSET + 0x14:
                   CANDIDATE_OBJECT_RAM_OFFSET + 0x16], "little", signed=True)
     y_fraction = word(0x16)
+    pointer_value = (word(CANDIDATE_OBJECT_POINTER_OFFSET) << 16) | word(
+        CANDIDATE_OBJECT_POINTER_OFFSET + 2)
     return {
         "frame": frame,
         "world_x": {
@@ -451,6 +455,15 @@ def _collect_candidate_object_state(ram_bytes, frame):
         "selected_words": {
             f"0x{offset:02X}": word(offset)
             for offset in CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS
+        },
+        "selected_bytes": {
+            f"0x{offset:02X}": ram_bytes[
+                CANDIDATE_OBJECT_RAM_OFFSET + (offset ^ 1)]
+            for offset in CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS
+        },
+        "pointer_0x20": {
+            "value_u32": pointer_value,
+            "hex": f"0x{pointer_value:08X}",
         },
     }
 
@@ -821,6 +834,11 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     f"0x{offset:02X}"
                     for offset in CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS
                 ],
+                "selected_byte_offsets": [
+                    f"0x{offset:02X}"
+                    for offset in CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS
+                ],
+                "pointer_offset": "0x20",
                 "frames": object_state_snapshots,
                 "raw_ram_exported": False,
                 "raw_rom_exported": False,
