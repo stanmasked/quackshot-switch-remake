@@ -36,6 +36,8 @@ COMPONENT_FIELDS = {
     "blue_centroid_y_milli", "blue_pixels", "touches_roi_boundary",
 }
 EXPECTED_Y_RIGHT = {2180: 176, 2220: 176, 2280: 176, 2297: 208, 2350: 208}
+EXPECTED_CAMERA_RIGHT = {2180: 92, 2220: 157, 2280: 254, 2297: 282, 2350: 358}
+EXPECTED_RENDER_RIGHT = {2180: 90, 2220: 155, 2280: 252, 2297: 280, 2350: 358}
 
 
 def require(ok, message):
@@ -83,11 +85,15 @@ def _validate_rows(report, role):
                     "unexpected row fields or frame sequence")
             expected_x = 61 if name == "idle" else EXPECTED_X[frame]
             expected_y = 176 if name == "idle" else EXPECTED_Y_RIGHT[frame]
+            expected_camera = 0 if name == "idle" else EXPECTED_CAMERA_RIGHT[frame]
+            expected_render = 0 if name == "idle" else EXPECTED_RENDER_RIGHT[frame]
             require(row["world_x"] == expected_x and
                     row["world_y"] == expected_y and
+                    row["camera"] == expected_camera and
+                    row["render_buffer"] == expected_render and
                     _int(row["world_x"]) and _int(row["world_y"]) and
                     _int(row["camera"]) and _int(row["render_buffer"]),
-                    "RAM/camera numeric baseline differs")
+                    "RAM/camera/render numeric baseline differs")
             total = row["color_blue_pixel_count"]
             groups = row["connected_color_groups"]
             require(_int(total, 0, roi[2] * roi[3]) and
