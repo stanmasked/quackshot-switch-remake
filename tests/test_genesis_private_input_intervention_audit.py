@@ -177,7 +177,8 @@ class SyntheticPrivateInputInterventionTests(unittest.TestCase):
 
     def test_incorrect_empty_roi_counts_rejected(self):
         left, right = self.pair()
-        right["runs"]["idle"][0]["connected_color_groups"] = 1
+        right["runs"]["idle"][0]["connected_color_groups"] = 0
+        right["runs"]["idle"][0]["largest_color_group"] = fake_component("right", 0)
         with self.assertRaisesRegex(ValueError, "empty ROI claims"):
             audit.analyze_pair(left, right)
 
