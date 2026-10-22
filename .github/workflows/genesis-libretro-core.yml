@@ -10,6 +10,8 @@ on:
       - "tools/ci_genesis_vdp_video_callback_smoke.py"
       - "tools/build_genesis_private_bundle.py"
       - "tests/test_build_genesis_private_bundle.py"
+      - "tools/genesis_private_bundle_launcher.py"
+      - "tests/test_genesis_private_bundle_launcher.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -168,6 +170,7 @@ jobs:
       - name: Audit and package full private numeric research closure (no original ROM)
         run: |
           python3 -m unittest discover -s tests -p 'test_build_genesis_private_bundle.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_private_bundle_launcher.py' -v
           python3 tools/build_genesis_private_bundle.py --build --destination rom-free-emulator
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
           (
@@ -180,6 +183,9 @@ jobs:
           print('STAGE203_FULL_PRIVATE_RESEARCH_MODULE_IMPORTS_PASS')
           PY
           )
+          python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
+          PYTHONDONTWRITEBYTECODE=1 python3 rom-free-emulator/tools/genesis_private_bundle_launcher.py \
+            --preflight --bundle rom-free-emulator
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
       - uses: actions/upload-artifact@v4
         with:
