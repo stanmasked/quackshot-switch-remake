@@ -19,6 +19,8 @@ on:
       - "tools/genesis_private_bundle_launcher.py"
       - "tests/test_genesis_private_bundle_launcher.py"
       - "tests/test_genesis_private_color_launcher.py"
+      - "tools/genesis_offline_numeric_report_audit.py"
+      - "tests/test_genesis_offline_numeric_report_audit.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -184,6 +186,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_build_genesis_private_bundle.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_private_bundle_launcher.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_private_color_launcher.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_offline_numeric_report_audit.py' -v
           python3 tools/build_genesis_private_bundle.py --build --destination rom-free-emulator
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
           (
@@ -193,7 +196,8 @@ jobs:
           import genesis_city_same_step_triplet_probe
           import genesis_city_visual_roi_probe
           import genesis_vdp_scroll_probe
-          print('STAGE203_FULL_PRIVATE_RESEARCH_MODULE_IMPORTS_PASS')
+          import genesis_offline_numeric_report_audit
+          print('STAGE208_PRIVATE_RECEIPT_AUDITOR_PACKAGE_IMPORTS_PASS')
           PY
           )
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
