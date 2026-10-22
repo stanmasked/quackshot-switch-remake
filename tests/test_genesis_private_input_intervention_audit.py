@@ -113,7 +113,7 @@ class SyntheticPrivateInputInterventionTests(unittest.TestCase):
 
     def test_wrong_right_repeat_rejected_even_when_flag_claims_exact(self):
         left, right = self.pair()
-        right["runs"]["right_repeat"][2]["camera"] += 1
+        right["runs"]["right_repeat"][2]["largest_color_group"]["blue_pixels"] += 1
         with self.assertRaisesRegex(ValueError, "RIGHT and RIGHT-repeat"):
             audit.analyze_pair(left, right)
 
