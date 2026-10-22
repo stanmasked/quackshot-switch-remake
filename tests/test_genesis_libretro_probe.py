@@ -177,6 +177,63 @@ class GenesisFrontendTests(unittest.TestCase):
             probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
                            sat_snapshot_frames=tuple(range(129)))
 
+    def test_word_swapped_ram_numeric_readers_and_object_snapshot(self):
+        ram = bytearray(0x10000)
+
+        def put_byte(offset, value):
+            ram[offset ^ 1] = value
+
+        def put_word(offset, value):
+            ram[offset:offset + 2] = value.to_bytes(2, "little")
+
+        def put_long(offset, value):
+            put_word(offset, value >> 16)
+            put_word(offset + 2, value & 0xFFFF)
+
+        put_word(0x10, 0x1234)
+        put_word(0x12, 0xABCD)
+        put_byte(0x20, 0x5A)
+        self.assertEqual(probe._ram_byte_swapped(ram, 0x20), 0x5A)
+        self.assertEqual(probe._ram_word_swapped(ram, 0x10), 0x1234)
+        self.assertEqual(probe._ram_long_swapped(ram, 0x10), 0x1234ABCD)
+
+        base = 0xA2C0
+        put_word(base + 2, 0x801A)
+        put_word(base + 4, 17)
+        put_word(base + 6, 1)
+        put_byte(base + 8, 0)
+        put_byte(base + 9, 1)
+        put_long(base + 0x10, 512 * 65536 + 0x5000)
+        put_long(base + 0x14, 166 * 65536 + 0xFC00)
+        put_long(base + 0x20, 0x21372)
+        put_word(base + 0x26, 30)
+        put_byte(0xEE03, 0xA3)
+        result = probe._collect_object_record_snapshot(bytes(ram), 2354)
+        self.assertEqual(result["state_word"], "0x801A")
+        self.assertEqual(result["state_code"], 26)
+        self.assertEqual(result["new_state_flag"], 1)
+        self.assertEqual(result["animation_sequence"], 17)
+        self.assertEqual(result["animation_frame"], 1)
+        self.assertEqual(result["world_x"], 512.3125)
+        self.assertEqual(result["world_y"], 166.984375)
+        self.assertEqual(result["animation_pointer"], "0x00021372")
+        self.assertEqual(result["timer_26"], 30)
+        self.assertEqual(result["global_gate_ee03"], "0xA3")
+        self.assertFalse(any("raw" in key or "bytes" in key for key in result))
+
+    def test_run_core_rejects_invalid_object_record_snapshot_frames_before_core_access(self):
+        invalid = ((-1,), (2,), (0, 0), [0, "1"])
+        for frames in invalid:
+            with self.subTest(frames=frames), self.assertRaisesRegex(
+                    ValueError, "object_record_snapshot_frames"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               object_record_snapshot_frames=frames)
+
+    def test_run_core_rejects_more_than_128_object_record_snapshot_frames(self):
+        with self.assertRaisesRegex(ValueError, "object_record_snapshot_frames"):
+            probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
+                           object_record_snapshot_frames=tuple(range(129)))
+
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json
         root = Path(__file__).resolve().parents[1]

@@ -260,7 +260,8 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
-            'PC trace records selected PCs and A0/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
+            'PC trace records selected PCs and A0/CCR; SAT and object APIs return decoded numeric metadata only.' \
+            'Object snapshots expose selected fields at 0xFFA2C0; neither API exports raw RAM/VRAM bytes.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
             'See LICENSE.txt; modified upstream source is included in the source archive.' \
@@ -289,7 +290,7 @@ jobs:
             --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
             --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
             --cpu-write-trace-window 0:89 --cpu-control-flow-trace-window 0:89 \
-            --sat-snapshot-frames 0,89 \
+            --sat-snapshot-frames 0,89 --object-record-snapshot-frames 0,89 \
             --output ci-only-cpu-trace-observation.json
           python3 - <<'PY'
           import json
@@ -339,9 +340,25 @@ jobs:
               assert 0 <= sprite['palette'] <= 3, sprite
               assert sprite['priority'] in (0, 1) and sprite['hflip'] in (0, 1) and sprite['vflip'] in (0, 1), sprite
               assert 0 <= sprite['next_link'] < 80, sprite
+          obj = report['object_record_trace']
+          assert obj['schema'] == 'quackshot_private_object_record_numeric_v1', obj
+          assert obj['status'] == 'COMPLETE', obj
+          assert obj['frame_indices_requested'] == [0, 89], obj
+          assert len(obj['frames']) == 2, obj
+          assert obj['raw_ram_exported'] is False and obj['raw_rom_exported'] is False, obj
+          assert obj['instruction_bytes_exported'] is False, obj
+          assert obj['frame_pixels_exported'] is False and obj['audio_exported'] is False, obj
+          for snapshot in obj['frames']:
+            assert snapshot['object_cpu_address'] == '0xFFA2C0', snapshot
+            assert snapshot['timer_26'] == 0x1234, snapshot
+            assert snapshot['animation_pointer'] == '0x00000000', snapshot
+            assert 0 <= snapshot['state_code'] <= 0x7FFF, snapshot
+            assert 0 <= snapshot['world_x_fixed16_16'] <= 0xFFFFFFFF, snapshot
+            assert 0 <= snapshot['world_y_fixed16_16'] <= 0xFFFFFFFF, snapshot
           assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
           print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
           print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
+          print('STAGE225_SYNTHETIC_OBJECT_RECORD_SNAPSHOT_PASS')
           PY
           rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json
           find cpu-trace-emulator -type f -print0 | xargs -0 file
