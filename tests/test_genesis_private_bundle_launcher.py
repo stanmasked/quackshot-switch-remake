@@ -131,6 +131,29 @@ class PrivateBundleLauncherTests(unittest.TestCase):
                                      (100,80,85,140),"bracket")
         self.assertEqual(guard.call_count,1)
 
+    def test_public_git_checkout_rejects_private_source_and_result(self):
+        checkout = self.home / "public-checkout"
+        checkout.mkdir()
+        (checkout / ".git").mkdir()
+        bundled = checkout / "rom-free-emulator"
+        bundled.mkdir()
+        outside_rom = self.home / "private-original.gen"
+        outside_rom.write_bytes(b"FAKE_ONLY")
+        inside_rom = checkout / "bad-original.gen"
+        inside_rom.write_bytes(b"FAKE_ONLY")
+        with mock.patch.object(launcher, "preflight", return_value={}), \
+             mock.patch.object(launcher, "PinnedOriginalInputs") as guard:
+            with self.assertRaisesRegex(ValueError, "public git checkout"):
+                launcher.prepare_run(bundled, inside_rom,
+                                     self.home / "outside.json",
+                                     (100,80,85,140), "bracket")
+            with self.assertRaisesRegex(ValueError, "public git checkout"):
+                launcher.prepare_run(bundled, outside_rom,
+                                     checkout / "private-leak.json",
+                                     (100,80,85,140), "bracket")
+            guard.assert_not_called()
+        self.assertFalse((checkout / "private-leak.json").exists())
+
     def test_unknown_modes_and_invalid_roi_refused_before_core(self):
         source=self.home/"original-private.gen"
         source.write_bytes(b"FAKE")
