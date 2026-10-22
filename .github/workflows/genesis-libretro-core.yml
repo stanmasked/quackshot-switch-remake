@@ -260,8 +260,9 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
-            'PC trace records selected PCs and A0/CCR; at PC 0x00B866 it accepts aligned object-pool A0 slots to identify the event writer.' \
-            'SAT and object APIs return decoded numeric metadata only; no raw RAM/VRAM bytes are exported.' \
+            'PC trace records selected PCs and A0/CCR; at PC 0x00B866 it captures any numeric A0 and decodes the numeric longword at SP.' \
+            'Collision-profile snapshots decode selected object boxes and the player rectangle; no raw ROM/RAM bytes are exported.' \
+            'The stack-return value is captured only at PC 0x00B866; no stack bytes are exported.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
             'See LICENSE.txt; modified upstream source is included in the source archive.' \
@@ -272,9 +273,11 @@ jobs:
           cp tools/genesis_cpu_write_trace_export.c cpu-trace-emulator/
           python3 - <<'PY'
           from pathlib import Path
-          data = bytearray(128 * 1024)
+          data = bytearray(1024 * 1024)
           data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
           data[4:8] = (0x200).to_bytes(4, 'big')
+          for vector in range(8, 0x100, 4):
+            data[vector:vector + 4] = (0xB870).to_bytes(4, 'big')
           data[0x100:0x110] = b'SEGA MEGA DRIVE '
           data[0x120:0x150] = b'OPENAI SYNTHETIC CPU TRACE ONLY'.ljust(48, b' ')
           data[0x150:0x180] = b'NO GAME ASSETS OR ORIGINAL ROM'.ljust(48, b' ')
@@ -284,10 +287,15 @@ jobs:
           data[0x1f0:0x1f1] = b'U'
           data[0x200:0x206] = bytes.fromhex('207c00ffa300')
           data[0x206:0x20e] = bytes.fromhex('33fc123400ffa2e6')
-          data[0x20e:0x214] = bytes.fromhex('4ef90000b860')
+          data[0x20e:0x214] = bytes.fromhex('4eb90000b860')
+          data[0x214:0x216] = bytes.fromhex('60fe')
           data[0xB860:0xB866] = bytes.fromhex('4e714e714e71')
           data[0xB866:0xB86c] = bytes.fromhex('11fc00ffee09')
-          data[0xB86c:0xB86e] = bytes.fromhex('60fe')
+          data[0xB86c:0xB86e] = bytes.fromhex('4e75')
+          data[0xB870:0xB872] = bytes.fromhex('4e73')
+          table = 0x7E500
+          data[table + 0x3D * 4:table + 0x3D * 4 + 4] = bytes((0xD8, 0x28, 0xF6, 0x14))
+          data[table + 0x40 * 4:table + 0x40 * 4 + 4] = bytes((0xFA, 0x04, 0xFE, 0x04))
           Path('ci-only-cpu-trace.gen').write_bytes(data)
           PY
           python3 tools/genesis_libretro_probe.py \
@@ -295,6 +303,7 @@ jobs:
             --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
             --cpu-write-trace-window 0:89 --cpu-control-flow-trace-window 0:89 \
             --sat-snapshot-frames 0,89 --object-record-snapshot-frames 0,89 \
+            --collision-profile-snapshot-frames 0,89 \
             --output ci-only-cpu-trace-observation.json
           python3 - <<'PY'
           import json
@@ -319,14 +328,17 @@ jobs:
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace
           pc_trace = report['cpu_control_flow_trace']
-          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v3', pc_trace
           assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
           assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
           assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
           pc_event = pc_trace['events'][0]
           assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0xB866, pc_event
           assert pc_event['a0_address'] == 0xFFA300, pc_event
+          assert pc_event['stack_return_pc'] == 0x214, pc_event
+          assert pc_event['stack_pointer_address'] == 0xFFFEFC, pc_event
           assert pc_trace['collision_event_writer_pc'] == '0x00B866', pc_trace
+          assert 'numeric longword at SP' in pc_trace['stack_return_capture'], pc_trace
           assert 'any A0 value' in pc_trace['object_pointer_filter'], pc_trace
           assert 0 <= pc_event['ccr_low5'] <= 0x1F, pc_event
           assert pc_trace['raw_rom_exported'] is False, pc_trace
@@ -369,11 +381,23 @@ jobs:
             assert 0 <= snapshot['state_code'] <= 0x7FFF, snapshot
             assert 0 <= snapshot['world_x_fixed16_16'] <= 0xFFFFFFFF, snapshot
             assert 0 <= snapshot['world_y_fixed16_16'] <= 0xFFFFFFFF, snapshot
+          collision = report['collision_profile_trace']
+          assert collision['schema'] == 'quackshot_private_collision_profile_trace_v1', collision
+          assert collision['status'] == 'COMPLETE', collision
+          assert collision['frame_indices_requested'] == [0, 89], collision
+          assert len(collision['frames']) == 2, collision
+          assert all(x['schema'] == 'quackshot_private_collision_profile_numeric_v1' for x in collision['frames']), collision
+          assert [o['cpu_address'] for o in collision['frames'][0]['objects']] == ['0xFF9000', '0xFF9040'], collision
+          assert collision['raw_rom_exported'] is False and collision['raw_ram_exported'] is False, collision
+          assert collision['collision_profile_bytes_exported'] is False, collision
+          assert collision['instruction_bytes_exported'] is False, collision
+          assert collision['frame_pixels_exported'] is False and collision['audio_exported'] is False, collision
           assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
           print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
           print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
           print('STAGE225_SYNTHETIC_OBJECT_RECORD_SNAPSHOT_PASS')
           print('STAGE227_SYNTHETIC_COLLISION_EVENT_WRITER_TRACE_PASS')
+          print('STAGE229_SYNTHETIC_COLLISION_PROFILE_NUMERIC_PASS')
           PY
           rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json
           find cpu-trace-emulator -type f -print0 | xargs -0 file

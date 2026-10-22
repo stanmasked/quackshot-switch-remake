@@ -1,10 +1,12 @@
 /*
- * Stage219: bounded numeric-only 68000 write tracing for selected Work RAM.
+ * Stage219/229: bounded numeric-only 68000 write and selected-PC tracing.
  *
  * Appended to pinned libretro/libretro.c only in a separate HOOK_CPU=1
- * research build. The hook records frame index, instruction PC, CPU address,
- * access width and numeric write value for a fixed set of small RAM windows.
- * It never exports instruction bytes, ROM bytes, RAM dumps, VRAM, or pixels.
+ * research build. The hook records frame, instruction PC, CPU address, access
+ * width and numeric write value for fixed small Work RAM windows. At the one
+ * selected EE09 writer PC (0x00B866), it also records A0 and decodes the
+ * numeric longword at SP from word-swapped Work RAM to identify the caller.
+ * No raw stack, instruction, ROM, RAM, VRAM or framebuffer bytes are exported.
  */
 #include <stdint.h>
 #include "../core/debug/cpuhook.h"
@@ -30,7 +32,22 @@ typedef struct
     unsigned int pc;
     unsigned int a0;
     unsigned int ccr;
+    unsigned int sp;
+    unsigned int stack_return_pc;
 } quackshot_cpu_pc_trace_event;
+
+static unsigned int quackshot_work_ram_word(unsigned int offset)
+{
+    offset &= 0xFFFFU;
+    return (unsigned int)work_ram[offset] |
+           ((unsigned int)work_ram[(offset + 1U) & 0xFFFFU] << 8);
+}
+
+static unsigned int quackshot_work_ram_long(unsigned int offset)
+{
+    return (quackshot_work_ram_word(offset) << 16) |
+           quackshot_work_ram_word(offset + 2U);
+}
 
 static quackshot_cpu_trace_event quackshot_cpu_trace_events[QS_CPU_TRACE_MAX_EVENTS];
 static quackshot_cpu_pc_trace_event quackshot_cpu_pc_trace_events[QS_CPU_PC_TRACE_MAX_EVENTS];
@@ -110,10 +127,18 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
             quackshot_cpu_pc_trace_watched(pc))
         {
             unsigned int a0 = m68k_get_reg(M68K_REG_A0) & 0xFFFFFFU;
+            unsigned int sp = 0U;
+            unsigned int stack_return_pc = 0U;
             int player_record = (a0 == 0xFFA2C0U);
             int collision_event_writer =
                 quackshot_cpu_trace_overlaps(pc, 1, 0x00B866U, 0x00B868U);
-            /* Only at this one writer PC, preserve any A0 value as numeric context. */
+            /* Only this one instruction captures the numeric stack top; no stack bytes are exported. */
+            if (collision_event_writer)
+            {
+                sp = m68k_get_reg(M68K_REG_SP) & 0xFFFFFFU;
+                if ((sp & 0xFF0000U) == 0xFF0000U)
+                    stack_return_pc = quackshot_work_ram_long(sp & 0xFFFFU) & 0xFFFFFFU;
+            }
             if (player_record || collision_event_writer)
             {
                 if (quackshot_cpu_pc_trace_count_value >= QS_CPU_PC_TRACE_MAX_EVENTS)
@@ -128,6 +153,8 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
                     pc_event->pc = pc;
                     pc_event->a0 = a0;
                     pc_event->ccr = m68k_get_reg(M68K_REG_SR) & 0x1FU;
+                    pc_event->sp = sp;
+                    pc_event->stack_return_pc = stack_return_pc;
                 }
             }
         }
@@ -236,12 +263,14 @@ int quackshot_research_cpu_pc_trace_read(unsigned int index,
                                          unsigned int *frame,
                                          unsigned int *pc,
                                          unsigned int *a0,
-                                         unsigned int *ccr)
+                                         unsigned int *ccr,
+                                         unsigned int *sp,
+                                         unsigned int *stack_return_pc)
 {
     const quackshot_cpu_pc_trace_event *event;
 
     if (index >= quackshot_cpu_pc_trace_count_value ||
-        !frame || !pc || !a0 || !ccr)
+        !frame || !pc || !a0 || !ccr || !sp || !stack_return_pc)
         return 0;
 
     event = &quackshot_cpu_pc_trace_events[index];
@@ -249,6 +278,8 @@ int quackshot_research_cpu_pc_trace_read(unsigned int index,
     *pc = event->pc;
     *a0 = event->a0;
     *ccr = event->ccr;
+    *sp = event->sp;
+    *stack_return_pc = event->stack_return_pc;
     return 1;
 }
 

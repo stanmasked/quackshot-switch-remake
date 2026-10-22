@@ -21,6 +21,8 @@ MAX_CPU_TRACE_WINDOW = 128
 MAX_SAT_SNAPSHOT_FRAMES = 128
 MAX_SAT_SPRITES = 80
 MAX_OBJECT_SNAPSHOT_FRAMES = 128
+MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES = 24
+COLLISION_PROFILE_TABLE_OFFSET = 0x7E500
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -254,7 +256,7 @@ def _prepare_cpu_trace_api(core, window):
     api["quackshot_research_cpu_pc_trace_overflow"].argtypes = []
     api["quackshot_research_cpu_pc_trace_overflow"].restype = C.c_uint32
     api["quackshot_research_cpu_pc_trace_read"].argtypes = (
-        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 4
+        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 6
     )
     api["quackshot_research_cpu_pc_trace_read"].restype = C.c_int
     if not api["quackshot_research_cpu_trace_reset"](*window):
@@ -312,21 +314,23 @@ def _collect_cpu_pc_trace(api, window):
     overflow = int(api["quackshot_research_cpu_pc_trace_overflow"]())
     events = []
     for index in range(count):
-        slots = [C.c_uint32() for _ in range(4)]
+        slots = [C.c_uint32() for _ in range(6)]
         ok = api["quackshot_research_cpu_pc_trace_read"](
             index, *(C.byref(slot) for slot in slots)
         )
         if not ok:
             raise RuntimeError("CPU PC trace event disappeared while reading")
-        frame, pc, a0, ccr = (int(slot.value) for slot in slots)
+        frame, pc, a0, ccr, sp, stack_return_pc = (int(slot.value) for slot in slots)
         events.append({
             "frame": frame,
             "instruction_pc": pc,
             "a0_address": a0,
             "ccr_low5": ccr,
+            "stack_pointer_address": sp,
+            "stack_return_pc": stack_return_pc,
         })
     return {
-        "schema": "quackshot_private_m68k_control_flow_trace_v2",
+        "schema": "quackshot_private_m68k_control_flow_trace_v3",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
         "pc_ranges": [
@@ -340,6 +344,10 @@ def _collect_cpu_pc_trace(api, window):
             "numeric context"
         ),
         "collision_event_writer_pc": "0x00B866",
+        "stack_return_capture": (
+            "At PC 0x00B866 only, SP and the numeric longword at SP are decoded "
+            "from word-swapped Work RAM; raw stack bytes are never exported"
+        ),
         "event_count": count,
         "overflow_count": overflow,
         "events": events,
@@ -475,7 +483,105 @@ def _collect_object_record_snapshot(ram, frame):
         "global_collision_gate_ee62": f"0x{_ram_byte_swapped(ram, 0xEE62):02X}",
     }
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_record_snapshot_frames=()):
+
+def _signed_byte(value):
+    return value - 0x100 if value & 0x80 else value
+
+
+def _signed_word(value):
+    return value - 0x10000 if value & 0x8000 else value
+
+
+def _collect_collision_profile_snapshot(ram, rom_data, frame):
+    """Decode two selected object boxes and their overlap with the game's player rectangle."""
+    if len(ram) < 0x10000:
+        raise RuntimeError("System RAM buffer is too small for collision-profile snapshot")
+    required_rom_size = COLLISION_PROFILE_TABLE_OFFSET + 256 * 4
+    if len(rom_data) < required_rom_size:
+        raise RuntimeError("Private ROM is too small for the complete collision-profile table")
+
+    player_y_min = _signed_word(_ram_word_swapped(ram, 0x8F54))
+    player_y_max = _signed_word(_ram_word_swapped(ram, 0x8F56))
+    player_x_min = _signed_word(_ram_word_swapped(ram, 0x8F58))
+    player_x_max = _signed_word(_ram_word_swapped(ram, 0x8F5A))
+    player_rect = {
+        "x_min": player_x_min,
+        "x_max": player_x_max,
+        "y_min": player_y_min,
+        "y_max": player_y_max,
+    }
+
+    objects = []
+    for base in (0x9000, 0x9040):
+        object_type = _ram_word_swapped(ram, base)
+        substate = _ram_word_swapped(ram, base + 0x02)
+        x_raw = _ram_long_swapped(ram, base + 0x10)
+        y_raw = _ram_long_swapped(ram, base + 0x14)
+        x_integer = _signed_word(_ram_word_swapped(ram, base + 0x10))
+        y_integer = _signed_word(_ram_word_swapped(ram, base + 0x14))
+        profile_index = _ram_byte_swapped(ram, base + 0x24)
+        profile_offset = COLLISION_PROFILE_TABLE_OFFSET + profile_index * 4
+        profile = [_signed_byte(value) for value in rom_data[profile_offset:profile_offset + 4]]
+        if len(profile) != 4:
+            raise RuntimeError("Collision profile table entry is incomplete")
+        y_min_offset, y_max_offset, x_min_offset, x_max_offset = profile
+        bounds = {
+            "x_min": x_integer + x_min_offset,
+            "x_max": x_integer + x_max_offset,
+            "y_min": y_integer + y_min_offset,
+            "y_max": y_integer + y_max_offset,
+        }
+        ix_min = max(player_x_min, bounds["x_min"])
+        ix_max = min(player_x_max, bounds["x_max"])
+        iy_min = max(player_y_min, bounds["y_min"])
+        iy_max = min(player_y_max, bounds["y_max"])
+        overlap = ix_min <= ix_max and iy_min <= iy_max
+        objects.append({
+            "cpu_address": f"0xFF{base:04X}",
+            "ram_offset": f"0x{base:04X}",
+            "object_type": object_type,
+            "substate": substate,
+            "object_flags_0c": _ram_byte_swapped(ram, base + 0x0C),
+            "object_flags_0d": _ram_byte_swapped(ram, base + 0x0D),
+            "object_flag_15": _ram_byte_swapped(ram, base + 0x15),
+            "world_x_fixed16_16": x_raw,
+            "world_x": x_raw / 65536.0,
+            "world_x_integer_used_by_collision": x_integer,
+            "world_y_fixed16_16": y_raw,
+            "world_y": y_raw / 65536.0,
+            "world_y_integer_used_by_collision": y_integer,
+            "animation_pointer": f"0x{_ram_long_swapped(ram, base + 0x20):08X}",
+            "collision_profile_index": profile_index,
+            "collision_profile_table_offset": f"0x{profile_offset:06X}",
+            "collision_profile_offsets_ymin_ymax_xmin_xmax": profile,
+            "collision_bounds": bounds,
+            "overlaps_player_collision_rectangle": overlap,
+            "intersection_with_player": ({
+                "x_min": ix_min, "x_max": ix_max,
+                "y_min": iy_min, "y_max": iy_max,
+            } if overlap else None),
+        })
+
+    return {
+        "schema": "quackshot_private_collision_profile_numeric_v1",
+        "frame": frame,
+        "player_collision_rectangle": player_rect,
+        "objects": objects,
+        "global_event_ee08": f"0x{_ram_byte_swapped(ram, 0xEE08):02X}",
+        "global_event_ee09": f"0x{_ram_byte_swapped(ram, 0xEE09):02X}",
+        "global_collision_gate_ee62": f"0x{_ram_byte_swapped(ram, 0xEE62):02X}",
+        "raw_rom_exported": False,
+        "raw_ram_exported": False,
+        "collision_profile_bytes_exported": False,
+        "instruction_bytes_exported": False,
+        "frame_pixels_exported": False,
+        "audio_exported": False,
+        "collision_geometry_verified": False,
+        "safe_to_modify_switch_physics": False,
+    }
+
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_record_snapshot_frames=(), collision_profile_snapshot_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -527,6 +633,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(object_record_snapshot_frames)) != len(object_record_snapshot_frames)):
         raise ValueError("object_record_snapshot_frames requires up to 128 unique valid frame indices")
     object_frame_set = set(object_record_snapshot_frames)
+    if (type(collision_profile_snapshot_frames) not in (tuple, list) or
+            len(collision_profile_snapshot_frames) > MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES or
+            any(type(f) is not int or f < 0 or f >= frames
+                for f in collision_profile_snapshot_frames) or
+            len(set(collision_profile_snapshot_frames)) != len(collision_profile_snapshot_frames)):
+        raise ValueError("collision_profile_snapshot_frames requires up to 24 unique valid frame indices")
+    collision_profile_frame_set = set(collision_profile_snapshot_frames)
     trace_windows = []
     for label, candidate in (
         ("cpu_write_trace_window", cpu_write_trace_window),
@@ -691,6 +804,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
     sat_api, sat_snapshots = None, []
     object_snapshots = []
+    collision_profile_snapshots = []
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -732,11 +846,15 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             checkpoint_frame = (frame % 60 == 0 or
                                 (ram_window is not None and
                                  ram_window[0] <= frame < ram_window[1]))
-            if checkpoint_frame or frame in object_frame_set:
+            if checkpoint_frame or frame in object_frame_set or frame in collision_profile_frame_set:
                 ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
                 ram = C.string_at(ptr, ram_len) if ptr and ram_len else b""
                 if frame in object_frame_set:
                     object_snapshots.append(_collect_object_record_snapshot(ram, frame))
+                if frame in collision_profile_frame_set:
+                    collision_profile_snapshots.append(
+                        _collect_collision_profile_snapshot(ram, rom_data, frame)
+                    )
                 if checkpoint_frame:
                     changed = []
                     if previous_ram is not None and len(previous_ram) == len(ram):
@@ -839,6 +957,21 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 "player_identity_verified": False,
                 "collision_geometry_verified": False,
             } if object_frame_set else None),
+            "collision_profile_trace": ({
+                "schema": "quackshot_private_collision_profile_trace_v1",
+                "status": "COMPLETE",
+                "frame_indices_requested": sorted(collision_profile_frame_set),
+                "max_frames": MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES,
+                "frames": collision_profile_snapshots,
+                "raw_rom_exported": False,
+                "raw_ram_exported": False,
+                "collision_profile_bytes_exported": False,
+                "instruction_bytes_exported": False,
+                "frame_pixels_exported": False,
+                "audio_exported": False,
+                "collision_geometry_verified": False,
+                "safe_to_modify_switch_physics": False,
+            } if collision_profile_frame_set else None),
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -913,6 +1046,8 @@ def main():
                         help="Comma-separated frames for decoded numeric VDP sprite attributes only (max 128 frames; no raw VRAM)")
     parser.add_argument("--object-record-snapshot-frames", default="",
                         help="Comma-separated frames for decoded numeric fields of candidate object 0xFFA2C0 only (max 128 frames; no raw RAM)")
+    parser.add_argument("--collision-profile-snapshot-frames", default="",
+                        help="Comma-separated frames for numeric collision boxes of objects 0xFF9000 and 0xFF9040 against the game's player rectangle (max 24 frames; no raw ROM/RAM)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -934,6 +1069,9 @@ def main():
                 args.cpu_control_flow_trace_window, args.frames)
             sat_frames = parse_frame_indices(args.sat_snapshot_frames, args.frames)
             object_frames = parse_frame_indices(args.object_record_snapshot_frames, args.frames)
+            collision_profile_frames = parse_frame_indices(args.collision_profile_snapshot_frames, args.frames)
+            if len(collision_profile_frames) > MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES:
+                raise ValueError("--collision-profile-snapshot-frames accepts at most 24 frames")
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
@@ -941,7 +1079,8 @@ def main():
                               cpu_write_trace_window=cpu_trace_window,
                               cpu_control_flow_trace_window=cpu_control_flow_trace_window,
                               sat_snapshot_frames=sat_frames,
-                              object_record_snapshot_frames=object_frames)
+                              object_record_snapshot_frames=object_frames,
+                              collision_profile_snapshot_frames=collision_profile_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
