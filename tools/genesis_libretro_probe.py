@@ -128,7 +128,7 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=()):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -151,6 +151,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 len(set(video_roi_frames)) != len(video_roi_frames)):
             raise ValueError("video ROI frames require 1..24 unique valid frame indices")
         roi_frame_set = set(video_roi_frames)
+    if video_roi_vdp_hook is not None and (video_roi is None or
+            not callable(video_roi_vdp_hook)):
+        raise ValueError("video VDP hook requires a callable and selected ROI")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
@@ -158,7 +161,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
              "frames_without_video_callback": 0,
              "frames_with_multiple_video_callbacks": 0,
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0,
-             "video_roi_samples": [], "video_roi_error": None}
+             "video_roi_samples": [], "video_roi_error": None,
+             "video_roi_vdp_samples": [], "video_roi_vdp_error": None}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
     # This path is never printed, exported, or included in numerical evidence.
@@ -211,7 +215,19 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 state["video_roi_samples"].append({
                     "frame": state["frame"], **metrics
                 })
-            except (ValueError, OverflowError):
+                if video_roi_vdp_hook is not None:
+                    # Research-only read of *numeric* VDP lines while the
+                    # video callback executes. Never export VRAM contents.
+                    values = video_roi_vdp_hook(int(state["frame"]))
+                    if (type(values) not in (tuple, list) or
+                            len(values) != 8 or
+                            any(type(v) is not int or not -1024 <= v <= 1023
+                                for v in values)):
+                        raise ValueError("VDP callback returned unsafe numbers")
+                    state["video_roi_vdp_samples"].append({
+                        "frame": int(state["frame"]), "plane_scroll": list(values)
+                    })
+            except (ValueError, OverflowError, RuntimeError, TypeError):
                 state["video_roi_error"] = "invalid private visual ROI sample"
         if not data or state["frame"] % video_stride or not width or not height:
             return
@@ -303,7 +319,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         if video_roi is not None:
             if (state["video_roi_error"] is not None or
                     sorted(row["frame"] for row in state["video_roi_samples"]) !=
-                    sorted(roi_frame_set)):
+                    sorted(roi_frame_set) or
+                    (video_roi_vdp_hook is not None and
+                     sorted(row["frame"] for row in state["video_roi_vdp_samples"]) !=
+                     sorted(roi_frame_set))):
                 raise RuntimeError("Invalid visual ROI callback cadence or geometry")
         return {
             "schema": "private_genesis_libretro_numeric_probe_v1",
@@ -334,6 +353,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "video_checkpoints": state["frame_checksums"],
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
+            "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
+                                       if video_roi_vdp_hook is not None else None),
             "ram_checkpoints": checkpoints,
             "most_frequently_changed_ram_offsets": [
                 {"offset": f"0x{i:04X}", "checkpoints_changed": count}
