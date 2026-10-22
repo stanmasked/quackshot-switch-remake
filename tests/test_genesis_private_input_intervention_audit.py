@@ -162,11 +162,18 @@ class SyntheticPrivateInputInterventionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "edge-clipped"):
             audit.analyze_pair(left, right)
 
-    def test_ram_camera_and_render_buffer_must_agree_across_rois(self):
+    def test_camera_numeric_baseline_is_pinned(self):
         left, right = self.pair()
         right["runs"]["right"][1]["camera"] += 1
         right["runs"]["right_repeat"][1]["camera"] += 1
-        with self.assertRaisesRegex(ValueError, "differs between ROIs"):
+        with self.assertRaisesRegex(ValueError, "camera/render numeric baseline"):
+            audit.analyze_pair(left, right)
+
+    def test_render_buffer_numeric_baseline_is_pinned(self):
+        left, right = self.pair()
+        right["runs"]["right"][1]["render_buffer"] += 1
+        right["runs"]["right_repeat"][1]["render_buffer"] += 1
+        with self.assertRaisesRegex(ValueError, "camera/render numeric baseline"):
             audit.analyze_pair(left, right)
 
     def test_extra_raw_pixel_or_memory_field_rejected(self):
