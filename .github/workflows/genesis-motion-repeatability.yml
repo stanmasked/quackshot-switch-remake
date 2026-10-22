@@ -21,6 +21,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_genesis_fixedpoint_motion.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_visual_roi_numeric.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_blue_roi_components.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_blue_roi_components_witness.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_city_visual_roi_probe.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_visual_vdp_origin_crosscheck.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_city_same_step_triplet_probe.py' -v
