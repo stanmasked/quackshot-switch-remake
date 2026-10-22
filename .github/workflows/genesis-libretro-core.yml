@@ -238,9 +238,10 @@ jobs:
           # Keep the single definition in cpuhook.c and make the header declaration external.
           sed -i 's/^void (\*cpu_hook)/extern void (*cpu_hook)/' emulator-core-trace/core/debug/cpuhook.h
           grep -q '^extern void (\*cpu_hook)' emulator-core-trace/core/debug/cpuhook.h
-          sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*;/' emulator-core-trace/libretro/link.T
+          sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*; quackshot_research_cpu_pc_trace_*;/' emulator-core-trace/libretro/link.T
           grep -q 'quackshot_research_cpu_trace_reset' emulator-core-trace/libretro/libretro.c
           grep -Fq 'quackshot_research_cpu_trace_*' emulator-core-trace/libretro/link.T
+          grep -Fq 'quackshot_research_cpu_pc_trace_*' emulator-core-trace/libretro/link.T
           make -C emulator-core-trace -f Makefile.libretro clean
           make -C emulator-core-trace -f Makefile.libretro -j2 platform=unix HAVE_CHD=0 HAVE_CDROM=0 HOOK_CPU=1 TARGET_NAME=genesis_plus_gx_cpu_trace
           test -s emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
