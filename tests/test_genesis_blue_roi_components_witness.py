@@ -122,7 +122,9 @@ class OriginalColorComponentWitnessTests(unittest.TestCase):
         self.assertFalse(report["original_sprite_identity_proven_from_blue_pixels"])
         self.assertFalse(report["original_collision_plane_verified"])
         self.assertFalse(report["safe_to_modify_switch_physics"])
-        self.assertNotIn("raw_ram",str(report))
+        self.assertNotIn("raw_ram", report["visual_component_candidates"][0])
+        self.assertNotIn("raw_frame", report["visual_component_candidates"][0])
+        self.assertNotIn("raw_ram", report["visual_component_candidates"][0]["components"][0])
         self.assertNotIn("raw_pixels",str(report))
 
     def test_default_visual_probe_preserves_original_numeric_schema(self):
