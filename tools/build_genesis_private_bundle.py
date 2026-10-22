@@ -21,6 +21,7 @@ SCHEMA = "quackshot_rom_free_genesis_research_bundle_v1"
 MANIFEST = "private-research-manifest.json"
 CORE_NAME = "genesis_plus_gx_libretro.so"
 ENTRYPOINTS = (
+    "genesis_private_bundle_launcher.py",
     "genesis_city_video_vdp_bracket_probe.py",
     "genesis_city_same_step_triplet_probe.py",
     "genesis_city_visual_roi_probe.py",
