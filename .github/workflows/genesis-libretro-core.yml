@@ -286,7 +286,7 @@ jobs:
           data[0x206:0x20e] = bytes.fromhex('33fc123400ffa2e6')
           data[0x20e:0x214] = bytes.fromhex('4ef90000b860')
           data[0xB860:0xB866] = bytes.fromhex('4e714e714e71')
-          data[0xB866:0xB86c] = bytes.fromhex('13fc00ffee09')
+          data[0xB866:0xB86c] = bytes.fromhex('11fc00ffee09')
           data[0xB86c:0xB86e] = bytes.fromhex('60fe')
           Path('ci-only-cpu-trace.gen').write_bytes(data)
           PY
