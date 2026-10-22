@@ -22,6 +22,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_genesis_visual_roi_numeric.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_city_visual_roi_probe.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_visual_vdp_origin_crosscheck.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_city_same_step_triplet_probe.py' -v
           python3 tools/genesis_visual_vdp_origin_crosscheck.py --out city-vdp-visual-crosscheck.json
           python3 -m unittest discover -s tests -p 'test_genesis_city_fractional_fall_probe.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_checkpoint_phase_contract.py' -v
