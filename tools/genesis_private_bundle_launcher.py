@@ -14,9 +14,10 @@ from build_genesis_private_bundle import CORE_NAME, MANIFEST, verify
 from genesis_blue_roi_numeric import validate_roi
 from genesis_city_same_step_triplet_probe import (
     ROM_SHA, INSTRUMENTED_CORE_SHA, validate_instrumented_vdp_archive,
-    VDP_ARCHIVE_PATH, collect as collect_triplet, private_write,
+    VDP_ARCHIVE_PATH, MARKERS, collect as collect_triplet, private_write,
 )
 from genesis_city_video_vdp_bracket_probe import collect as collect_bracket
+from genesis_city_visual_roi_probe import validate_component_sample
 from genesis_libretro_probe import safe_rom, setup_core
 from private_genesis_input_guard import PinnedOriginalInputs
 from private_genesis_report_output import private_output_path
@@ -74,8 +75,45 @@ def _reject_public_checkout_path(bundle_root, private_path):
                 "inside a public git checkout")
 
 
-def prepare_run(bundle_root, rom, output, roi, mode):
+def _validate_component_option(mode, component_candidates):
+    require(type(component_candidates) is bool,
+            "color candidate flag must be a boolean")
+    require(not component_candidates or mode == "triplet",
+            "color candidates require the verified triplet mode")
+
+
+def _validate_component_report(report, roi, enabled):
+    """Fail closed before serializing original-game numeric color candidates."""
+    require(type(report) is dict, "invalid private report")
+    if not enabled:
+        require("visual_component_candidates" not in report,
+                "unexpected private color components when disabled")
+        return
+    require(report.get("schema") ==
+            "quackshot_private_genesis_ram_video_vdp_same_step_v1" and
+            report.get("component_identity_unverified") is True and
+            report.get("safe_to_modify_switch_physics") is False and
+            report.get("original_collision_hitbox_or_contact_plane_verified") is False,
+            "private color report makes unsupported original claims")
+    frames = report.get("frames")
+    candidates = report.get("visual_component_candidates")
+    require(type(frames) is list and type(candidates) is list and
+            len(frames) == len(candidates) == len(MARKERS),
+            "missing original numeric color candidates")
+    for frame, numeric, row in zip(MARKERS, frames, candidates):
+        require(type(numeric) is dict and type(row) is dict and
+                type(numeric.get("frame")) is int and numeric["frame"] == frame and
+                type(row.get("frame")) is int and row["frame"] == frame and
+                type(numeric.get("blue_pixel_count")) is int,
+                "wrong private candidate frame pairing")
+        fields = {k: v for k, v in row.items() if k != "frame"}
+        validate_component_sample(fields, roi, numeric["blue_pixel_count"])
+
+
+def prepare_run(bundle_root, rom, output, roi, mode, *,
+                component_candidates=False):
     """Validate all local prerequisites before opening the original ROM."""
+    _validate_component_option(mode, component_candidates)
     root = Path(bundle_root)
     preflight(root)
     require(mode in MODES, "unknown bounded private experiment mode")
@@ -95,8 +133,12 @@ def prepare_run(bundle_root, rom, output, roi, mode):
     return guard, target
 
 
-def run_private(bundle_root, rom, output, roi, mode):
-    guard, target = prepare_run(bundle_root, rom, output, roi, mode)
+def run_private(bundle_root, rom, output, roi, mode, *,
+                component_candidates=False):
+    _validate_component_option(mode, component_candidates)
+    guard, target = prepare_run(
+        bundle_root, rom, output, roi, mode,
+        component_candidates=component_candidates)
     root = Path(bundle_root)
     core_path = root / CORE_NAME
     # Only after the full manifest and original ROM/core SHA checks pass
@@ -105,8 +147,13 @@ def run_private(bundle_root, rom, output, roi, mode):
     rom_bytes, found_sha = safe_rom(Path(rom), ROM_SHA)
     require(found_sha == ROM_SHA, "original source ROM changed")
     guard()
-    collector = collect_bracket if mode == "bracket" else collect_triplet
-    report = collector(core, metadata, Path(rom), rom_bytes, tuple(roi), guard)
+    if mode == "triplet":
+        report = collect_triplet(
+            core, metadata, Path(rom), rom_bytes, tuple(roi), guard,
+            component_candidates=component_candidates)
+    else:
+        report = collect_bracket(
+            core, metadata, Path(rom), rom_bytes, tuple(roi), guard)
     guard()
     require(type(report) is dict and
             report.get("safe_to_modify_switch_physics") is False and
@@ -114,6 +161,7 @@ def run_private(bundle_root, rom, output, roi, mode):
             report.get("reference_rom_sha256") == ROM_SHA and
             report.get("instrumented_core_sha256") == INSTRUMENTED_CORE_SHA,
             "private report not from pinned numeric experiment")
+    _validate_component_report(report, tuple(roi), component_candidates)
     private_write(report, target, root)
     return None
 
@@ -130,18 +178,22 @@ def main():
     parser.add_argument("--mode", choices=MODES, default="bracket")
     parser.add_argument("--roi", type=int, nargs=4,
                         default=(100, 80, 85, 140))
+    parser.add_argument("--component-candidates", action="store_true",
+                        help="Numeric color groups in triplet only; NOT hitbox")
     args = parser.parse_args()
     try:
         if args.preflight:
-            require(args.rom is None and args.output is None,
-                    "preflight never accepts original ROM/output arguments")
+            require(args.rom is None and args.output is None and
+                    not args.component_candidates,
+                    "preflight never accepts original ROM/output/candidate arguments")
             preflight(args.bundle)
             print("GENESIS_STAGE204_PRIVATE_BUNDLE_PREFLIGHT_PASS")
         else:
             require(args.rom is not None and args.output is not None,
                     "private run needs local ROM and fresh private output")
             run_private(args.bundle, args.rom, args.output,
-                        tuple(args.roi), args.mode)
+                        tuple(args.roi), args.mode,
+                        component_candidates=args.component_candidates)
             print("GENESIS_STAGE204_PRIVATE_NUMERIC_RUN_PASS")
     except (OSError, ValueError, RuntimeError, TypeError, KeyError,
             SyntaxError, json.JSONDecodeError):
