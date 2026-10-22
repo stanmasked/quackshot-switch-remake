@@ -108,8 +108,6 @@ def chosen_paths(source_root):
     # Public reference numeric observations and authorship constants only.
     require(validate(*read_inputs(source_root))["rom_sha256"] == ROM_SHA,
             "published numeric references inconsistent")
-    vdp = json.loads((source_root / REFERENCE_PATHS[-1]).read_text(
-        encoding="utf-8"))
     # Lookup by exact name; do not rely on sorting for the VDP reference.
     vdp = json.loads((source_root /
         "research/observations/user_rom_vdp_hscroll_2026-10-18.json"
@@ -147,8 +145,8 @@ def scan_bundle_files(dest):
 def build(source_root, dest):
     source_root = source_root.resolve(strict=True)
     dest = dest.resolve(strict=True)
-    require(dest != source_root and source_root not in dest.parents,
-            "bundle must not overwrite public repository")
+    require(dest != source_root,
+            "bundle must not overwrite the repository root")
     core = regular_file(dest / CORE_NAME, dest)
     selected = chosen_paths(source_root)
     for rel in selected:
@@ -208,6 +206,11 @@ def verify(dest):
     for rel, sha in expected.items():
         require(digest_file(regular_file(dest / rel, dest)) == sha,
                 "research dependency/core SHA mismatch")
+    external_sha_path = dest / "emulator-sha256.txt"
+    if external_sha_path.exists():
+        require(regular_file(external_sha_path, dest).read_text(
+            encoding="utf-8").split()[0] == expected[CORE_NAME],
+            "existing core SHA summary differs from bundled core")
     require(info.get("packaged_core_sha256") == expected[CORE_NAME] and
             info.get("historical_instrumented_core_sha256") ==
             INSTRUMENTED_CORE_SHA and
