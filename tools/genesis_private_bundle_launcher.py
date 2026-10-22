@@ -143,7 +143,10 @@ def prepare_run(bundle_root, rom, output, roi, mode, *,
     root = Path(bundle_root)
     preflight(root)
     require(mode in MODES, "unknown bounded private experiment mode")
-    validate_roi(roi)
+    _, _, roi_width, roi_height = validate_roi(roi)
+    if component_candidates:
+        require(roi_width * roi_height <= 65536,
+                "blue component ROI exceeds the bounded pixel budget")
     target = private_output_path(output, root)
     rom_path = Path(rom)
     require(rom_path.is_absolute(), "private ROM must use an absolute local path")
