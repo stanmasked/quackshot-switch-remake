@@ -12,6 +12,8 @@ on:
       - "tools/genesis_vdp_hscroll_export.c"
       - "tools/genesis_city_video_vdp_bracket_probe.py"
       - "tools/ci_genesis_vdp_video_callback_smoke.py"
+      - "tools/ci_genesis_blue_components_real_core.py"
+      - "tests/test_ci_genesis_blue_components_real_core.py"
       - "tools/build_genesis_private_bundle.py"
       - "tests/test_build_genesis_private_bundle.py"
       - "tools/genesis_private_bundle_launcher.py"
@@ -145,6 +147,10 @@ jobs:
           PY
           python3 -m unittest discover -s tests -p 'test_ci_genesis_vdp_video_callback_smoke.py' -v
           python3 tools/ci_genesis_vdp_video_callback_smoke.py \
+            --core emulator-core/genesis_plus_gx_libretro.so \
+            --rom ci-only-synthetic.gen
+          python3 -m unittest discover -s tests -p 'test_ci_genesis_blue_components_real_core.py' -v
+          python3 tools/ci_genesis_blue_components_real_core.py \
             --core emulator-core/genesis_plus_gx_libretro.so \
             --rom ci-only-synthetic.gen
           rm -f ci-only-synthetic.gen ci-only-observation.json ci-only-causal.json
