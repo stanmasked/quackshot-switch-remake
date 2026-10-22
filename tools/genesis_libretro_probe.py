@@ -20,6 +20,7 @@ MAX_FRAMES = 10000
 MAX_CPU_TRACE_WINDOW = 128
 MAX_SAT_SNAPSHOT_FRAMES = 128
 MAX_SAT_SPRITES = 80
+MAX_OBJECT_SNAPSHOT_FRAMES = 128
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -411,7 +412,61 @@ def _collect_sat_snapshot(api, frame):
         })
     return {"frame": frame, "entry_count": count, "sprites": sprites}
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=()):
+
+def _ram_byte_swapped(ram, offset):
+    """Read one logical 68000 byte from Genesis Plus GX's word-swapped RAM."""
+    if offset < 0 or offset >= len(ram):
+        raise ValueError("RAM byte offset out of range")
+    return ram[offset ^ 1]
+
+
+def _ram_word_swapped(ram, offset):
+    """Read one logical big-endian 68000 word from the core's host buffer."""
+    if offset < 0 or offset + 2 > len(ram):
+        raise ValueError("RAM word offset out of range")
+    return int.from_bytes(ram[offset:offset + 2], "little")
+
+
+def _ram_long_swapped(ram, offset):
+    """Read one logical 68000 longword while preserving its word order."""
+    return (_ram_word_swapped(ram, offset) << 16) | _ram_word_swapped(ram, offset + 2)
+
+
+def _collect_object_record_snapshot(ram, frame):
+    """Export selected decoded fields from one candidate object, never raw RAM."""
+    if len(ram) < 0x10000:
+        raise RuntimeError("System RAM buffer is too small for the candidate object record")
+    base = 0xA2C0
+    state_word = _ram_word_swapped(ram, base + 0x02)
+    world_x_raw = _ram_long_swapped(ram, base + 0x10)
+    world_y_raw = _ram_long_swapped(ram, base + 0x14)
+    animation_pointer = _ram_long_swapped(ram, base + 0x20)
+    global_gate = _ram_byte_swapped(ram, 0xEE03)
+    return {
+        "frame": frame,
+        "object_cpu_address": "0xFFA2C0",
+        "object_ram_offset": "0xA2C0",
+        "state_word": f"0x{state_word:04X}",
+        "state_code": state_word & 0x7FFF,
+        "new_state_flag": (state_word >> 15) & 1,
+        "animation_sequence": _ram_word_swapped(ram, base + 0x04),
+        "animation_frame": _ram_word_swapped(ram, base + 0x06),
+        "animation_tick": _ram_byte_swapped(ram, base + 0x08),
+        "animation_duration": _ram_byte_swapped(ram, base + 0x09),
+        "object_flags_0d": _ram_byte_swapped(ram, base + 0x0D),
+        "object_flags_0e": _ram_byte_swapped(ram, base + 0x0E),
+        "object_flags_0f": _ram_byte_swapped(ram, base + 0x0F),
+        "world_x_fixed16_16": world_x_raw,
+        "world_x": world_x_raw / 65536.0,
+        "world_y_fixed16_16": world_y_raw,
+        "world_y": world_y_raw / 65536.0,
+        "animation_pointer": f"0x{animation_pointer:08X}",
+        "timer_26": _ram_word_swapped(ram, base + 0x26),
+        "global_gate_ee03": f"0x{global_gate:02X}",
+        "global_gate_bit7": (global_gate >> 7) & 1,
+    }
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_record_snapshot_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -456,6 +511,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(sat_snapshot_frames)) != len(sat_snapshot_frames)):
         raise ValueError("sat_snapshot_frames requires up to 128 unique valid frame indices")
     sat_frame_set = set(sat_snapshot_frames)
+    if (type(object_record_snapshot_frames) not in (tuple, list) or
+            len(object_record_snapshot_frames) > MAX_OBJECT_SNAPSHOT_FRAMES or
+            any(type(f) is not int or not 0 <= f < frames
+                for f in object_record_snapshot_frames) or
+            len(set(object_record_snapshot_frames)) != len(object_record_snapshot_frames)):
+        raise ValueError("object_record_snapshot_frames requires up to 128 unique valid frame indices")
+    object_frame_set = set(object_record_snapshot_frames)
     trace_windows = []
     for label, candidate in (
         ("cpu_write_trace_window", cpu_write_trace_window),
@@ -619,6 +681,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     initialized, loaded = False, False
     cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
     sat_api, sat_snapshots = None, []
+    object_snapshots = []
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -657,24 +720,30 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 state["frames_without_video_callback"] += 1
             elif state["video_callbacks_current_step"] > 1:
                 state["frames_with_multiple_video_callbacks"] += 1
-            if frame % 60 == 0 or (ram_window is not None and ram_window[0] <= frame < ram_window[1]):
+            checkpoint_frame = (frame % 60 == 0 or
+                                (ram_window is not None and
+                                 ram_window[0] <= frame < ram_window[1]))
+            if checkpoint_frame or frame in object_frame_set:
                 ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
                 ram = C.string_at(ptr, ram_len) if ptr and ram_len else b""
-                changed = []
-                if previous_ram is not None and len(previous_ram) == len(ram):
-                    changed = [i for i, (a, b) in enumerate(zip(previous_ram, ram)) if a != b]
-                    ram_change_counts.update(changed)
-                previous_ram = ram
-                if checkpoint_sink is not None:
-                    # Only callers trusted with the local private ROM can see
-                    # transient RAM bytes. The public JSON never embeds them.
-                    checkpoint_sink(frame, ram)
-                checkpoints.append({
-                    "frame": frame,
-                    "input": active,
-                    "ram_changed_address_count": len(changed),
-                    # Neither RAM values nor ROM bytes are exported.
-                })
+                if frame in object_frame_set:
+                    object_snapshots.append(_collect_object_record_snapshot(ram, frame))
+                if checkpoint_frame:
+                    changed = []
+                    if previous_ram is not None and len(previous_ram) == len(ram):
+                        changed = [i for i, (a, b) in enumerate(zip(previous_ram, ram)) if a != b]
+                        ram_change_counts.update(changed)
+                    previous_ram = ram
+                    if checkpoint_sink is not None:
+                        # Only callers trusted with the local private ROM can see
+                        # transient RAM bytes. The public JSON never embeds them.
+                        checkpoint_sink(frame, ram)
+                    checkpoints.append({
+                        "frame": frame,
+                        "input": active,
+                        "ram_changed_address_count": len(changed),
+                        # Neither RAM values nor ROM bytes are exported.
+                    })
         if cpu_trace_active:
             if cpu_write_trace_window is not None:
                 cpu_trace_result = _collect_cpu_trace(cpu_trace_api, trace_window)
@@ -683,6 +752,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             cpu_trace_active = False
         if sat_frame_set and sorted(row["frame"] for row in sat_snapshots) != sorted(sat_frame_set):
             raise RuntimeError("Invalid VDP SAT snapshot frame cadence")
+        if (object_frame_set and
+                sorted(row["frame"] for row in object_snapshots) != sorted(object_frame_set)):
+            raise RuntimeError("Invalid object-record snapshot frame cadence")
         if digest_frame_set:
             if (state["video_digest_error"] is not None or
                     sorted(row["frame"] for row in state["video_frame_digests"]) !=
@@ -744,6 +816,20 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 "audio_exported": False,
                 "sprite_identity_verified": False,
             } if sat_frame_set else None),
+            "object_record_trace": ({
+                "schema": "quackshot_private_object_record_numeric_v1",
+                "status": "COMPLETE",
+                "frame_indices_requested": sorted(object_frame_set),
+                "max_frames": MAX_OBJECT_SNAPSHOT_FRAMES,
+                "frames": object_snapshots,
+                "raw_ram_exported": False,
+                "raw_rom_exported": False,
+                "instruction_bytes_exported": False,
+                "frame_pixels_exported": False,
+                "audio_exported": False,
+                "player_identity_verified": False,
+                "collision_geometry_verified": False,
+            } if object_frame_set else None),
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -756,9 +842,12 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 {"offset": f"0x{i:04X}", "checkpoints_changed": count}
                 for i, count in ram_change_counts.most_common(32)
             ],
-            "limitations": ("No RAM content, video, audio, gameplay positions or private path "
-                            "exported. Changed RAM offsets do not identify Donald's position. "
-                            "Unattended emulation may remain in menus or title screen."),
+            "limitations": ("Raw RAM/ROM bytes, frame pixels, audio and private path are never "
+                            "exported. Selected numeric object coordinates/animation fields are "
+                            "included only when object snapshots are explicitly requested; these "
+                            "do not prove collision geometry or actor identity. Changed RAM offsets "
+                            "do not identify Donald's position. Unattended emulation may remain in "
+                            "menus or title screen."),
         }
     finally:
         if cpu_trace_active and cpu_trace_api is not None:
@@ -813,6 +902,8 @@ def main():
                         help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
     parser.add_argument("--sat-snapshot-frames", default="",
                         help="Comma-separated frames for decoded numeric VDP sprite attributes only (max 128 frames; no raw VRAM)")
+    parser.add_argument("--object-record-snapshot-frames", default="",
+                        help="Comma-separated frames for decoded numeric fields of candidate object 0xFFA2C0 only (max 128 frames; no raw RAM)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -833,13 +924,15 @@ def main():
             cpu_control_flow_trace_window = parse_cpu_trace_window(
                 args.cpu_control_flow_trace_window, args.frames)
             sat_frames = parse_frame_indices(args.sat_snapshot_frames, args.frames)
+            object_frames = parse_frame_indices(args.object_record_snapshot_frames, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
                               video_digest_frames=digest_frames,
                               cpu_write_trace_window=cpu_trace_window,
                               cpu_control_flow_trace_window=cpu_control_flow_trace_window,
-                              sat_snapshot_frames=sat_frames)
+                              sat_snapshot_frames=sat_frames,
+                              object_record_snapshot_frames=object_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
