@@ -213,6 +213,9 @@ CPU_TRACE_WATCH_RANGES = (
 )
 
 CPU_PC_TRACE_RANGES = (
+    (0x9A26, 0x9A40),  # descriptor lookup and header
+    (0x9AC2, 0x9ADC),  # nested cursor offset and normal stream path
+    (0x9B3C, 0x9B4A),  # alternate-layout/mirror path
     (0x0206, 0x0208),  # synthetic CI instruction only
     (0x5D20, 0x5DE0),  # coordinate/state writers
     (0x6100, 0x6160),  # object-state dispatch and movement gate
@@ -234,6 +237,7 @@ def _prepare_cpu_trace_api(core, window):
         "quackshot_research_cpu_pc_trace_count",
         "quackshot_research_cpu_pc_trace_overflow",
         "quackshot_research_cpu_pc_trace_read",
+        "quackshot_research_cpu_pc_trace_a1",
     )
     try:
         api = {name: getattr(core, name) for name in names}
@@ -261,6 +265,8 @@ def _prepare_cpu_trace_api(core, window):
         [C.c_uint32] + [C.POINTER(C.c_uint32)] * 4
     )
     api["quackshot_research_cpu_pc_trace_read"].restype = C.c_int
+    api["quackshot_research_cpu_pc_trace_a1"].argtypes = [C.c_uint32]
+    api["quackshot_research_cpu_pc_trace_a1"].restype = C.c_uint32
     if not api["quackshot_research_cpu_trace_reset"](*window):
         raise RuntimeError("CPU trace core rejected the bounded frame window")
     return api
@@ -310,7 +316,7 @@ def _collect_cpu_trace(api, window):
 
 
 def _collect_cpu_pc_trace(api, window):
-    """Read only selected instruction PCs, A0 and CCR; no instruction bytes."""
+    """Read selected instruction PCs, A0/A1 and CCR only; no instruction bytes."""
     api["quackshot_research_cpu_trace_stop"]()
     count = int(api["quackshot_research_cpu_pc_trace_count"]())
     overflow = int(api["quackshot_research_cpu_pc_trace_overflow"]())
@@ -323,14 +329,16 @@ def _collect_cpu_pc_trace(api, window):
         if not ok:
             raise RuntimeError("CPU PC trace event disappeared while reading")
         frame, pc, a0, ccr = (int(slot.value) for slot in slots)
+        a1 = int(api["quackshot_research_cpu_pc_trace_a1"](index))
         events.append({
             "frame": frame,
             "instruction_pc": pc,
             "a0_address": a0,
+            "a1_address": a1,
             "ccr_low5": ccr,
         })
     return {
-        "schema": "quackshot_private_m68k_control_flow_trace_v1",
+        "schema": "quackshot_private_m68k_control_flow_trace_v2",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
         "pc_ranges": [

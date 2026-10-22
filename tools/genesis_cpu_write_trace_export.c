@@ -29,6 +29,7 @@ typedef struct
     unsigned int frame;
     unsigned int pc;
     unsigned int a0;
+    unsigned int a1;
     unsigned int ccr;
 } quackshot_cpu_pc_trace_event;
 
@@ -85,7 +86,10 @@ static int quackshot_cpu_pc_trace_watched(unsigned int pc)
 {
     pc &= 0xFFFFFFU;
     return
-        quackshot_cpu_trace_overlaps(pc, 1, 0x00000206U, 0x00000208U) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x009A26U, 0x009A40U) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x009AC2U, 0x009ADCU) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x009B3CU, 0x009B4AU) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x00000206U, 0x00000208U)
         quackshot_cpu_trace_overlaps(pc, 1, 0x005D20U, 0x005DE0U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x006100U, 0x006160U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x005E90U, 0x005F80U) ||
@@ -109,6 +113,7 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
             quackshot_cpu_pc_trace_watched(pc))
         {
             unsigned int a0 = m68k_get_reg(M68K_REG_A0) & 0xFFFFFFU;
+            unsigned int a1 = m68k_get_reg(M68K_REG_A1) & 0xFFFFFFU;
             if (a0 == 0xFFA2C0U)
             {
                 if (quackshot_cpu_pc_trace_count_value >= QS_CPU_PC_TRACE_MAX_EVENTS)
@@ -122,6 +127,7 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
                     pc_event->frame = quackshot_cpu_trace_current_frame;
                     pc_event->pc = pc;
                     pc_event->a0 = a0;
+                    pc_event->a1 = a1;
                     pc_event->ccr = m68k_get_reg(M68K_REG_SR) & 0x1FU;
                 }
             }
@@ -225,6 +231,13 @@ unsigned int quackshot_research_cpu_pc_trace_count(void)
 unsigned int quackshot_research_cpu_pc_trace_overflow(void)
 {
     return quackshot_cpu_pc_trace_overflow_value;
+}
+
+unsigned int quackshot_research_cpu_pc_trace_a1(unsigned int index)
+{
+    if (index >= quackshot_cpu_pc_trace_count_value)
+        return 0;
+    return quackshot_cpu_pc_trace_events[index].a1;
 }
 
 int quackshot_research_cpu_pc_trace_read(unsigned int index,

@@ -132,7 +132,12 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         data[descriptor:descriptor + 2] = bytes([header_first, header_second])
         data[descriptor + 2:descriptor + 4] = sequence_word.to_bytes(2, "big")
         adjusted = (sequence_word - 2) & 0xFFFF
-        if not adjusted & 0x8000:
+        if adjusted & 0x8000:
+            target = descriptor + (sequence_word & 0x7FFF)
+            data[target:target + 5] = bytes(
+                [control, 0xAA, 0xBB, animation_byte_24, animation_byte_25]
+            )
+        else:
             target = descriptor + sequence_word
             data[target:target + 3] = bytes(
                 [control, animation_byte_24, animation_byte_25]
@@ -156,12 +161,14 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
         self.assertEqual(resolved["threshold_action"], "inherit_existing_threshold")
 
-    def test_high_bit_sequence_offset_uses_special_path(self):
-        data = self.make_nested_record(sequence_word=0x9000)
+    def test_high_bit_sequence_offset_uses_alternate_layout(self):
+        data = self.make_nested_record(sequence_word=0x8010)
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
-        self.assertEqual(resolved["status"], "special_offset_path")
-        self.assertIsNone(resolved["target_relative_offset"])
-        self.assertIsNone(resolved["animation_byte_24"])
+        self.assertEqual(resolved["status"], "resolved_alternate_layout")
+        self.assertTrue(resolved["alternate_layout"])
+        self.assertEqual(resolved["target_relative_offset"], "0x0018")
+        self.assertEqual(resolved["animation_byte_24"], 9)
+        self.assertEqual(resolved["animation_byte_25"], 9)
 
     def test_high_bit_control_byte_uses_special_path(self):
         data = self.make_nested_record(control=0x80)

@@ -139,6 +139,11 @@ class GenesisFrontendTests(unittest.TestCase):
                                video_digest_frames=frames)
 
 
+    def test_control_flow_trace_ranges_cover_animation_pointer_paths(self):
+        self.assertIn((0x9A26, 0x9A40), probe.CPU_PC_TRACE_RANGES)
+        self.assertIn((0x9AC2, 0x9ADC), probe.CPU_PC_TRACE_RANGES)
+        self.assertIn((0x9B3C, 0x9B4A), probe.CPU_PC_TRACE_RANGES)
+
     def test_parse_cpu_trace_window_is_inclusive_and_strict(self):
         self.assertEqual(probe.parse_cpu_trace_window("3:5", 10), (3, 5))
         self.assertIsNone(probe.parse_cpu_trace_window("", 10))

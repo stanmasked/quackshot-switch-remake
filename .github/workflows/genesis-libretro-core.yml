@@ -251,7 +251,351 @@ jobs:
           test -s emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_reset$'
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_read$'
-          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_pc_trace_read$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_pc_trace_read
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_count$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_read$'
+          ldd emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
+          mkdir -p cpu-trace-emulator/tools
+          cp emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so cpu-trace-emulator/
+          cp emulator-core-trace/LICENSE.txt cpu-trace-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py cpu-trace-emulator/tools/
+          sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
+          printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
+            'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
+            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
+            'PC trace records selected PCs and A0/A1/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
+            'Candidate-object snapshots expose only fixed-point X/Y, two allowlisted words, two bytes and one numeric longword; no raw RAM is exported.' \
+            'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
+            'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
+            'See LICENSE.txt; modified upstream source is included in the source archive.' \
+            > cpu-trace-emulator/BUILD_PROVENANCE.txt
+          tar --exclude='.git' --exclude='*.o' --exclude='*.so' --exclude='*.a' \
+            -czf "$GITHUB_WORKSPACE/cpu-trace-emulator/genesis-plus-gx-cpu-trace-source.tar.gz" \
+            -C emulator-core-trace .
+          cp tools/genesis_cpu_write_trace_export.c cpu-trace-emulator/
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI SYNTHETIC CPU TRACE ONLY'.ljust(48, b' ')
+          data[0x150:0x180] = b'NO GAME ASSETS OR ORIGINAL ROM'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x18e:0x190] = (0x207c).to_bytes(2, 'big')
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x20e] = bytes.fromhex('207c00ffa2c033fc123400ffa2e6')
+          data[0x20e:0x210] = bytes.fromhex('60fe')
+          Path('ci-only-cpu-trace.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py \
+            --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
+            --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
+            --cpu-write-trace-window 0:89 --cpu-control-flow-trace-window 0:89 \
+            --sat-snapshot-frames 0,89 \
+            --output ci-only-cpu-trace-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('ci-only-cpu-trace-observation.json').read_text())
+          trace = report['cpu_write_trace']
+          assert trace['schema'] == 'quackshot_private_m68k_cpu_write_trace_v1', trace
+          assert trace['status'] == 'COMPLETE' and trace['overflow_count'] == 0, trace
+          assert trace['frame_window_inclusive'] == [0, 89], trace
+          assert trace['event_count'] == 1 and len(trace['events']) == 1, trace
+          event = trace['events'][0]
+          assert event == {
+              'frame': 0, 'instruction_pc': 0x206, 'cpu_address': 0xFFA2E6,
+              'ram_offset': 0xA2E6, 'width_bytes': 2, 'write_value': 0x1234
+          }, event
+          assert trace['raw_rom_exported'] is False, trace
+          assert trace['raw_ram_exported'] is False, trace
+          assert trace['instruction_bytes_exported'] is False, trace
+          pc_trace = report['cpu_control_flow_trace']
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
+          assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
+          assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
+          assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
+          pc_event = pc_trace['events'][0]
+          assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0x206, pc_event
+          assert pc_event['a0_address'] == 0xFFA2C0, pc_event
+          assert 0 <= pc_event['a1_address'] <= 0xFFFFFF, pc_event
+          assert 0 <= pc_event['ccr_low5'] <= 0x1F, pc_event
+          assert pc_trace['raw_rom_exported'] is False, pc_trace
+          assert pc_trace['raw_ram_exported'] is False, pc_trace
+          assert pc_trace['instruction_bytes_exported'] is False, pc_trace
+          sat = report['sat_sprite_trace']
+          assert sat['schema'] == 'quackshot_private_genesis_vdp_sat_numeric_v1', sat
+          assert sat['status'] == 'COMPLETE', sat
+          assert sat['frame_indices_requested'] == [0, 89], sat
+          assert len(sat['frames']) == 2, sat
+          assert sat['raw_vram_exported'] is False and sat['raw_sat_bytes_exported'] is False, sat
+          assert sat['frame_pixels_exported'] is False and sat['audio_exported'] is False, sat
+          for snapshot in sat['frames']:
+            assert snapshot['entry_count'] == len(snapshot['sprites']) <= 80, snapshot
+            for sprite in snapshot['sprites']:
+              assert 0 <= sprite['sprite_index'] < 80, sprite
+              assert -128 <= sprite['x_screen'] <= 383, sprite
+              assert -128 <= sprite['y_screen'] <= 383, sprite
+              assert sprite['width'] in (8, 16, 24, 32), sprite
+              assert sprite['height'] in (8, 16, 24, 32), sprite
+              assert 0 <= sprite['pattern_index'] <= 0x7FF, sprite
+              assert 0 <= sprite['palette'] <= 3, sprite
+              assert sprite['priority'] in (0, 1) and sprite['hflip'] in (0, 1) and sprite['vflip'] in (0, 1), sprite
+              assert 0 <= sprite['next_link'] < 80, sprite
+          assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
+          print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
+          print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI OBJECT SNAPSHOT TEST'.ljust(48, b' ')
+          data[0x150:0x180] = b'NO ORIGINAL GAME ASSETS'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x18e:0x190] = (0x207c).to_bytes(2, 'big')
+          program = bytes.fromhex(
+              '207c00ffa2c0'
+              '33fc003d00ffa2d0'
+              '33fc800000ffa2d2'
+              '33fc00b000ffa2d4'
+              '33fc400000ffa2d6'
+              '33fc001b00ffa2c4'
+              '33fc000c00ffa2c6'
+              '33fc050800ffa2c8'
+              '33fc000200ffa2e0'
+              '33fc137200ffa2e2'
+              '60fe')
+          data[0x200:0x200 + len(program)] = program
+          Path('ci-only-object-state.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py \
+            --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
+            --rom ci-only-object-state.gen --frames 90 --video-stride 1 \
+            --object-state-snapshot-frames 0,89 \
+            --output ci-only-object-state-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('ci-only-object-state-observation.json').read_text())
+          trace = report['candidate_object_state_trace']
+          assert trace['schema'] == 'quackshot_private_candidate_object_state_numeric_v1', trace
+          assert trace['status'] == 'COMPLETE', trace
+          assert trace['frame_indices_requested'] == [0, 89], trace
+          assert trace['candidate_object_cpu_base'] == '0xFFA2C0', trace
+          assert len(trace['frames']) == 2, trace
+          for sample in trace['frames']:
+              assert sample['world_x'] == {
+                  'integer': 61, 'fraction_u16': 0x8000, 'fixed_16_16': 61.5
+              }, sample
+              assert sample['world_y'] == {
+                  'integer': 176, 'fraction_u16': 0x4000, 'fixed_16_16': 176.25
+              }, sample
+              assert sample['selected_words'] == {'0x04': 0x001B, '0x06': 0x000C}, sample
+              assert sample['selected_bytes'] == {'0x08': 0x05, '0x09': 0x08}, sample
+              assert sample['pointer_0x20'] == {
+                  'value_u32': 0x00021372, 'hex': '0x00021372'
+              }, sample
+          assert trace['raw_ram_exported'] is False, trace
+          assert trace['raw_rom_exported'] is False, trace
+          assert trace['raw_vram_exported'] is False, trace
+          assert trace['raw_sat_bytes_exported'] is False, trace
+          assert trace['frame_pixels_exported'] is False, trace
+          assert trace['audio_exported'] is False, trace
+          assert 'raw_ram' not in trace and 'ram_bytes' not in trace, trace
+          print('STAGE224_SYNTHETIC_CANDIDATE_OBJECT_STATE_PASS')
+          PY
+          rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json ci-only-object-state.gen ci-only-object-state-observation.json
+          find cpu-trace-emulator -type f -print0 | xargs -0 file
+          if find cpu-trace-emulator -type f | grep -E '\.(gen|rom|sav|srm|bk2|png|wav|mp3)$'; then
+            echo "Unexpected game/media artifact in CPU trace package" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-plus-gx-cpu-write-trace-linux-x64
+          path: cpu-trace-emulator/
+          retention-days: 7
+          if-no-files-found: error
+
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_pc_trace_a1
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_count$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_read$'
+          ldd emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
+          mkdir -p cpu-trace-emulator/tools
+          cp emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so cpu-trace-emulator/
+          cp emulator-core-trace/LICENSE.txt cpu-trace-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py cpu-trace-emulator/tools/
+          sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
+          printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
+            'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
+            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
+            'PC trace records selected PCs and A0/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
+            'Candidate-object snapshots expose only fixed-point X/Y, two allowlisted words, two bytes and one numeric longword; no raw RAM is exported.' \
+            'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
+            'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
+            'See LICENSE.txt; modified upstream source is included in the source archive.' \
+            > cpu-trace-emulator/BUILD_PROVENANCE.txt
+          tar --exclude='.git' --exclude='*.o' --exclude='*.so' --exclude='*.a' \
+            -czf "$GITHUB_WORKSPACE/cpu-trace-emulator/genesis-plus-gx-cpu-trace-source.tar.gz" \
+            -C emulator-core-trace .
+          cp tools/genesis_cpu_write_trace_export.c cpu-trace-emulator/
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI SYNTHETIC CPU TRACE ONLY'.ljust(48, b' ')
+          data[0x150:0x180] = b'NO GAME ASSETS OR ORIGINAL ROM'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x18e:0x190] = (0x207c).to_bytes(2, 'big')
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x20e] = bytes.fromhex('207c00ffa2c033fc123400ffa2e6')
+          data[0x20e:0x210] = bytes.fromhex('60fe')
+          Path('ci-only-cpu-trace.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py \
+            --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
+            --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
+            --cpu-write-trace-window 0:89 --cpu-control-flow-trace-window 0:89 \
+            --sat-snapshot-frames 0,89 \
+            --output ci-only-cpu-trace-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('ci-only-cpu-trace-observation.json').read_text())
+          trace = report['cpu_write_trace']
+          assert trace['schema'] == 'quackshot_private_m68k_cpu_write_trace_v1', trace
+          assert trace['status'] == 'COMPLETE' and trace['overflow_count'] == 0, trace
+          assert trace['frame_window_inclusive'] == [0, 89], trace
+          assert trace['event_count'] == 1 and len(trace['events']) == 1, trace
+          event = trace['events'][0]
+          assert event == {
+              'frame': 0, 'instruction_pc': 0x206, 'cpu_address': 0xFFA2E6,
+              'ram_offset': 0xA2E6, 'width_bytes': 2, 'write_value': 0x1234
+          }, event
+          assert trace['raw_rom_exported'] is False, trace
+          assert trace['raw_ram_exported'] is False, trace
+          assert trace['instruction_bytes_exported'] is False, trace
+          pc_trace = report['cpu_control_flow_trace']
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v1', pc_trace
+          assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
+          assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
+          assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
+          pc_event = pc_trace['events'][0]
+          assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0x206, pc_event
+          assert pc_event['a0_address'] == 0xFFA2C0, pc_event
+          assert 0 <= pc_event['ccr_low5'] <= 0x1F, pc_event
+          assert pc_trace['raw_rom_exported'] is False, pc_trace
+          assert pc_trace['raw_ram_exported'] is False, pc_trace
+          assert pc_trace['instruction_bytes_exported'] is False, pc_trace
+          sat = report['sat_sprite_trace']
+          assert sat['schema'] == 'quackshot_private_genesis_vdp_sat_numeric_v1', sat
+          assert sat['status'] == 'COMPLETE', sat
+          assert sat['frame_indices_requested'] == [0, 89], sat
+          assert len(sat['frames']) == 2, sat
+          assert sat['raw_vram_exported'] is False and sat['raw_sat_bytes_exported'] is False, sat
+          assert sat['frame_pixels_exported'] is False and sat['audio_exported'] is False, sat
+          for snapshot in sat['frames']:
+            assert snapshot['entry_count'] == len(snapshot['sprites']) <= 80, snapshot
+            for sprite in snapshot['sprites']:
+              assert 0 <= sprite['sprite_index'] < 80, sprite
+              assert -128 <= sprite['x_screen'] <= 383, sprite
+              assert -128 <= sprite['y_screen'] <= 383, sprite
+              assert sprite['width'] in (8, 16, 24, 32), sprite
+              assert sprite['height'] in (8, 16, 24, 32), sprite
+              assert 0 <= sprite['pattern_index'] <= 0x7FF, sprite
+              assert 0 <= sprite['palette'] <= 3, sprite
+              assert sprite['priority'] in (0, 1) and sprite['hflip'] in (0, 1) and sprite['vflip'] in (0, 1), sprite
+              assert 0 <= sprite['next_link'] < 80, sprite
+          assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
+          print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
+          print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
+          PY
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI OBJECT SNAPSHOT TEST'.ljust(48, b' ')
+          data[0x150:0x180] = b'NO ORIGINAL GAME ASSETS'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x18e:0x190] = (0x207c).to_bytes(2, 'big')
+          program = bytes.fromhex(
+              '207c00ffa2c0'
+              '33fc003d00ffa2d0'
+              '33fc800000ffa2d2'
+              '33fc00b000ffa2d4'
+              '33fc400000ffa2d6'
+              '33fc001b00ffa2c4'
+              '33fc000c00ffa2c6'
+              '33fc050800ffa2c8'
+              '33fc000200ffa2e0'
+              '33fc137200ffa2e2'
+              '60fe')
+          data[0x200:0x200 + len(program)] = program
+          Path('ci-only-object-state.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py \
+            --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
+            --rom ci-only-object-state.gen --frames 90 --video-stride 1 \
+            --object-state-snapshot-frames 0,89 \
+            --output ci-only-object-state-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('ci-only-object-state-observation.json').read_text())
+          trace = report['candidate_object_state_trace']
+          assert trace['schema'] == 'quackshot_private_candidate_object_state_numeric_v1', trace
+          assert trace['status'] == 'COMPLETE', trace
+          assert trace['frame_indices_requested'] == [0, 89], trace
+          assert trace['candidate_object_cpu_base'] == '0xFFA2C0', trace
+          assert len(trace['frames']) == 2, trace
+          for sample in trace['frames']:
+              assert sample['world_x'] == {
+                  'integer': 61, 'fraction_u16': 0x8000, 'fixed_16_16': 61.5
+              }, sample
+              assert sample['world_y'] == {
+                  'integer': 176, 'fraction_u16': 0x4000, 'fixed_16_16': 176.25
+              }, sample
+              assert sample['selected_words'] == {'0x04': 0x001B, '0x06': 0x000C}, sample
+              assert sample['selected_bytes'] == {'0x08': 0x05, '0x09': 0x08}, sample
+              assert sample['pointer_0x20'] == {
+                  'value_u32': 0x00021372, 'hex': '0x00021372'
+              }, sample
+          assert trace['raw_ram_exported'] is False, trace
+          assert trace['raw_rom_exported'] is False, trace
+          assert trace['raw_vram_exported'] is False, trace
+          assert trace['raw_sat_bytes_exported'] is False, trace
+          assert trace['frame_pixels_exported'] is False, trace
+          assert trace['audio_exported'] is False, trace
+          assert 'raw_ram' not in trace and 'ram_bytes' not in trace, trace
+          print('STAGE224_SYNTHETIC_CANDIDATE_OBJECT_STATE_PASS')
+          PY
+          rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json ci-only-object-state.gen ci-only-object-state-observation.json
+          find cpu-trace-emulator -type f -print0 | xargs -0 file
+          if find cpu-trace-emulator -type f | grep -E '\.(gen|rom|sav|srm|bk2|png|wav|mp3)$'; then
+            echo "Unexpected game/media artifact in CPU trace package" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-plus-gx-cpu-write-trace-linux-x64
+          path: cpu-trace-emulator/
+          retention-days: 7
+          if-no-files-found: error
+
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_count$'
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_read$'
           ldd emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so

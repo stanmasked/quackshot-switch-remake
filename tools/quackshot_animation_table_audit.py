@@ -158,11 +158,11 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
 
 
 def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
-    """Resolve one animation-sequence cursor to a numeric subrecord summary.
+    """Resolve one animation cursor to a numeric subrecord summary.
 
-    This mirrors the decoded 68000 path: directory selection via +0x04, a
-    record-relative word lookup via +0x06, and the leading control byte that
-    determines whether the following two bytes are copied to +0x24/+0x25.
+    The high bit of the adjusted offset selects an alternate subrecord layout:
+    it is cleared for address calculation, and the two animation bytes are
+    read after two additional layout bytes.
     """
     directory = parse_offset_directory(rom_bytes, table_base)
     if type(selector) is not int or not 0 <= selector < directory["entry_count"]:
@@ -184,6 +184,9 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
         rom_bytes[cursor_word:cursor_word + 2], "big", signed=False
     )
     adjusted_word = (sequence_word - 2) & 0xFFFF
+    alternate_layout = bool(adjusted_word & 0x8000)
+    offset_word = adjusted_word & 0x7FFF if alternate_layout else adjusted_word
+    target = descriptor + 2 + offset_word
     common = {
         "selector": selector,
         "cursor": cursor,
@@ -193,26 +196,15 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
         "header_second_byte": header_second,
         "sequence_word": f"0x{sequence_word:04X}",
         "adjusted_sequence_word": f"0x{adjusted_word:04X}",
+        "offset_word_after_flag": f"0x{offset_word:04X}",
+        "alternate_layout": alternate_layout,
         "threshold_action": (
             "inherit_existing_threshold" if header_second & 0x80
             else "set_threshold_from_header"
         ),
     }
 
-    if adjusted_word & 0x8000:
-        return {
-            **common,
-            "status": "special_offset_path",
-            "target_relative_offset": None,
-            "target_rom_offset": None,
-            "control_byte": None,
-            "special_control_path": None,
-            "animation_byte_24": None,
-            "animation_byte_25": None,
-        }
-
-    target = descriptor + sequence_word
-    if target < 0 or target + 3 > len(rom_bytes):
+    if target < 0 or target + (5 if alternate_layout else 3) > len(rom_bytes):
         raise ValueError("resolved animation subrecord is outside the ROM")
     control = rom_bytes[target]
     if control & 0x80:
@@ -227,15 +219,16 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
             "animation_byte_25": None,
         }
 
+    byte_offset = target + (3 if alternate_layout else 1)
     return {
         **common,
-        "status": "resolved",
+        "status": "resolved_alternate_layout" if alternate_layout else "resolved",
         "target_relative_offset": f"0x{target - table_base:04X}",
         "target_rom_offset": f"0x{target:06X}",
         "control_byte": control,
         "special_control_path": False,
-        "animation_byte_24": rom_bytes[target + 1],
-        "animation_byte_25": rom_bytes[target + 2],
+        "animation_byte_24": rom_bytes[byte_offset],
+        "animation_byte_25": rom_bytes[byte_offset + 1],
     }
 
 def audit_pinned_rom(rom_path):
