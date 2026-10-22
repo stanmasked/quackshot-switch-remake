@@ -59,12 +59,16 @@ def preflight(bundle_root):
 
 
 def _reject_public_checkout_path(bundle_root, private_path):
-    """Do not let original media or private evidence land in an ancestor git tree."""
-    root = Path(bundle_root).resolve(strict=True)
+    """Reject private inputs/outputs in ANY enclosing Git checkout.
+
+    A separate sibling checkout may contain the ROM even when the verified
+    bundle is outside Git. Check ancestors of the *private path* itself,
+    resolving parent symlinks; never print names or file contents.
+    """
+    Path(bundle_root).resolve(strict=True)
     target = Path(private_path).resolve(strict=False)
-    for parent in (root, *root.parents):
-        if (parent / ".git").exists() and (
-                target == parent or parent in target.parents):
+    for parent in (target, *target.parents):
+        if (parent / ".git").exists() or (parent / ".git").is_symlink():
             raise ValueError(
                 "Genesis private launcher: private files cannot reside "
                 "inside a public git checkout")
