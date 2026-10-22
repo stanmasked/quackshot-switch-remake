@@ -23,6 +23,8 @@ on:
       - "tests/test_genesis_offline_numeric_report_audit.py"
       - "tools/genesis_private_cross_roi_consistency.py"
       - "tests/test_genesis_private_cross_roi_consistency.py"
+      - "tools/genesis_private_input_intervention_audit.py"
+      - "tests/test_genesis_private_input_intervention_audit.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -190,6 +192,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_genesis_private_color_launcher.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_offline_numeric_report_audit.py' -v
           python3 -m unittest discover -s tests -p 'test_genesis_private_cross_roi_consistency.py' -v
+          python3 -m unittest discover -s tests -p 'test_genesis_private_input_intervention_audit.py' -v
           python3 tools/build_genesis_private_bundle.py --build --destination rom-free-emulator
           python3 tools/build_genesis_private_bundle.py --verify --destination rom-free-emulator
           (
@@ -201,6 +204,7 @@ jobs:
           import genesis_vdp_scroll_probe
           import genesis_offline_numeric_report_audit
           import genesis_private_cross_roi_consistency
+          import genesis_private_input_intervention_audit
           print('STAGE208_PRIVATE_RECEIPT_AUDITOR_PACKAGE_IMPORTS_PASS')
           PY
           )
