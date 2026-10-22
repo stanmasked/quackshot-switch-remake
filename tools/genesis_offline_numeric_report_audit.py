@@ -121,7 +121,7 @@ def audit_triplet(report):
     roi = report["video_roi"]
     validate_roi(roi)
     require(type(roi) is list and
-            roi[2] * roi[3] <= 65536 if has_components else True,
+            (not has_components or roi[2] * roi[3] <= 65536),
             "connected-color report exceeded ROI budget")
     validate_frame_rows(report["frames"], roi=roi)
     if has_components:
