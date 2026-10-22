@@ -142,6 +142,16 @@ class SecurePrivateColorLauncherTests(unittest.TestCase):
             prepare.assert_not_called()
             loader.assert_not_called()
 
+    def test_large_color_roi_is_rejected_before_original_media_is_opened(self):
+        with mock.patch.object(launcher, "preflight", return_value={}), \
+             mock.patch.object(launcher, "PinnedOriginalInputs") as guard:
+            with self.assertRaisesRegex(ValueError, "pixel budget"):
+                launcher.prepare_run(
+                    Path("/synthetic-bundle"), Path("/synthetic-private.gen"),
+                    Path("/synthetic-private.json"), (0, 0, 257, 256),
+                    "triplet", component_candidates=True)
+            guard.assert_not_called()
+
     def test_preflight_cannot_accept_component_flag_or_print_original_paths(self):
         script=ROOT/"tools"/"genesis_private_bundle_launcher.py"
         with tempfile.TemporaryDirectory(prefix="qs-stage207-") as tmp:
