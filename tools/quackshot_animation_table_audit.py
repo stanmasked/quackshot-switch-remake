@@ -156,6 +156,88 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
     }
 
 
+
+def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
+    """Resolve one animation-sequence cursor to a numeric subrecord summary.
+
+    This mirrors the decoded 68000 path: directory selection via +0x04, a
+    record-relative word lookup via +0x06, and the leading control byte that
+    determines whether the following two bytes are copied to +0x24/+0x25.
+    """
+    directory = parse_offset_directory(rom_bytes, table_base)
+    if type(selector) is not int or not 0 <= selector < directory["entry_count"]:
+        raise ValueError("selector is outside the offset directory")
+    if type(cursor) is not int or cursor < 0:
+        raise ValueError("cursor must be a nonnegative integer")
+
+    descriptor_relative = directory["relative_offsets"][selector]
+    descriptor = table_base + descriptor_relative
+    if descriptor + 2 > len(rom_bytes):
+        raise ValueError("selected descriptor header is outside the ROM")
+
+    header_first = rom_bytes[descriptor]
+    header_second = rom_bytes[descriptor + 1]
+    cursor_word = descriptor + 2 + 2 * cursor
+    if cursor_word + 2 > len(rom_bytes):
+        raise ValueError("selected sequence cursor is outside the ROM")
+    sequence_word = int.from_bytes(
+        rom_bytes[cursor_word:cursor_word + 2], "big", signed=False
+    )
+    adjusted_word = (sequence_word - 2) & 0xFFFF
+    common = {
+        "selector": selector,
+        "cursor": cursor,
+        "descriptor_relative_offset": f"0x{descriptor_relative:04X}",
+        "descriptor_rom_offset": f"0x{descriptor:06X}",
+        "header_first_byte": header_first,
+        "header_second_byte": header_second,
+        "sequence_word": f"0x{sequence_word:04X}",
+        "adjusted_sequence_word": f"0x{adjusted_word:04X}",
+        "threshold_action": (
+            "inherit_existing_threshold" if header_second & 0x80
+            else "set_threshold_from_header"
+        ),
+    }
+
+    if adjusted_word & 0x8000:
+        return {
+            **common,
+            "status": "special_offset_path",
+            "target_relative_offset": None,
+            "target_rom_offset": None,
+            "control_byte": None,
+            "special_control_path": None,
+            "animation_byte_24": None,
+            "animation_byte_25": None,
+        }
+
+    target = descriptor + sequence_word
+    if target < 0 or target + 3 > len(rom_bytes):
+        raise ValueError("resolved animation subrecord is outside the ROM")
+    control = rom_bytes[target]
+    if control & 0x80:
+        return {
+            **common,
+            "status": "special_control_path",
+            "target_relative_offset": f"0x{target - table_base:04X}",
+            "target_rom_offset": f"0x{target:06X}",
+            "control_byte": control,
+            "special_control_path": True,
+            "animation_byte_24": None,
+            "animation_byte_25": None,
+        }
+
+    return {
+        **common,
+        "status": "resolved",
+        "target_relative_offset": f"0x{target - table_base:04X}",
+        "target_rom_offset": f"0x{target:06X}",
+        "control_byte": control,
+        "special_control_path": False,
+        "animation_byte_24": rom_bytes[target + 1],
+        "animation_byte_25": rom_bytes[target + 2],
+    }
+
 def audit_pinned_rom(rom_path):
     """Audit the pinned local ROM; never include its bytes in the result."""
     rom_path = Path(rom_path)

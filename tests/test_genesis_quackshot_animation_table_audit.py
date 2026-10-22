@@ -94,6 +94,14 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertEqual(
             summary["first_16_descriptor_candidates"][9]["header_word"], "0x0104"
         )
+        directory_offsets = {
+            item["index"]: item["relative_offset"]
+            for item in summary["directory_entries"]
+        }
+        self.assertEqual(
+            {index: directory_offsets[index] for index in (1, 3, 5, 27)},
+            {1: "0x0082", 3: "0x00BE", 5: "0x00E0", 27: "0x0086"},
+        )
         self.assertEqual(
             summary["interior_reference_candidates"],
             [
@@ -112,6 +120,66 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertFalse(summary["raw_rom_exported"])
         self.assertNotIn("rom_bytes", summary)
         self.assertNotIn("raw_bytes", summary)
+
+
+    def make_nested_record(self, header_first=2, header_second=4,
+                           sequence_word=0x10, control=0x03,
+                           animation_byte_24=0x09, animation_byte_25=0x09):
+        table_base = 0x100
+        offsets = [8, 0x20, 0x30, 0x40]
+        data = self.make_directory(table_base, offsets, size=0x200)
+        descriptor = table_base + offsets[0]
+        data[descriptor:descriptor + 2] = bytes([header_first, header_second])
+        data[descriptor + 2:descriptor + 4] = sequence_word.to_bytes(2, "big")
+        adjusted = (sequence_word - 2) & 0xFFFF
+        if not adjusted & 0x8000:
+            target = descriptor + sequence_word
+            data[target:target + 3] = bytes(
+                [control, animation_byte_24, animation_byte_25]
+            )
+        return data
+
+    def test_resolves_nested_record_relative_to_descriptor_start(self):
+        data = self.make_nested_record()
+        resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["descriptor_relative_offset"], "0x0008")
+        self.assertEqual(resolved["sequence_word"], "0x0010")
+        self.assertEqual(resolved["target_relative_offset"], "0x0018")
+        self.assertEqual(resolved["control_byte"], 3)
+        self.assertEqual(resolved["animation_byte_24"], 9)
+        self.assertEqual(resolved["animation_byte_25"], 9)
+        self.assertEqual(resolved["threshold_action"], "set_threshold_from_header")
+
+    def test_ff_header_inherits_existing_threshold(self):
+        data = self.make_nested_record(header_second=0xFF)
+        resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
+        self.assertEqual(resolved["threshold_action"], "inherit_existing_threshold")
+
+    def test_high_bit_sequence_offset_uses_special_path(self):
+        data = self.make_nested_record(sequence_word=0x9000)
+        resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
+        self.assertEqual(resolved["status"], "special_offset_path")
+        self.assertIsNone(resolved["target_relative_offset"])
+        self.assertIsNone(resolved["animation_byte_24"])
+
+    def test_high_bit_control_byte_uses_special_path(self):
+        data = self.make_nested_record(control=0x80)
+        resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
+        self.assertEqual(resolved["status"], "special_control_path")
+        self.assertTrue(resolved["special_control_path"])
+        self.assertIsNone(resolved["animation_byte_24"])
+
+    def test_rejects_cursor_outside_rom(self):
+        data = self.make_nested_record()
+        with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
+            AUDIT.resolve_nested_record(data, selector=0, cursor=256, table_base=0x100)
+
+    def test_rejects_selector_outside_directory(self):
+        data = self.make_nested_record()
+        with self.assertRaisesRegex(ValueError, "selector is outside"):
+            AUDIT.resolve_nested_record(data, selector=4, cursor=0, table_base=0x100)
+
 
     def test_pinned_rom_audit_rejects_non_reference_hash(self):
         data = bytearray(0x300)
