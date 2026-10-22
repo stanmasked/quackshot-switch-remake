@@ -263,7 +263,7 @@ jobs:
           sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
-            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
+            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/A1/CCR and parsed VDP SAT tracing.' \
             'PC trace records selected PCs and A0/A1/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
             'Candidate-object snapshots expose only fixed-point X/Y, two allowlisted words, two bytes and one numeric longword; no raw RAM is exported.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
