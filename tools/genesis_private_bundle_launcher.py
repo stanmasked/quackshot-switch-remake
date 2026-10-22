@@ -58,6 +58,18 @@ def preflight(bundle_root):
             "safe_to_modify_switch_physics": False}
 
 
+def _reject_public_checkout_path(bundle_root, private_path):
+    """Do not let original media or private evidence land in an ancestor git tree."""
+    root = Path(bundle_root).resolve(strict=True)
+    target = Path(private_path).resolve(strict=False)
+    for parent in (root, *root.parents):
+        if (parent / ".git").exists() and (
+                target == parent or parent in target.parents):
+            raise ValueError(
+                "Genesis private launcher: private files cannot reside "
+                "inside a public git checkout")
+
+
 def prepare_run(bundle_root, rom, output, roi, mode):
     """Validate all local prerequisites before opening the original ROM."""
     root = Path(bundle_root)
@@ -70,6 +82,8 @@ def prepare_run(bundle_root, rom, output, roi, mode):
     require(rom_path.resolve() != (root / CORE_NAME).resolve() and
             root.resolve() not in rom_path.resolve().parents,
             "original ROM must remain outside the research bundle")
+    _reject_public_checkout_path(root, rom_path)
+    _reject_public_checkout_path(root, target)
     # Reuse the Stage192 inode/content guard; reject changed/symlink media.
     guard = PinnedOriginalInputs(rom_path, root / CORE_NAME,
                                  ROM_SHA, INSTRUMENTED_CORE_SHA)
