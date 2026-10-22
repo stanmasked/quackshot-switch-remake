@@ -436,7 +436,7 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
-            'PC trace records selected PCs and A0/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
+            'PC trace records selected PCs and A0/A1/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
             'Candidate-object snapshots expose only fixed-point X/Y, two allowlisted words, two bytes and one numeric longword; no raw RAM is exported.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
@@ -486,7 +486,7 @@ jobs:
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace
           pc_trace = report['cpu_control_flow_trace']
-          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v1', pc_trace
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
           assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
           assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
           assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
@@ -607,7 +607,7 @@ jobs:
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
             'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
-            'PC trace records selected PCs and A0/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
+            'PC trace records selected PCs and A0/A1/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
             'Candidate-object snapshots expose only fixed-point X/Y, two allowlisted words, two bytes and one numeric longword; no raw RAM is exported.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
             'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
@@ -657,7 +657,7 @@ jobs:
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace
           pc_trace = report['cpu_control_flow_trace']
-          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v1', pc_trace
+          assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
           assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
           assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
           assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
