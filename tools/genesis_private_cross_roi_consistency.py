@@ -25,14 +25,6 @@ def require(condition, message):
         raise ValueError("Private numeric cross-ROI consistency: " + message)
 
 
-def _bbox_inside(box, roi):
-    return (roi[0] < box[0] < box[2] and
-            roi[1] < box[1] < box[3]) if False else (
-        roi[0] < box[0] < box[2] <= roi[0] + roi[2] and
-        roi[1] < box[1] < box[3] <= roi[1] + roi[3]
-    )
-
-
 def _strictly_nested(outer, inner):
     return (outer[0] < inner[0] and outer[1] < inner[1] and
             inner[0] + inner[2] < outer[0] + outer[2] and
