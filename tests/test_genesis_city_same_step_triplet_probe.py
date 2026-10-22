@@ -75,6 +75,26 @@ def verify(traces, reads, digests, roi):
 
 
 class FrameTripletTests(unittest.TestCase):
+    def test_instrumented_vdp_core_sha_is_pinned_to_archived_hardware(self):
+        archive = json.loads(
+            (ROOT / study.VDP_ARCHIVE_PATH).read_text(encoding="utf-8"))
+        self.assertIsNone(study.validate_instrumented_vdp_archive(archive))
+        for section, field, value in (
+            ("root", "rom_free_instrumented_core_sha256", "0"*64),
+            ("root", "reference_rom_sha256", "0"*64),
+            ("root", "original_rom_in_public_repository", True),
+            ("measurement", "sampled_vdp_scanlines", [0, 64]),
+            ("measurement", "VDP_register_11", 2),
+            ("measurement", "identical_right_replays", False),
+        ):
+            with self.subTest(section=section, field=field):
+                changed = copy.deepcopy(archive)
+                target = (changed if section == "root"
+                          else changed["measurement"])
+                target[field] = value
+                with self.assertRaises(ValueError):
+                    study.validate_instrumented_vdp_archive(changed)
+
     def test_fake_valid_triplet_is_limited_to_libretro_step(self):
         result = verify(*fixture())
         self.assertEqual(result["schema"],
