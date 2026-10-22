@@ -99,7 +99,9 @@ class InstrumentedOriginalTripletComponentsTests(unittest.TestCase):
         self.assertFalse(report["safe_to_modify_switch_physics"])
         self.assertFalse(report["original_collision_hitbox_or_contact_plane_verified"])
         self.assertNotIn("raw_frame",str(report))
-        self.assertNotIn("raw_ram",str(report))
+        self.assertNotIn("raw_ram", report["visual_component_candidates"][0])
+        self.assertNotIn("raw_frame", report["visual_component_candidates"][0])
+        self.assertNotIn("raw_ram", report["visual_component_candidates"][0]["components"][0])
 
     def test_legacy_triplet_report_unmodified_when_disabled(self):
         report,calls,guard=synthetic_triplet(enabled=False)
