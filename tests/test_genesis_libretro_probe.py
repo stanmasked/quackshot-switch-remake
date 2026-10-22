@@ -138,6 +138,20 @@ class GenesisFrontendTests(unittest.TestCase):
                 probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
                                video_digest_frames=frames)
 
+
+    def test_parse_cpu_trace_window_is_inclusive_and_strict(self):
+        self.assertEqual(probe.parse_cpu_trace_window("3:5", 10), (3, 5))
+        self.assertIsNone(probe.parse_cpu_trace_window("", 10))
+        for spec in ("-1:2", "2:1", "0:10", "0:128", "1:2:3", " 1:2", "x:2"):
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                probe.parse_cpu_trace_window(spec, 10 if spec != "0:128" else 129)
+
+    def test_run_core_rejects_invalid_cpu_trace_windows_before_core_access(self):
+        for window in ((0, 2), (2, 1), (-1, 0), (0, 128), [0, "1"]):
+            with self.subTest(window=window), self.assertRaisesRegex(ValueError, "cpu_write_trace_window"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               cpu_write_trace_window=window)
+
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json
         root = Path(__file__).resolve().parents[1]

@@ -10,6 +10,7 @@ on:
       - "tests/test_genesis_blue_roi_components_witness.py"
       - "tests/test_genesis_blue_roi_components_triplet.py"
       - "tools/genesis_vdp_hscroll_export.c"
+      - "tools/genesis_cpu_write_trace_export.c"
       - "tools/genesis_city_video_vdp_bracket_probe.py"
       - "tools/ci_genesis_vdp_video_callback_smoke.py"
       - "tools/ci_genesis_blue_components_real_core.py"
@@ -226,5 +227,85 @@ jobs:
         with:
           name: genesis-plus-gx-rom-free-linux-x64
           path: rom-free-emulator/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Build separate CPU-write-trace core (ROM-free)
+        run: |
+          cp -a emulator-core emulator-core-trace
+          cat tools/genesis_cpu_write_trace_export.c >> emulator-core-trace/libretro/libretro.c
+          sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*;/' emulator-core-trace/libretro/link.T
+          grep -q 'quackshot_research_cpu_trace_reset' emulator-core-trace/libretro/libretro.c
+          grep -Fq 'quackshot_research_cpu_trace_*' emulator-core-trace/libretro/link.T
+          make -C emulator-core-trace -f Makefile.libretro clean
+          make -C emulator-core-trace -f Makefile.libretro -j2 platform=unix HAVE_CHD=0 HAVE_CDROM=0 HOOK_CPU=1 TARGET_NAME=genesis_plus_gx_cpu_trace
+          test -s emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_reset$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_read$'
+          ldd emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
+          mkdir -p cpu-trace-emulator/tools
+          cp emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so cpu-trace-emulator/
+          cp emulator-core-trace/LICENSE.txt cpu-trace-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py cpu-trace-emulator/tools/
+          sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
+          printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
+            'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
+            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write tracing.' \
+            'No original game ROM, raw RAM dump, instruction bytes, framebuffer, graphics or audio included.' \
+            'See LICENSE.txt; modified upstream source is included in the source archive.' \
+            > cpu-trace-emulator/BUILD_PROVENANCE.txt
+          tar --exclude='.git' --exclude='*.o' --exclude='*.so' --exclude='*.a' \
+            -czf "$GITHUB_WORKSPACE/cpu-trace-emulator/genesis-plus-gx-cpu-trace-source.tar.gz" \
+            -C emulator-core-trace .
+          cp tools/genesis_cpu_write_trace_export.c cpu-trace-emulator/
+          python3 - <<'PY'
+          from pathlib import Path
+          data = bytearray(128 * 1024)
+          data[0:4] = (0x00FFFF00).to_bytes(4, 'big')
+          data[4:8] = (0x200).to_bytes(4, 'big')
+          data[0x100:0x110] = b'SEGA MEGA DRIVE '
+          data[0x120:0x150] = b'OPENAI SYNTHETIC CPU TRACE ONLY'.ljust(48, b' ')
+          data[0x150:0x180] = b'NO GAME ASSETS OR ORIGINAL ROM'.ljust(48, b' ')
+          data[0x180:0x18e] = b'GM 99999999-00'
+          data[0x18e:0x190] = (0x33fc).to_bytes(2, 'big')
+          data[0x1a4:0x1a8] = (len(data) - 1).to_bytes(4, 'big')
+          data[0x1f0:0x1f1] = b'U'
+          data[0x200:0x208] = bytes.fromhex('33fc123400ffa2e6')
+          data[0x208:0x20a] = bytes.fromhex('60fe')
+          Path('ci-only-cpu-trace.gen').write_bytes(data)
+          PY
+          python3 tools/genesis_libretro_probe.py \
+            --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
+            --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
+            --cpu-write-trace-window 0:89 --output ci-only-cpu-trace-observation.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path('ci-only-cpu-trace-observation.json').read_text())
+          trace = report['cpu_write_trace']
+          assert trace['schema'] == 'quackshot_private_m68k_cpu_write_trace_v1', trace
+          assert trace['status'] == 'COMPLETE' and trace['overflow_count'] == 0, trace
+          assert trace['frame_window_inclusive'] == [0, 89], trace
+          assert trace['event_count'] == 1 and len(trace['events']) == 1, trace
+          event = trace['events'][0]
+          assert event == {
+              'frame': 0, 'instruction_pc': 0x200, 'cpu_address': 0xFFA2E6,
+              'ram_offset': 0xA2E6, 'width_bytes': 2, 'write_value': 0x1234
+          }, event
+          assert trace['raw_rom_exported'] is False, trace
+          assert trace['raw_ram_exported'] is False, trace
+          assert trace['instruction_bytes_exported'] is False, trace
+          assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
+          print('STAGE219_SYNTHETIC_M68K_WRITE_PC_TRACE_PASS')
+          PY
+          rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json
+          find cpu-trace-emulator -type f -print0 | xargs -0 file
+          if find cpu-trace-emulator -type f | grep -E '\.(gen|rom|sav|srm|bk2|png|wav|mp3)$'; then
+            echo "Unexpected game/media artifact in CPU trace package" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-plus-gx-cpu-write-trace-linux-x64
+          path: cpu-trace-emulator/
           retention-days: 7
           if-no-files-found: error
