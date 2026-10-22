@@ -52,12 +52,15 @@ static int quackshot_cpu_trace_watched(unsigned int address, int width)
     w = (unsigned int)width;
 
     return
-        quackshot_cpu_trace_overlaps(offset, w, 0x8F28U, 0x8F2CU) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0x8F28U, 0x8F32U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x8F52U, 0x8F5AU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x9025U, 0x9029U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0x904EU, 0x9052U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xA2D0U, 0xA2E8U) ||
-        quackshot_cpu_trace_overlaps(offset, w, 0xF374U, 0xF378U);
+        quackshot_cpu_trace_overlaps(offset, w, 0xEE3FU, 0xEE43U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xEF00U, 0xEF04U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xF374U, 0xF378U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xFEE8U, 0xFEF0U);
 }
 
 static void quackshot_cpu_trace_hook(hook_type_t type, int width,
