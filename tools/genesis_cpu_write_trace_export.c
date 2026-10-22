@@ -111,11 +111,10 @@ static void quackshot_cpu_trace_hook(hook_type_t type, int width,
         {
             unsigned int a0 = m68k_get_reg(M68K_REG_A0) & 0xFFFFFFU;
             int player_record = (a0 == 0xFFA2C0U);
-            int object_pool_slot = (a0 >= 0xFFA2C0U && a0 < 0xFFA800U &&
-                                    ((a0 - 0xFFA2C0U) & 0x3FU) == 0U);
             int collision_event_writer =
                 quackshot_cpu_trace_overlaps(pc, 1, 0x00B866U, 0x00B868U);
-            if (player_record || (collision_event_writer && object_pool_slot))
+            /* Only at this one writer PC, preserve any A0 value as numeric context. */
+            if (player_record || collision_event_writer)
             {
                 if (quackshot_cpu_pc_trace_count_value >= QS_CPU_PC_TRACE_MAX_EVENTS)
                 {

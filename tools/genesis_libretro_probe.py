@@ -336,8 +336,8 @@ def _collect_cpu_pc_trace(api, window):
         ],
         "object_pointer_filter": (
             "A0 equals 0xFFA2C0 for player-state ranges; for the single "
-            "collision-event writer PC 0x00B866, any aligned 0x40 object-pool "
-            "slot from 0xFFA2C0 through 0xFFA7C0 is accepted"
+            "collision-event writer PC 0x00B866, any A0 value is captured as "
+            "numeric context"
         ),
         "collision_event_writer_pc": "0x00B866",
         "event_count": count,

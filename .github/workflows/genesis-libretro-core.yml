@@ -327,7 +327,7 @@ jobs:
           assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0xB866, pc_event
           assert pc_event['a0_address'] == 0xFFA300, pc_event
           assert pc_trace['collision_event_writer_pc'] == '0x00B866', pc_trace
-          assert '0xFFA7C0' in pc_trace['object_pointer_filter'], pc_trace
+          assert 'any A0 value' in pc_trace['object_pointer_filter'], pc_trace
           assert 0 <= pc_event['ccr_low5'] <= 0x1F, pc_event
           assert pc_trace['raw_rom_exported'] is False, pc_trace
           assert pc_trace['raw_ram_exported'] is False, pc_trace
