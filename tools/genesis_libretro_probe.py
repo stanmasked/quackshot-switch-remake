@@ -192,13 +192,22 @@ def parse_cpu_trace_window(spec, frame_count, limit=MAX_CPU_TRACE_WINDOW):
 CPU_TRACE_WATCH_RANGES = (
     (0x8F28, 0x8F32),
     (0x8F52, 0x8F5A),
+    (0x8F94, 0x8F9A),
     (0x9025, 0x9029),
     (0x904E, 0x9052),
+    (0xA2C8, 0xA2CE),
     (0xA2D0, 0xA2E8),
     (0xEE3F, 0xEE43),
+    (0xEE56, 0xEE5A),
     (0xEF00, 0xEF04),
     (0xF374, 0xF378),
     (0xFEE8, 0xFEF0),
+)
+CPU_TRACE_READ_WATCH_RANGES = (
+    (0x8F94, 0x8F9A),
+    (0xA2C8, 0xA2CE),
+    (0xA2E4, 0xA2E8),
+    (0xEE56, 0xEE5A),
 )
 
 
@@ -227,7 +236,7 @@ def _prepare_cpu_trace_api(core, window):
     api["quackshot_research_cpu_trace_overflow"].argtypes = []
     api["quackshot_research_cpu_trace_overflow"].restype = C.c_uint32
     api["quackshot_research_cpu_trace_read"].argtypes = (
-        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 5
+        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 6
     )
     api["quackshot_research_cpu_trace_read"].restype = C.c_int
     if not api["quackshot_research_cpu_trace_reset"](*window):
@@ -242,29 +251,41 @@ def _collect_cpu_trace(api, window):
     overflow = int(api["quackshot_research_cpu_trace_overflow"]())
     events = []
     for index in range(count):
-        slots = [C.c_uint32() for _ in range(5)]
+        slots = [C.c_uint32() for _ in range(6)]
         ok = api["quackshot_research_cpu_trace_read"](
             index, *(C.byref(slot) for slot in slots)
         )
         if not ok:
             raise RuntimeError("CPU trace event disappeared while reading")
-        frame, pc, address, width, value = (int(slot.value) for slot in slots)
-        events.append({
+        frame, pc, address, width, value, kind = (int(slot.value) for slot in slots)
+        if kind not in (1, 2):
+            raise RuntimeError("CPU trace API version mismatch or invalid access kind")
+        access_kind = "R" if kind == 1 else "W"
+        event = {
             "frame": frame,
             "instruction_pc": pc,
             "cpu_address": address,
             "ram_offset": address & 0xFFFF,
             "width_bytes": width,
-            "write_value": value,
-        })
+            "access_kind": access_kind,
+            "access_value": value,
+        }
+        if access_kind == "W":
+            event["write_value"] = value
+        events.append(event)
     return {
-        "schema": "quackshot_private_m68k_cpu_write_trace_v1",
+        "schema": "quackshot_private_m68k_cpu_access_trace_v2",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
-        "watch_ranges": [
+        "write_watch_ranges": [
             {"start_inclusive": f"0x{start:04X}",
              "end_exclusive": f"0x{end:04X}"}
             for start, end in CPU_TRACE_WATCH_RANGES
+        ],
+        "read_watch_ranges": [
+            {"start_inclusive": f"0x{start:04X}",
+             "end_exclusive": f"0x{end:04X}"}
+            for start, end in CPU_TRACE_READ_WATCH_RANGES
         ],
         "event_count": count,
         "overflow_count": overflow,
@@ -569,7 +590,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "video_digest_frames_requested": sorted(digest_frame_set),
             "video_frame_digests": (state["video_frame_digests"]
                                     if digest_frame_set else None),
-            "cpu_write_trace": cpu_trace_result,
+            "cpu_access_trace": cpu_trace_result,
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -633,8 +654,9 @@ def main():
                         help="Save frame checksums every N frames; use 1 for precise input-response timing")
     parser.add_argument("--video-digest-frames", default="",
                         help="Comma-separated frames to SHA-256 hash transiently; pixels are not saved")
-    parser.add_argument("--cpu-write-trace-window", default="",
-                        help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM-write PC tracing (max 128 frames)")
+    parser.add_argument("--cpu-write-trace-window", "--cpu-access-trace-window",
+                        dest="cpu_write_trace_window", default="",
+                        help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM access tracing (max 128 frames)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
