@@ -842,9 +842,12 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 {"offset": f"0x{i:04X}", "checkpoints_changed": count}
                 for i, count in ram_change_counts.most_common(32)
             ],
-            "limitations": ("No RAM content, video, audio, gameplay positions or private path "
-                            "exported. Changed RAM offsets do not identify Donald's position. "
-                            "Unattended emulation may remain in menus or title screen."),
+            "limitations": ("Raw RAM/ROM bytes, frame pixels, audio and private path are never "
+                            "exported. Selected numeric object coordinates/animation fields are "
+                            "included only when object snapshots are explicitly requested; these "
+                            "do not prove collision geometry or actor identity. Changed RAM offsets "
+                            "do not identify Donald's position. Unattended emulation may remain in "
+                            "menus or title screen."),
         }
     finally:
         if cpu_trace_active and cpu_trace_api is not None:
