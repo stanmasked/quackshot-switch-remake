@@ -149,7 +149,7 @@ jobs:
           cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
           (
             cd rom-free-emulator
-            python3 - <<'PY'
+            PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
           import genesis_libretro_probe
           import genesis_blue_roi_numeric
           import genesis_vdp_scroll_probe
