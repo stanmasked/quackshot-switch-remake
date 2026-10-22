@@ -154,6 +154,20 @@ class FrameTripletTests(unittest.TestCase):
                 ValueError, "VDP hardware"):
                 verify(tr, rd, dg, roi)
 
+    def test_vdp_snapshot_extra_data_and_invalid_types_rejected(self):
+        for extra in ("raw_vram_bytes", "pixel_buffer"):
+            tr, rd, dg, roi = fixture()
+            tr["right"][2220]["vdp_scanlines"][0][extra] = b"fake"
+            tr["right_repeat"][2220]["vdp_scanlines"][0][extra] = b"fake"
+            with self.subTest(extra=extra), self.assertRaisesRegex(
+                ValueError, "VDP sample"):
+                verify(tr, rd, dg, roi)
+        tr, rd, dg, roi = fixture()
+        tr["right"][2220]["vdp_scanlines"][0]["vdp_reg11"] = False
+        tr["right_repeat"][2220]["vdp_scanlines"][0]["vdp_reg11"] = False
+        with self.assertRaisesRegex(ValueError, "VDP sample"):
+            verify(tr, rd, dg, roi)
+
     def test_visual_center_bounds_and_empty_sample_rules(self):
         for mutation in ("center", "box", "count_type", "empty"):
             tr, rd, dg, roi = fixture()
