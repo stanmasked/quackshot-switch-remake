@@ -13,6 +13,7 @@ from pathlib import Path
 import zlib
 
 from genesis_blue_roi_numeric import blue_roi_numeric, validate_roi
+from genesis_blue_roi_components import blue_roi_components_numeric
 
 MAX_ROM_BYTES = 8 * 1024 * 1024
 MAX_FRAMES = 10000
@@ -128,7 +129,7 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -154,6 +155,11 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     if video_roi_vdp_hook is not None and (video_roi is None or
             not callable(video_roi_vdp_hook)):
         raise ValueError("video VDP hook requires a callable and selected ROI")
+    if type(video_roi_components) is not bool or (
+            video_roi_components and video_roi is None):
+        raise ValueError("visual components require a selected ROI and boolean flag")
+    if video_roi_components and video_roi[2] * video_roi[3] > 65536:
+        raise ValueError("visual components require at most 65536 ROI pixels")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
@@ -162,7 +168,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
              "frames_with_multiple_video_callbacks": 0,
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0,
              "video_roi_samples": [], "video_roi_error": None,
-             "video_roi_vdp_samples": [], "video_roi_vdp_error": None}
+             "video_roi_vdp_samples": [], "video_roi_vdp_error": None,
+             "video_roi_components_samples": []}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
     # This path is never printed, exported, or included in numerical evidence.
@@ -215,6 +222,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 state["video_roi_samples"].append({
                     "frame": state["frame"], **metrics
                 })
+                if video_roi_components:
+                    numeric_components = blue_roi_components_numeric(
+                        C.string_at(data, count), int(width), int(height),
+                        int(pitch), int(state["pixel_format"]), video_roi)
+                    state["video_roi_components_samples"].append({
+                        "frame": int(state["frame"]), **numeric_components
+                    })
                 if video_roi_vdp_hook is not None:
                     # Research-only read of *numeric* VDP lines while the
                     # video callback executes. Never export VRAM contents.
@@ -322,6 +336,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     sorted(roi_frame_set) or
                     (video_roi_vdp_hook is not None and
                      sorted(row["frame"] for row in state["video_roi_vdp_samples"]) !=
+                     sorted(roi_frame_set)) or
+                    (video_roi_components and
+                     sorted(row["frame"] for row in state["video_roi_components_samples"]) !=
                      sorted(roi_frame_set))):
                 raise RuntimeError("Invalid visual ROI callback cadence or geometry")
         return {
@@ -355,6 +372,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
                                        if video_roi_vdp_hook is not None else None),
+            "video_roi_components_numeric": (
+                state["video_roi_components_samples"]
+                if video_roi_components else None),
             "ram_checkpoints": checkpoints,
             "most_frequently_changed_ram_offsets": [
                 {"offset": f"0x{i:04X}", "checkpoints_changed": count}
