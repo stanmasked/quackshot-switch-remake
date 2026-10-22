@@ -59,6 +59,12 @@ VISUAL_FIELDS = {
     "blue_centroid_y_milli", "blue_bbox_xyxy_exclusive",
     "source_collision_plane_measured"
 }
+VDP_FIELDS = {
+    "line", "vdp_reg11", "vdp_reg13", "hscroll_vram_base_address",
+    "hscroll_scanline_mask", "plane_A_HScroll_11bit_signed",
+    "plane_B_HScroll_11bit_signed", "plane_A_highbits",
+    "plane_B_highbits"
+}
 
 
 def require(value, problem):
@@ -121,9 +127,16 @@ def validate_triplet(traces, reads, video_digests, roi, *, rom_sha, core_sha):
                         roi[0] <= box[0] < box[2] <= roi[0] + roi[2] and
                         roi[1] <= box[1] < box[3] <= roi[1] + roi[3],
                         "blue ROI centroid/bounds inconsistent")
+            vdp_rows = sample["vdp_scanlines"]
+            require(type(vdp_rows) is list and len(vdp_rows) == len(SCANLINES),
+                    "missing/extra VDP hardware scanline")
+            for row in vdp_rows:
+                require(type(row) is dict and set(row) == VDP_FIELDS and
+                        all(type(v) is int for v in row.values()),
+                        "VDP sample contains forbidden or noninteger data")
             vdp_scenarios[name][frame] = {
                 "render_buffer_RAM_0x852c": sample["render_buffer_ram"],
-                "vdp_scanlines": sample["vdp_scanlines"]
+                "vdp_scanlines": vdp_rows
             }
     require(traces["right"] == traces["right_repeat"],
             "right-run RAM/video/VDP triplets not reproducible")
