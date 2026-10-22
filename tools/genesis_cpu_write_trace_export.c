@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "../core/debug/cpuhook.h"
 #include "../core/m68k/m68k.h"
+#include "../core/vdp_ctrl.h"
 
 #define QS_CPU_TRACE_MAX_EVENTS 65536U
 #define QS_CPU_PC_TRACE_MAX_EVENTS 65536U
@@ -244,4 +245,115 @@ int quackshot_research_cpu_pc_trace_read(unsigned int index,
     *a0 = event->a0;
     *ccr = event->ccr;
     return 1;
+}
+
+/*
+ * Stage223: parsed numeric VDP sprite-attribute-table observations.
+ * This API exposes coordinates and decoded attributes only; it never exports
+ * raw VRAM bytes or raw SAT words. The table is read after retro_run returns.
+ */
+#define QS_SAT_MAX_SPRITES 80U
+
+static int quackshot_research_sat_entry(unsigned int requested,
+                                        unsigned int *sprite_index,
+                                        int *x_screen, int *y_screen,
+                                        unsigned int *width,
+                                        unsigned int *height,
+                                        unsigned int *pattern,
+                                        unsigned int *palette,
+                                        unsigned int *priority,
+                                        unsigned int *hflip,
+                                        unsigned int *vflip,
+                                        unsigned int *next_link)
+{
+    uint16 *sat_words = (uint16 *)&sat[0];
+    uint16 *vram_words = (uint16 *)&vram[satb];
+    unsigned char seen[QS_SAT_MAX_SPRITES] = {0};
+    unsigned int sprite = 0;
+    unsigned int entry;
+
+    for (entry = 0; entry < QS_SAT_MAX_SPRITES; entry++)
+    {
+        unsigned int word_index;
+        unsigned int size_link;
+        unsigned int next;
+        unsigned int attr;
+        unsigned int y_raw;
+        unsigned int x_raw;
+        unsigned int size;
+
+        if (sprite >= QS_SAT_MAX_SPRITES || seen[sprite])
+            return 0;
+        seen[sprite] = 1;
+        word_index = sprite << 2;
+        size_link = sat_words[word_index + 1U];
+        next = size_link & 0x7FU;
+        attr = vram_words[word_index + 2U];
+        y_raw = sat_words[word_index] & 0x1FFU;
+        x_raw = vram_words[word_index + 3U] & 0x1FFU;
+        size = (size_link >> 8) & 0x0FU;
+
+        if (entry == requested)
+        {
+            if (sprite_index) *sprite_index = sprite;
+            if (x_screen) *x_screen = (int)x_raw - 0x80;
+            if (y_screen) *y_screen = (int)y_raw - 0x80;
+            if (width) *width = 8U + (((size >> 2) & 3U) << 3);
+            if (height) *height = 8U + ((size & 3U) << 3);
+            if (pattern) *pattern = attr & 0x7FFU;
+            if (palette) *palette = (attr >> 13) & 3U;
+            if (priority) *priority = (attr >> 15) & 1U;
+            if (hflip) *hflip = (attr >> 11) & 1U;
+            if (vflip) *vflip = (attr >> 12) & 1U;
+            if (next_link) *next_link = next;
+            return 1;
+        }
+
+        if (next == 0U || next >= QS_SAT_MAX_SPRITES || seen[next])
+            return 0;
+        sprite = next;
+    }
+    return 0;
+}
+
+unsigned int quackshot_research_sat_count(void)
+{
+    uint16 *sat_words = (uint16 *)&sat[0];
+    unsigned char seen[QS_SAT_MAX_SPRITES] = {0};
+    unsigned int sprite = 0;
+    unsigned int count;
+
+    for (count = 0; count < QS_SAT_MAX_SPRITES; count++)
+    {
+        unsigned int next;
+        if (sprite >= QS_SAT_MAX_SPRITES || seen[sprite])
+            break;
+        seen[sprite] = 1;
+        next = sat_words[(sprite << 2) + 1U] & 0x7FU;
+        if (next == 0U || next >= QS_SAT_MAX_SPRITES || seen[next])
+        {
+            count++;
+            break;
+        }
+        sprite = next;
+    }
+    return count;
+}
+
+int quackshot_research_sat_read(unsigned int index,
+                                unsigned int *sprite_index,
+                                int *x_screen, int *y_screen,
+                                unsigned int *width, unsigned int *height,
+                                unsigned int *pattern, unsigned int *palette,
+                                unsigned int *priority, unsigned int *hflip,
+                                unsigned int *vflip, unsigned int *next_link)
+{
+    if (index >= QS_SAT_MAX_SPRITES || !sprite_index || !x_screen ||
+        !y_screen || !width || !height || !pattern || !palette ||
+        !priority || !hflip || !vflip || !next_link)
+        return 0;
+
+    return quackshot_research_sat_entry(index, sprite_index, x_screen,
+        y_screen, width, height, pattern, palette, priority, hflip, vflip,
+        next_link);
 }
