@@ -207,7 +207,7 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertEqual(result["selected_bytes"], {"0x08": 0x05, "0x09": 0x08})
         self.assertEqual(result["candidate_flag_0x0D"], 0x00)
         self.assertEqual(probe.CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS,
-                         (0x08, 0x09, 0x0D))
+                         (0x08, 0x09))
         self.assertEqual(result["pointer_0x20"], {
             "value_u32": 0x00021372, "hex": "0x00021372"})
         self.assertNotIn("raw_ram", result)
