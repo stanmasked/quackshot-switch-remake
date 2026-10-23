@@ -269,6 +269,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_shot = 0;
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
+    g->reference_up_fire_frames = 0;
     g->ruins_gate_open = 0; /* every new test scene closes its own gate */
     g->ruins_relic_collected = 0; /* only local relic resets on new entry */
     g->rooftop_bridge_open = 0; /* reconstruct stage 2 pit on every entry */
@@ -364,6 +365,7 @@ static void clear_city_transients(QsGame *g) {
     g->pending_reference_shot = 0;
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
+    g->reference_up_fire_frames = 0; /* no old pose after retry or handoff */
     g->city_air_reward_fx_frames = 0; /* a respawn retires the burst only */
 }
 
@@ -415,6 +417,8 @@ static void respawn(QsGame *g) {
 
 static void hurt(QsGame *g) {
     if (g->hero.hurt_frames) return;
+    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0)
+        g->reference_up_fire_frames = 0;
     if (--g->hero.hearts <= 0) respawn(g);
     else g->hero.hurt_frames = 70;
 }
@@ -1593,7 +1597,31 @@ void qs_step(QsGame *g, QsInput input) {
                 int fire_due_red = g->pending_reference_red;
                 g->pending_reference_shot = 0;
                 g->pending_reference_red = 0;
+                /*
+                 * Stage261: presentation-only first-city upward firing pose.
+                 * The original's stationary UP+B state persisted for 20 frames,
+                 * but its projectile trajectory and special one-frame SAT gap
+                 * are not sufficiently understood to copy into gameplay.
+                 * Tick before edge creation: the trigger frame is frame 1/20.
+                 */
+                if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                    g->stage == 0) {
+                    if (g->reference_up_fire_frames < 0 ||
+                        g->reference_up_fire_frames > QS_CITY_UP_FIRE_POSE_TICKS)
+                        g->reference_up_fire_frames = 0;
+                    else if (g->reference_up_fire_frames > 0)
+                        --g->reference_up_fire_frames;
+                    if (input.left || input.right || input.down ||
+                        input.jump || !g->hero.grounded)
+                        g->reference_up_fire_frames = 0;
+                }
                 if (edge(input.fire, g->previous.fire)) {
+                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                        g->stage == 0 && input.up &&
+                        !input.left && !input.right && !input.down &&
+                        !input.jump && g->hero.grounded)
+                        g->reference_up_fire_frames =
+                            QS_CITY_UP_FIRE_POSE_TICKS;
                     if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
                         /* The city test queues appearance for one step.
                          * Capture the selected ammo NOW: a weapon swap
