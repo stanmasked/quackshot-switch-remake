@@ -201,7 +201,7 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
         "offset_word_after_flag": f"0x{offset_word:04X}",
         "alternate_layout": alternate_layout,
         "threshold_action": (
-            "inherit_existing_threshold" if header_second & 0x80
+            "inherit_existing_threshold" if header_second == 0xFF
             else "set_threshold_from_header"
         ),
     }
