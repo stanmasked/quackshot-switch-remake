@@ -341,6 +341,8 @@ def main():
                         help="Local pinned QuackShot ROM; never uploaded")
     parser.add_argument("--output", type=Path,
                         help="Optional path for numeric-only JSON output")
+    parser.add_argument("--animation-pairs", action="store_true",
+                        help="Include numeric mirror-pair classification")
     args = parser.parse_args()
     try:
         if args.output is not None and (
@@ -349,6 +351,10 @@ def main():
         ):
             raise ValueError("numeric report output must differ from source ROM")
         report = audit_pinned_rom(args.rom)
+        if args.animation_pairs:
+            report["animation_pairs"] = classify_animation_pairs(
+                args.rom.read_bytes(), TABLE_BASE
+            )
         rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
         if args.output:
             # Exclusive creation avoids clobbering prior reports or symlinked
