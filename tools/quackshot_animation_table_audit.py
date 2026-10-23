@@ -250,7 +250,8 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
         ),
     }
 
-    if target < 0 or target + (5 if alternate_layout else 3) > len(rom_bytes):
+    # Special control records consume only the leading control byte.
+    if target < 0 or target + 1 > len(rom_bytes):
         raise ValueError("resolved animation subrecord is outside the ROM")
     control = rom_bytes[target]
     if control & 0x80:
@@ -265,6 +266,8 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
             "animation_byte_25": None,
         }
 
+    if target + (5 if alternate_layout else 3) > len(rom_bytes):
+        raise ValueError("resolved animation subrecord is outside the ROM")
     byte_offset = target + (3 if alternate_layout else 1)
     return {
         **common,
