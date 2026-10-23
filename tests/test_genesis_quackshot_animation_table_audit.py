@@ -336,6 +336,36 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                 truncated, selector=0, cursor=0, table_base=0x100
             )
 
+    def test_special_control_only_requires_control_byte(self):
+        for sequence_word in (0x10, 0x8010):
+            with self.subTest(sequence_word=sequence_word):
+                # One-entry directory; target sits at the last ROM byte.
+                data = bytearray(0x113)
+                data[0x100:0x102] = (2).to_bytes(2, "big")
+                data[0x102:0x104] = bytes([0, 0xFF])
+                data[0x104:0x106] = sequence_word.to_bytes(2, "big")
+                data[0x112] = 0x80
+                result = AUDIT.resolve_nested_record(
+                    data, selector=0, cursor=0, table_base=0x100
+                )
+                self.assertEqual(result["status"], "special_control_path")
+                self.assertEqual(result["control_byte"], 0x80)
+                self.assertIsNone(result["animation_byte_24"])
+                self.assertIsNone(result["animation_byte_25"])
+
+    def test_regular_control_requires_full_payload(self):
+        for sequence_word in (0x10, 0x8010):
+            with self.subTest(sequence_word=sequence_word):
+                data = bytearray(0x113)
+                data[0x100:0x102] = (2).to_bytes(2, "big")
+                data[0x102:0x104] = bytes([0, 0xFF])
+                data[0x104:0x106] = sequence_word.to_bytes(2, "big")
+                data[0x112] = 0x01
+                with self.assertRaisesRegex(ValueError, "outside the ROM"):
+                    AUDIT.resolve_nested_record(
+                        data, selector=0, cursor=0, table_base=0x100
+                    )
+
     def test_special_control_path_is_numeric_only_and_stable(self):
         data = self.make_nested_record(
             sequence_word=0x8010, control=0xFF,
