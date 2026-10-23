@@ -204,9 +204,8 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertEqual(result["world_y"], {
             "integer": 176, "fraction_u16": 0x4000, "fixed_16_16": 176.25})
         self.assertEqual(result["selected_words"], {"0x04": 0x001B, "0x06": 0x000C})
-        self.assertEqual(result["selected_bytes"], {
-            "0x08": 0x05, "0x09": 0x08, "0x0D": 0x00
-        })
+        self.assertEqual(result["selected_bytes"], {"0x08": 0x05, "0x09": 0x08})
+        self.assertEqual(result["candidate_flag_0x0D"], 0x00)
         self.assertEqual(probe.CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS,
                          (0x08, 0x09, 0x0D))
         self.assertEqual(result["pointer_0x20"], {
