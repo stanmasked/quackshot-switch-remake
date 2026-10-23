@@ -214,6 +214,19 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertNotIn("raw_ram", result)
         self.assertNotIn("bytes", result)
 
+    def test_candidate_flag_byte_preserves_full_unsigned_range(self):
+        ram = bytearray(probe.CANDIDATE_OBJECT_RAM_OFFSET +
+                        probe.CANDIDATE_OBJECT_RECORD_BYTES)
+        offset = probe.CANDIDATE_OBJECT_RAM_OFFSET + (0x0D ^ 1)
+        for flag in (0x00, 0x01, 0x7F, 0x80, 0xA5, 0xFF):
+            with self.subTest(flag=flag):
+                ram[offset] = flag
+                result = probe._collect_candidate_object_state(bytes(ram), 0)
+                self.assertEqual(result["candidate_flag_0x0D"], flag)
+                self.assertEqual(
+                    result["selected_bytes"], {"0x08": 0x00, "0x09": 0x00}
+                )
+
     def test_candidate_object_state_rejects_short_ram(self):
         with self.assertRaisesRegex(RuntimeError, "too short"):
             probe._collect_candidate_object_state(bytes(0xA2FF), 0)
