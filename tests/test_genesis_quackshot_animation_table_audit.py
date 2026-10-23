@@ -133,6 +133,25 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertNotIn("raw_bytes", summary)
 
 
+    def test_rejects_non_monotonic_primary_candidate_run(self):
+        table_base = 0x100
+        primary = [
+            0x54, 0x82, 0xB0, 0xBE, 0xCC, 0xE0, 0xF4, 0xF8,
+            0xFC, 0x102, 0x108, 0x116, 0x124, 0x132, 0x140, 0x148,
+        ]
+        primary[1], primary[2] = primary[2], primary[1]
+        rest = [
+            0x156, 0x150, 0x15C, 0x168, 0x174, 0x17E, 0x188, 0x190,
+            0x198, 0x1A2, 0x58, 0x86, 0x1C0, 0x1CA, 0x1D4, 0x1DE,
+            0x1F4, 0x1FA, 0x1E8, 0x1EE, 0x1AC, 0x1B6, 0x200, 0x216,
+            0x224, 0x228,
+        ]
+        offsets = primary + rest
+        data = self.make_directory(table_base, offsets, size=0x500)
+        data[table_base:table_base + 2] = (0x54).to_bytes(2, "big")
+        with self.assertRaisesRegex(ValueError, "not strictly increasing"):
+            AUDIT.summarize_directory(data, table_base)
+
     def test_duplicate_secondary_target_is_classified_as_alias(self):
         table_base = 0x100
         primary = [
