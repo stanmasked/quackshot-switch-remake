@@ -1,5 +1,7 @@
 import hashlib
 import importlib.util
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -455,6 +457,26 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "selector is outside"):
             AUDIT.resolve_nested_record(data, selector=4, cursor=0, table_base=0x100)
 
+
+    def test_cli_refuses_to_overwrite_source_rom_or_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "original.gen"
+            source.write_bytes(bytes([0x00, 0x54, 0xFF, 0x80]))
+            alias = Path(directory) / "alias.gen"
+            alias.symlink_to(source)
+            original = source.read_bytes()
+            for output in (source, alias):
+                with self.subTest(output=str(output)):
+                    completed = subprocess.run(
+                        [
+                            sys.executable, str(MODULE_PATH),
+                            "--rom", str(source), "--output", str(output),
+                        ],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertIn("output must differ from source ROM", completed.stderr)
+                    self.assertEqual(source.read_bytes(), original)
 
     def test_pinned_rom_audit_rejects_non_reference_hash(self):
         data = bytearray(0x300)
