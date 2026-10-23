@@ -427,9 +427,25 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
             rectangle(renderer, (int)s->x - cam, (int)s->y, s->attached ? 16 : 7, 4,
                       s->red ? color(230, 74, 78) : color(255, 225, 108));
     }
-    if ((game->hero.hurt_frames % 8) < 4)
-        rectangle(renderer, (int)game->hero.x - cam, (int)game->hero.y,
-                  12, 20, color(250, 237, 167));
+    if ((game->hero.hurt_frames % 8) < 4) {
+        int hx = (int)game->hero.x - cam;
+        int hy = (int)game->hero.y;
+        rectangle(renderer, hx, hy, 12, 20, color(250, 237, 167));
+        /*
+         * Stage261: original-free, upward-aiming silhouette in the opt-in
+         * city research scene. Never hide the hero for the original ROM's
+         * single-frame SAT anomaly; its rendering mechanism is unproven.
+         */
+        if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+            game->stage == 0 && game->reference_up_fire_frames > 0 &&
+            game->reference_up_fire_frames <= QS_CITY_UP_FIRE_POSE_TICKS) {
+            int muzzle_x = hx + (game->hero.facing > 0 ? 9 : 0);
+            rectangle(renderer, muzzle_x, hy - 7, 3, 9,
+                      color(112, 167, 221));
+            rectangle(renderer, muzzle_x - 1, hy - 9, 5, 3,
+                      color(255, 225, 108));
+        }
+    }
     rectangle(renderer, 0, 0, QS_VIEW_W, 15, color(28, 38, 54));
     for (i = 0; i < 3; i++)
         rectangle(renderer, 8 + i * 14, 4, 10, 8,
