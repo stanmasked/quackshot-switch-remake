@@ -202,6 +202,34 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                 truncated, selector=0, cursor=0, table_base=0x100
             )
 
+    def test_special_control_path_is_numeric_only_and_stable(self):
+        data = self.make_nested_record(
+            sequence_word=0x8010, control=0xFF,
+            animation_byte_24=0xA5, animation_byte_25=0x5A,
+        )
+        first = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        second = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        self.assertEqual(first, second)
+        self.assertEqual(first["status"], "special_control_path")
+        self.assertEqual(first["control_byte"], 0xFF)
+        self.assertIsNone(first["animation_byte_24"])
+        self.assertIsNone(first["animation_byte_25"])
+        self.assertNotIn("raw_bytes", first)
+        self.assertNotIn("rom_bytes", first)
+
+    def test_rejects_invalid_cursor_types_without_coercion(self):
+        data = self.make_nested_record()
+        for cursor in (True, -1, 0.5, "0"):
+            with self.subTest(cursor=cursor):
+                with self.assertRaises(ValueError):
+                    AUDIT.resolve_nested_record(
+                        data, selector=0, cursor=cursor, table_base=0x100
+                    )
+
     def test_rejects_cursor_outside_rom(self):
         data = self.make_nested_record()
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
