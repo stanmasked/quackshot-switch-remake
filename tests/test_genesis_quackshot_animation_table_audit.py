@@ -55,6 +55,29 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "too short for the complete offset directory"):
             AUDIT.parse_offset_directory(bytearray([0, 8]), 0)
 
+    def test_classifies_mirror_pairs_and_special_exception(self):
+        data = bytearray(0x180)
+        base = 0x100
+        offsets = (8, 16, 24, 32)
+        for index, offset in enumerate(offsets):
+            data[base + index * 2:base + index * 2 + 2] = offset.to_bytes(2, "big")
+        for index, (target, alternate) in enumerate(
+            ((0x150, False), (0x150, True),
+             (0x160, False), (0x170, True))
+        ):
+            descriptor = base + offsets[index]
+            data[descriptor:descriptor + 2] = bytes([0, 0xFF])
+            word = target - descriptor + (0x8000 if alternate else 0)
+            data[descriptor + 2:descriptor + 4] = word.to_bytes(2, "big")
+            data[target] = 0x80 if index == 2 else 1
+        summary = AUDIT.classify_animation_pairs(data, base)
+        self.assertEqual(summary["pair_count"], 2)
+        self.assertEqual(summary["cursor_count"], 4)
+        self.assertEqual(summary["mirror_pair_count"], 1)
+        self.assertEqual(len(summary["exceptions"]), 1)
+        self.assertEqual(summary["exceptions"][0]["selectors"], [2, 3])
+        self.assertEqual(summary["exceptions"][0]["special_control_count"], 1)
+
     def test_rejects_odd_directory_byte_length(self):
         data = self.make_directory(0x100, [9], size=0x200)
         with self.assertRaisesRegex(ValueError, "positive even"):
