@@ -183,7 +183,9 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
     sequence_word = int.from_bytes(
         rom_bytes[cursor_word:cursor_word + 2], "big", signed=False
     )
-    adjusted_word = (sequence_word - 2) & 0xFFFF
+    if sequence_word < 2:
+        raise ValueError("selected sequence word is smaller than its two-byte header")
+    adjusted_word = sequence_word - 2
     alternate_layout = bool(adjusted_word & 0x8000)
     offset_word = adjusted_word & 0x7FFF if alternate_layout else adjusted_word
     target = descriptor + 2 + offset_word
