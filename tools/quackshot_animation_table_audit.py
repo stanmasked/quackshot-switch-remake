@@ -280,6 +280,39 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
         "animation_byte_25": rom_bytes[byte_offset + 1],
     }
 
+def classify_animation_pairs(rom_bytes, table_base=TABLE_BASE):
+    """Compute ROM-free-reportable mirror-pair statistics."""
+    directory = parse_offset_directory(rom_bytes, table_base)
+    if directory["entry_count"] % 2:
+        raise ValueError("unpaired animation selector")
+    pairs = []
+    for first in range(0, directory["entry_count"], 2):
+        sequences = []
+        for selector in (first, first + 1):
+            position = table_base + directory["relative_offsets"][selector]
+            sequences.append([
+                resolve_nested_record(rom_bytes, selector, cursor, table_base)
+                for cursor in range(rom_bytes[position] + 1)
+            ])
+        a, b = sequences
+        matches = sum(x["target_rom_offset"] == y["target_rom_offset"]
+                      for x, y in zip(a, b))
+        opposite = sum(x["alternate_layout"] != y["alternate_layout"]
+                       for x, y in zip(a, b))
+        special = sum(x["special_control_path"] for seq in sequences for x in seq)
+        mirror = (len(a) == len(b) == matches == opposite and special == 0)
+        pairs.append({"selectors": [first, first + 1],
+                      "cursor_counts": [len(a), len(b)],
+                      "matching_targets": matches,
+                      "opposite_layout_positions": opposite,
+                      "special_control_count": special,
+                      "full_mirror": mirror})
+    return {"pair_count": len(pairs),
+            "cursor_count": sum(sum(row["cursor_counts"]) for row in pairs),
+            "mirror_pair_count": sum(row["full_mirror"] for row in pairs),
+            "exceptions": [row for row in pairs if not row["full_mirror"]]}
+
+
 def audit_pinned_rom(rom_path):
     """Audit the pinned local ROM; never include its bytes in the result."""
     rom_path = Path(rom_path)
