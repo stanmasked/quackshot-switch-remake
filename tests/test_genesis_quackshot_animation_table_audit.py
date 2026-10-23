@@ -464,8 +464,10 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
             source.write_bytes(bytes([0x00, 0x54, 0xFF, 0x80]))
             alias = Path(directory) / "alias.gen"
             alias.symlink_to(source)
+            hardlink = Path(directory) / "hardlink.gen"
+            hardlink.hardlink_to(source)
             original = source.read_bytes()
-            for output in (source, alias):
+            for output in (source, alias, hardlink):
                 with self.subTest(output=str(output)):
                     completed = subprocess.run(
                         [
