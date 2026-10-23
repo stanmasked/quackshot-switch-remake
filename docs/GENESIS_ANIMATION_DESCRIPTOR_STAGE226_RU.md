@@ -171,3 +171,13 @@ CI для этой новой ревизии ещё требуется пров�
 - логическое значение `True` не принимается как индекс каталога, несмотря на то, что в Python `bool` является подклассом `int`.
 
 Это закрывает ещё два класса невалидного ввода, не меняя обработку корректных дескрипторов. На момент обновления документации свежий CI для этих изменений ещё не получен; результаты прежних запусков с отменёнными задачами не считаются полным проходом.
+
+## Stage234 — exact sentinel for threshold inheritance
+
+The resolver previously treated any descriptor second-header byte with bit 7 set as an inheritance marker. The Stage227 trace notes identify the sentinel as the exact value `0xFF`; the broader mask could therefore misclassify values such as `0x80` and `0xFE`. Commit `7252c7a23065ae16744098e29a91f8bab4762512` changes the condition to exact equality, and `486fc300d031e5b602b5da29fec5c8044ccbb4e7` adds regression tests for ordinary values `0x00, 0x04, 0x7F, 0x80, 0xFE` and the exact `0xFF` sentinel.
+
+All six workflows for the test commit completed successfully: evidence integrity, ROM metadata tests, Switch NRO, Portable gameplay core, Genesis motion repeatability, and Genesis libretro core. A subsequent test-only commit `d380cb42df619d80174c932eb37d6aa9d9770555` adds coverage for `0x7F` in the alternate layout; its CI was still pending at the latest check, so it is not included in the fully-green claim.
+
+## Stage235 — next audit
+
+First verify all workflows for the alternate-layout boundary test. Then extend the numeric-only object-state evidence for flag byte `+0x0D` across existing controlled scenarios (idle, right, left, jump and landing), if the matching private evidence is available. Keep the analysis descriptive until state transitions are independently confirmed; do not infer a flag's meaning solely from correlation. Compare the one known orientation-transition mismatch separately from stable frames. No gameplay physics changes until original-game evidence supports them.
