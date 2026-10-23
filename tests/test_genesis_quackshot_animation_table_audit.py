@@ -305,6 +305,23 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                 data, selector=True, cursor=0, table_base=0x100
             )
 
+    def test_cursor_equal_to_descriptor_sequence_limit_is_allowed(self):
+        data = self.make_nested_record(header_first=2, sequence_word=0x20)
+        descriptor = 0x100 + 8
+        # Cursor 2 selects the third word after the descriptor header.
+        word_at = descriptor + 2 + 2 * 2
+        data[word_at:word_at + 2] = (0x10).to_bytes(2, "big")
+        target = descriptor + 0x10
+        data[target:target + 3] = bytes([0x03, 0x31, 0x42])
+        resolved = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=2, table_base=0x100
+        )
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertEqual(resolved["cursor"], 2)
+        self.assertEqual(resolved["control_byte"], 0x03)
+        self.assertEqual(resolved["animation_byte_24"], 0x31)
+        self.assertEqual(resolved["animation_byte_25"], 0x42)
+
     def test_rejects_cursor_beyond_descriptor_sequence_limit(self):
         data = self.make_nested_record(header_first=2)
         with self.assertRaisesRegex(ValueError, "cursor exceeds selected descriptor"):
