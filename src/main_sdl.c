@@ -4280,6 +4280,50 @@ static int run_upward_pose_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+
+/* Stage264: actual readback of independently drawn vertical projectile;
+ * no original sprite artwork, emulator screenshot or ROM participates. */
+static int run_vertical_projectile_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput input = {0};
+    int x=0, y=0, old_y=0, age;
+    uint32_t gold=0, cyan=0, absent=0;
+    const uint32_t expected_gold = UINT32_C(0xffffe16c);
+    const uint32_t expected_cyan = UINT32_C(0xff70a7dd);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    qs_step(&g,input);
+    if (!g.hero.grounded) return 0;
+    input.up=input.fire=1;
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    input=(QsInput){0};
+    qs_step(&g,input);
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y) ||
+        !upward_pose_pixel(renderer,&g,x,y,&gold) ||
+        !upward_pose_pixel(renderer,&g,x+3,y+3,&cyan) ||
+        gold!=expected_gold || cyan!=expected_cyan) return 0;
+    old_y=y;
+    qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y) ||
+        old_y-y!=8 ||
+        !upward_pose_pixel(renderer,&g,x+3,y+3,&cyan) ||
+        cyan!=expected_cyan) return 0;
+    for(age=2;age<QS_REFERENCE_UPWARD_OBSERVED_FRAMES;age++)
+        qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y) ||
+        !upward_pose_pixel(renderer,&g,60,166,&absent) ||
+        absent==expected_gold) return 0;
+    puts("VERTICAL_PROJECTILE_SDL_PASS: 3-frame delay, gold/cyan raster, measured vertical step and bounded disappearance");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4376,6 +4420,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_air_reward_hud_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     if (!run_upward_pose_sdl_smoke(renderer)) return 1;
+    if (!run_vertical_projectile_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
