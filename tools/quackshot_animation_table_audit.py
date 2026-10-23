@@ -310,6 +310,8 @@ def main():
                         help="Optional path for numeric-only JSON output")
     args = parser.parse_args()
     try:
+        if args.output is not None and args.output.resolve() == args.rom.resolve():
+            raise ValueError("numeric report output must differ from source ROM")
         report = audit_pinned_rom(args.rom)
         rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
         if args.output:
