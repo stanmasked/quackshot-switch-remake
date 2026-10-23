@@ -1,4 +1,5 @@
 #include "qs_game.h"
+#include "qs_reference_projectile_curve.h"
 #include <math.h>
 #include <string.h>
 
@@ -270,6 +271,7 @@ void qs_begin_stage(QsGame *g, int stage) {
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
     g->reference_up_fire_frames = 0;
+    memset(&g->reference_up_projectile, 0, sizeof(g->reference_up_projectile));
     g->ruins_gate_open = 0; /* every new test scene closes its own gate */
     g->ruins_relic_collected = 0; /* only local relic resets on new entry */
     g->rooftop_bridge_open = 0; /* reconstruct stage 2 pit on every entry */
@@ -366,6 +368,7 @@ static void clear_city_transients(QsGame *g) {
     g->pending_reference_red = 0;
     g->reference_jump_steps = 0;
     g->reference_up_fire_frames = 0; /* no old pose after retry or handoff */
+    memset(&g->reference_up_projectile, 0, sizeof(g->reference_up_projectile));
     g->city_air_reward_fx_frames = 0; /* a respawn retires the burst only */
 }
 
@@ -913,6 +916,45 @@ static void update_city_air_reward(QsGame *g) {
         g->city_air_reward_fx_frames = QS_CITY_AIR_REWARD_FX_TICKS;
         if (g->hero.hearts < 3) ++g->hero.hearts;
     }
+}
+
+/* Stage264: read-only, owner-researched screen-space projectile model.
+ * This separately modeled actor never participates in collision or damage. */
+int qs_city_up_projectile_position(const QsGame *g, int *x, int *y) {
+    const QsCityUpProjectile *p;
+    int dx, dy;
+    if (!g || !x || !y || x == y ||
+        g->mode != QS_STAGE || g->stage != 0 ||
+        g->physics_profile != QS_PHYSICS_REFERENCE_CITY) return 0;
+    p = &g->reference_up_projectile;
+    if (p->active != 1 || (p->facing != -1 && p->facing != 1) ||
+        p->world_x < -32 || p->world_x > QS_COLUMNS * QS_TILE + 32 ||
+        p->world_y < -32 || p->world_y > QS_VIEW_H + 32 ||
+        !qs_reference_projectile_offset(QS_REFERENCE_PROJECTILE_UPWARD,
+                                         p->facing, p->age, &dx, &dy))
+        return 0;
+    *x = p->world_x + dx;
+    *y = p->world_y + dy;
+    return 1;
+}
+
+static void advance_reference_up_projectile(QsGame *g) {
+    QsCityUpProjectile *p = &g->reference_up_projectile;
+    if (g->physics_profile != QS_PHYSICS_REFERENCE_CITY || g->stage != 0)
+        return;
+    if (!p->active) {
+        memset(p, 0, sizeof(*p));
+        return;
+    }
+    if (p->active != 1 || p->age < -3 ||
+        p->age >= QS_REFERENCE_UPWARD_OBSERVED_FRAMES - 1 ||
+        (p->facing != -1 && p->facing != 1) ||
+        p->world_x < -32 || p->world_x > QS_COLUMNS * QS_TILE + 32 ||
+        p->world_y < -32 || p->world_y > QS_VIEW_H + 32) {
+        memset(p, 0, sizeof(*p));
+        return;
+    }
+    ++p->age;
 }
 
 static void shoot_as(QsGame *g, int red) {
@@ -1520,6 +1562,7 @@ void qs_step(QsGame *g, QsInput input) {
         sanitize_city_pickups(g);
         sanitize_city_shots(g);
         sanitize_city_weapon_queue(g);
+        advance_reference_up_projectile(g);
         if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY && g->stage == 0) {
             if (g->city_checkpoint_active != 1)
                 g->city_checkpoint_active = 0;
@@ -1616,16 +1659,25 @@ void qs_step(QsGame *g, QsInput input) {
                         g->reference_up_fire_frames = 0;
                 }
                 if (edge(input.fire, g->previous.fire)) {
-                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+                    int upward = g->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
                         g->stage == 0 && input.up &&
                         !input.left && !input.right && !input.down &&
-                        !input.jump && g->hero.grounded)
-                        g->reference_up_fire_frames =
-                            QS_CITY_UP_FIRE_POSE_TICKS;
-                    if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
-                        /* The city test queues appearance for one step.
-                         * Capture the selected ammo NOW: a weapon swap
-                         * next tick cannot retroactively recolor it. */
+                        !input.jump && g->hero.grounded;
+                    if (upward) {
+                        QsCityUpProjectile *p = &g->reference_up_projectile;
+                        g->reference_up_fire_frames = QS_CITY_UP_FIRE_POSE_TICKS;
+                        /* Dedicated visual shot, not the horizontal legacy
+                         * projectile. Upward collisions are still unknown. */
+                        if (!p->active) {
+                            p->active = 1;
+                            p->age = -3; /* first visible after three ticks */
+                            p->facing = g->hero.facing;
+                            p->world_x = (int)g->hero.x +
+                                         (p->facing == 1 ? 20 : -8);
+                            p->world_y = (int)g->hero.y - 22;
+                        }
+                    } else if (g->physics_profile == QS_PHYSICS_REFERENCE_CITY) {
+                        /* Existing horizontal-fire timing and ammo preserved. */
                         g->pending_reference_shot = 1;
                         g->pending_reference_red =
                             g->red_unlocked && g->weapon == QS_RED;
