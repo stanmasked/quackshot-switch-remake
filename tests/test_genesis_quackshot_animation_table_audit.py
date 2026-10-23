@@ -239,6 +239,20 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                         data, selector=0, cursor=0, table_base=0x100
                     )
 
+    def test_rejects_high_bit_offset_that_resolves_beyond_rom(self):
+        data = self.make_nested_record(sequence_word=0xFFFF)
+        with self.assertRaisesRegex(ValueError, "outside the ROM"):
+            AUDIT.resolve_nested_record(
+                data, selector=0, cursor=0, table_base=0x100
+            )
+
+    def test_rejects_boolean_selector_without_integer_coercion(self):
+        data = self.make_nested_record()
+        with self.assertRaisesRegex(ValueError, "selector is outside"):
+            AUDIT.resolve_nested_record(
+                data, selector=True, cursor=0, table_base=0x100
+            )
+
     def test_rejects_cursor_outside_rom(self):
         data = self.make_nested_record()
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
