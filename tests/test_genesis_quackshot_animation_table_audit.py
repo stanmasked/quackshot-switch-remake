@@ -117,6 +117,17 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                 },
             ],
         )
+        roles = {
+            item["directory_index"]: item
+            for item in summary["directory_entry_roles"]
+        }
+        self.assertEqual(roles[0]["role"], "primary_descriptor_candidate")
+        self.assertEqual(roles[26]["role"], "interior_reference_candidate")
+        self.assertEqual(roles[26]["containing_primary_index"], 0)
+        self.assertEqual(roles[27]["role"], "interior_reference_candidate")
+        self.assertEqual(roles[27]["containing_primary_index"], 1)
+        self.assertEqual(roles[28]["role"], "secondary_target_candidate")
+        self.assertEqual(len(roles), 42)
         self.assertFalse(summary["raw_rom_exported"])
         self.assertNotIn("rom_bytes", summary)
         self.assertNotIn("raw_bytes", summary)
