@@ -183,6 +183,21 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertEqual(resolved["animation_byte_24"], 0x12)
         self.assertEqual(resolved["animation_byte_25"], 0x34)
 
+    def test_alternate_layout_control_byte_below_high_bit_is_regular(self):
+        data = self.make_nested_record(
+            sequence_word=0x8010, control=0x7F,
+            animation_byte_24=0x23, animation_byte_25=0x45,
+        )
+        resolved = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        self.assertEqual(resolved["status"], "resolved_alternate_layout")
+        self.assertTrue(resolved["alternate_layout"])
+        self.assertFalse(resolved["special_control_path"])
+        self.assertEqual(resolved["control_byte"], 0x7F)
+        self.assertEqual(resolved["animation_byte_24"], 0x23)
+        self.assertEqual(resolved["animation_byte_25"], 0x45)
+
     def test_high_bit_control_byte_uses_special_path(self):
         data = self.make_nested_record(control=0x80)
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
