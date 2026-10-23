@@ -305,6 +305,11 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                 data, selector=True, cursor=0, table_base=0x100
             )
 
+    def test_rejects_cursor_beyond_descriptor_sequence_limit(self):
+        data = self.make_nested_record(header_first=2)
+        with self.assertRaisesRegex(ValueError, "cursor exceeds selected descriptor"):
+            AUDIT.resolve_nested_record(data, selector=0, cursor=3, table_base=0x100)
+
     def test_rejects_cursor_outside_rom(self):
         data = self.make_nested_record()
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
