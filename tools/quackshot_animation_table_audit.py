@@ -318,7 +318,10 @@ def main():
         report = audit_pinned_rom(args.rom)
         rendered = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
         if args.output:
-            args.output.write_text(rendered, encoding="utf-8")
+            # Exclusive creation avoids clobbering prior reports or symlinked
+            # private files if the destination already exists.
+            with args.output.open("x", encoding="utf-8") as destination:
+                destination.write(rendered)
         else:
             print(rendered, end="")
     except (OSError, TypeError, ValueError) as error:
