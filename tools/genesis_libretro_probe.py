@@ -469,6 +469,7 @@ def _collect_candidate_object_state(ram_bytes, frame):
                 CANDIDATE_OBJECT_RAM_OFFSET + (offset ^ 1)]
             for offset in CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS
         },
+        "candidate_flag_0x0D": ram_bytes[CANDIDATE_OBJECT_RAM_OFFSET + (0x0D ^ 1)],
         "pointer_0x20": {
             "value_u32": pointer_value,
             "hex": f"0x{pointer_value:08X}",
