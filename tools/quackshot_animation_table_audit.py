@@ -143,10 +143,19 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
     # run is treated as primary descriptor candidates; later entries are
     # candidates until interval membership is established.
     entry_roles = []
+    first_index_by_offset = {}
+    for index, offset in enumerate(offsets):
+        first_index_by_offset.setdefault(offset, index)
     for index, offset in enumerate(offsets):
         role = "primary_descriptor_candidate" if index < 16 else "secondary_target_candidate"
         containing = None
+        duplicate_of = None
+        if first_index_by_offset[offset] != index:
+            role = "duplicate_target_candidate"
+            duplicate_of = first_index_by_offset[offset]
         for primary_index, start in enumerate(primary_offsets):
+            if duplicate_of is not None:
+                break
             if primary_index + 1 < len(primary_offsets):
                 end = primary_offsets[primary_index + 1]
             else:
@@ -161,6 +170,7 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
             "relative_offset": f"0x{offset:04X}",
             "role": role,
             "containing_primary_index": containing,
+            "duplicate_of_directory_index": duplicate_of,
         })
 
     return {
