@@ -4186,6 +4186,89 @@ static int run_rooftop_bridge_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+
+/*
+ * Stage262: inspect the ACTUAL ROM-free SDL raster of the Stage261 upward
+ * pose. No original game image is used as expected output. The pose must
+ * appear at the correct left/right muzzle and disappear when its 20 ticks
+ * expire; a normal shot must never accidentally create that muzzle.
+ */
+static int upward_pose_pixel(SDL_Renderer *renderer, const QsGame *game,
+                             int x, int y, uint32_t *pixel) {
+    uint64_t digest;
+    SDL_Rect rect = {x, y, 1, 1};
+    return capture_frame(renderer, game, &digest) &&
+           SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ARGB8888,
+                                pixel, (int)sizeof(*pixel)) == 0;
+}
+
+static int run_upward_pose_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame right, left, fire_only;
+    QsInput input = {0};
+    uint32_t right_cap = 0, right_beam = 0, left_cap = 0;
+    uint32_t missing_cap = 0, baseline = 0, hero_pixel = 0;
+    const uint32_t gold = UINT32_C(0xffffe16c);
+    const uint32_t blue = UINT32_C(0xff70a7dd);
+    const uint32_t hero = UINT32_C(0xfffaeda7);
+    int count, hx, hy;
+
+    qs_init(&right);
+    right.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&right, 0);
+    qs_step(&right, input); /* settle onto the synthetic ground */
+    if (!right.hero.grounded) return 0;
+
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (!upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &baseline) ||
+        baseline == gold) return 0;
+
+    left = right;
+    left.hero.facing = -1;
+    fire_only = right;
+    input.fire = input.up = 1;
+    qs_step(&right, input);
+    qs_step(&left, input);
+    input.up = 0;
+    qs_step(&fire_only, input);
+    if (right.reference_up_fire_frames != QS_CITY_UP_FIRE_POSE_TICKS ||
+        left.reference_up_fire_frames != QS_CITY_UP_FIRE_POSE_TICKS ||
+        fire_only.reference_up_fire_frames != 0) return 0;
+
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (!upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &right_cap) ||
+        !upward_pose_pixel(renderer, &right, hx + 10, hy - 5, &right_beam) ||
+        !upward_pose_pixel(renderer, &right, hx - 1, hy - 9, &missing_cap) ||
+        right_cap != gold || right_beam != blue || missing_cap == gold)
+        return 0;
+    hx = (int)left.hero.x;
+    hy = (int)left.hero.y;
+    if (!upward_pose_pixel(renderer, &left, hx - 1, hy - 9, &left_cap) ||
+        !upward_pose_pixel(renderer, &left, hx + 10, hy - 9, &missing_cap) ||
+        left_cap != gold || missing_cap == gold)
+        return 0;
+    hx = (int)fire_only.hero.x;
+    hy = (int)fire_only.hero.y;
+    if (!upward_pose_pixel(renderer, &fire_only, hx + 10, hy - 9,
+                           &missing_cap) || missing_cap == gold)
+        return 0;
+
+    input.up = 1;
+    for (count = 1; count <= QS_CITY_UP_FIRE_POSE_TICKS; ++count)
+        qs_step(&right, input);
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (right.reference_up_fire_frames != 0 ||
+        !upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &missing_cap) ||
+        !upward_pose_pixel(renderer, &right, hx + 5, hy + 10, &hero_pixel) ||
+        missing_cap == gold || hero_pixel != hero)
+        return 0;
+
+    puts("UPWARD_POSE_SDL_PASS: left/right muzzle pixels, no ordinary-shot muzzle, 20-tick expiration and visible hero");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4281,6 +4364,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_air_reward_fx_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_hud_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
+    if (!run_upward_pose_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
