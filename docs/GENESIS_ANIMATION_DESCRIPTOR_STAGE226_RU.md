@@ -249,3 +249,9 @@ Next: finish the remaining Portable `compare-city-timeline` job; then, if the pr
 - Синтетический тест доказывает только поведение инструмента на фикстуре, а не успешное прохождение оригинальной игры. Реальные выводы помечать отдельно и подтверждать приватными локальными свидетельствами.
 
 Это правило является обязательным для последующих этапов и не меняет уже подтверждённые выводы об анимации. Текущий оригинальный ROM остаётся неизменённым и вне Git.
+
+## Stage243 — primary offset ordering guard
+
+The summary parser now rejects a directory if the first 16 descriptor candidates are not strictly increasing, before inferring record spans. This makes ambiguous primary boundaries fail closed with an explicit error; secondary directory references still preserve their original order and need not be sorted. A synthetic regression swaps two primary candidate offsets and expects this rejection. Implementation: `985bb003b4b4ccdb6cb7c67e5ff8e38b6d9b9b2c`; test: `6dfb860bf6a3200084db730e407a6e7ee0767f05`.
+
+CI for the new code revisions is pending. The six required Actions workflows passed for the prior tested revision; the storage-policy documentation-only commit had no workflow runs due to path filters. That prior pass does not validate these new code commits.
