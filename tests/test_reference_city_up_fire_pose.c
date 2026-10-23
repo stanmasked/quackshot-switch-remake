@@ -34,15 +34,15 @@ static void pose_lasts_exactly_twenty_ticks(void) {
     in.up = in.fire = 1;
     qs_step(&g, in);
     CHECK(g.reference_up_fire_frames == QS_CITY_UP_FIRE_POSE_TICKS);
-    CHECK(g.hero.facing == 1 && g.pending_reference_shot == 1);
+    CHECK(g.hero.facing == 1 && !g.pending_reference_shot);
+    CHECK(g.reference_up_projectile.active && g.reference_up_projectile.age == -3);
     CHECK(!g.shots[0].active);
     for (tick = 1; tick < QS_CITY_UP_FIRE_POSE_TICKS; ++tick) {
         qs_step(&g, in); /* held fire must not re-trigger the pose */
         CHECK(g.reference_up_fire_frames ==
               QS_CITY_UP_FIRE_POSE_TICKS - tick);
         if (tick == 1) {
-            CHECK(g.shots[0].active);
-            CHECK(g.shots[0].vx == 5.5f);
+            CHECK(!g.shots[0].active && g.reference_up_projectile.age == -2);
         }
     }
     qs_step(&g, in);
@@ -65,7 +65,8 @@ static void facing_and_negative_controls(void) {
     CHECK(left.reference_up_fire_frames == 20);
     CHECK(left.hero.facing == -1);
     qs_step(&left, in);
-    CHECK(left.shots[0].active && left.shots[0].vx == -5.5f);
+    CHECK(!left.shots[0].active && left.reference_up_projectile.active);
+    CHECK(left.reference_up_projectile.facing == -1);
 
     in = none(); in.up = 1; qs_step(&up, in);
     CHECK(up.reference_up_fire_frames == 0);
@@ -133,7 +134,7 @@ static void movement_pause_retry_and_damage(void) {
     CHECK(g.reference_up_fire_frames == 0);
 }
 
-static void shot_path_unchanged(void) {
+static void upward_shot_separate_from_horizontal(void) {
     QsGame aim = fresh(QS_PHYSICS_REFERENCE_CITY);
     QsGame plain = aim;
     QsInput up = none(), fire = none();
@@ -141,11 +142,11 @@ static void shot_path_unchanged(void) {
     fire.fire = 1;
     qs_step(&aim, up); qs_step(&plain, fire);
     qs_step(&aim, none()); qs_step(&plain, none());
-    CHECK(aim.shots[0].active == plain.shots[0].active);
-    CHECK(aim.shots[0].red == plain.shots[0].red);
-    CHECK(aim.shots[0].x == plain.shots[0].x);
-    CHECK(aim.shots[0].y == plain.shots[0].y);
-    CHECK(aim.shots[0].vx == plain.shots[0].vx);
+    CHECK(aim.reference_up_projectile.active && !aim.shots[0].active);
+    CHECK(!aim.pending_reference_shot);
+    CHECK(!plain.reference_up_projectile.active && plain.shots[0].active);
+    CHECK(plain.shots[0].vx == 5.5f);
+    CHECK(plain.shots[0].y == plain.hero.y + 9);
     CHECK(aim.hero.x == plain.hero.x && aim.hero.y == plain.hero.y);
 }
 
@@ -153,7 +154,7 @@ int main(void) {
     pose_lasts_exactly_twenty_ticks();
     facing_and_negative_controls();
     movement_pause_retry_and_damage();
-    shot_path_unchanged();
+    upward_shot_separate_from_horizontal();
     puts("PASS: synthetic reference-city upward-fire presentation tests");
     return EXIT_SUCCESS;
 }
