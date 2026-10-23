@@ -136,14 +136,40 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
                 })
                 break
 
+    primary_offsets_strictly_increasing = all(
+        left < right for left, right in zip(primary_offsets, primary_offsets[1:])
+    )
+    # Classify directory entries conservatively. Only the initial monotonic
+    # run is treated as primary descriptor candidates; later entries are
+    # candidates until interval membership is established.
+    entry_roles = []
+    for index, offset in enumerate(offsets):
+        role = "primary_descriptor_candidate" if index < 16 else "secondary_target_candidate"
+        containing = None
+        for primary_index, start in enumerate(primary_offsets):
+            if primary_index + 1 < len(primary_offsets):
+                end = primary_offsets[primary_index + 1]
+            else:
+                later = [value for value in offsets if value > start]
+                end = min(later) if later else start
+            if start < offset < end:
+                role = "interior_reference_candidate"
+                containing = primary_index
+                break
+        entry_roles.append({
+            "directory_index": index,
+            "relative_offset": f"0x{offset:04X}",
+            "role": role,
+            "containing_primary_index": containing,
+        })
+
     return {
         "schema": "quackshot_stage226_animation_offset_directory_v1",
         **{key: value for key, value in directory.items()
            if key != "relative_offsets"},
         "directory_entries": entries,
-        "first_16_offsets_strictly_increasing": all(
-            left < right for left, right in zip(primary_offsets, primary_offsets[1:])
-        ),
+        "directory_entry_roles": entry_roles,
+        "first_16_offsets_strictly_increasing": primary_offsets_strictly_increasing,
         "first_16_descriptor_candidates": primary_records,
         "interior_reference_candidates": interior_references,
         "raw_rom_exported": False,
