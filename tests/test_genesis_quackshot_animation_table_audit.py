@@ -177,6 +177,31 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertTrue(resolved["special_control_path"])
         self.assertIsNone(resolved["animation_byte_24"])
 
+    def test_alternate_layout_with_special_control_does_not_expose_animation_bytes(self):
+        data = self.make_nested_record(
+            sequence_word=0x8010, control=0x80,
+            animation_byte_24=0x45, animation_byte_25=0x67,
+        )
+        resolved = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        self.assertEqual(resolved["status"], "special_control_path")
+        self.assertTrue(resolved["alternate_layout"])
+        self.assertTrue(resolved["special_control_path"])
+        self.assertIsNone(resolved["animation_byte_24"])
+        self.assertIsNone(resolved["animation_byte_25"])
+        self.assertEqual(resolved["target_relative_offset"], "0x0018")
+
+    def test_alternate_layout_out_of_bounds_fails_closed(self):
+        data = self.make_nested_record(sequence_word=0x8010)
+        # Leave the target control byte present, but truncate the alternate
+        # layout payload. The resolver must reject rather than read padding.
+        truncated = data[:0x11C]
+        with self.assertRaisesRegex(ValueError, "outside the ROM"):
+            AUDIT.resolve_nested_record(
+                truncated, selector=0, cursor=0, table_base=0x100
+            )
+
     def test_rejects_cursor_outside_rom(self):
         data = self.make_nested_record()
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
