@@ -201,3 +201,13 @@ ROM, сырые дампы и кадры не добавлялись. Физик
 Google Drive-поиск по названиям Stage225 и QuackShot original ROM не вернул результатов в текущем коннекторном поиске. Поэтому на этом шаге не создаются новые утверждения о значениях +0x0D в реальных игровых сценариях: имеющиеся исторические числовые свидетельства не содержат самого нового поля. Следует сначала завершить CI, затем повторно найти приватный исходный образ/архив числовых свидетельств в Library и Drive и выполнить контролируемые сценарии, если доступные файлы это позволяют.
 
 Флагу `+0x0D` не присваивается семантика только по синтетическим тестам. Сырые RAM/VRAM/SAT, кадры и ROM не публикуются; физика Nintendo Switch не менялась.
+
+## Stage237 — cross-check with the independent collision-profile audit
+
+CI follow-up for the Stage236 snapshot: Genesis libretro core, motion repeatability, Switch NRO, and reference-evidence integrity completed successfully. Reference ROM metadata tests also passed. Portable gameplay core's SDL2 and four compiler configurations passed, but its separate `compare-city-timeline` job remained queued at the latest check; the entire workflow is therefore not yet complete.
+
+A cross-check against the private numeric summary documented in `QuackShot_Stage229_Collision_Profile_Trace_RU.md` reinforces the SAT attribution correction: the cluster `1024/1026/1042/1045` corresponds to a type-3 object in slot `0xFF9000`, while the player candidate on the tested frame uses patterns around `1920/1923/1935/1941`. This is independent evidence against reviving the old cluster-as-player hypothesis. It does not by itself map every animation descriptor to a pose.
+
+The current library search finds historical Stage13–17 gameplay summaries and Stage213–215 tracking summaries, but no indexed Stage225 raw numeric archive containing `candidate_flag_0x0D` samples. The new probe field is validated synthetically; its actual values across idle, movement, jump and landing remain unmeasured in the accessible indexed evidence. Do not assign semantics or alter Switch physics until those controlled samples exist.
+
+Next: finish the remaining Portable `compare-city-timeline` job; then, if the private Stage225 archive or ROM can be located in the connected sources/session, run bounded snapshots at matched transition frames and report only aggregate numeric values. Keep the original ROM and raw memory private.
