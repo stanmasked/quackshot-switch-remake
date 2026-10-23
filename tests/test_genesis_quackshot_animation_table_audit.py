@@ -311,9 +311,11 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
             AUDIT.resolve_nested_record(data, selector=0, cursor=3, table_base=0x100)
 
     def test_rejects_cursor_outside_rom(self):
-        data = self.make_nested_record()
+        # A maximum-byte sequence limit permits cursor 255, but this compact
+        # synthetic ROM does not contain the corresponding sequence word.
+        data = self.make_nested_record(header_first=0xFF)
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
-            AUDIT.resolve_nested_record(data, selector=0, cursor=256, table_base=0x100)
+            AUDIT.resolve_nested_record(data, selector=0, cursor=0xFF, table_base=0x100)
 
     def test_rejects_selector_outside_directory(self):
         data = self.make_nested_record()
