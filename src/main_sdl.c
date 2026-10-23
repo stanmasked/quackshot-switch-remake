@@ -427,6 +427,17 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
             rectangle(renderer, (int)s->x - cam, (int)s->y, s->attached ? 16 : 7, 4,
                       s->red ? color(230, 74, 78) : color(255, 225, 108));
     }
+    /* Stage264: independent procedural vertical projectile; bounded to
+     * first-city SAT position samples, deliberately collision-free. */
+    {
+        int shot_x, shot_y;
+        if (qs_city_up_projectile_position(game, &shot_x, &shot_y)) {
+            rectangle(renderer, shot_x - cam, shot_y, 7, 7,
+                      color(255, 225, 108));
+            rectangle(renderer, shot_x + 2 - cam, shot_y + 2, 3, 3,
+                      color(112, 167, 221));
+        }
+    }
     if ((game->hero.hurt_frames % 8) < 4) {
         int hx = (int)game->hero.x - cam;
         int hy = (int)game->hero.y;
