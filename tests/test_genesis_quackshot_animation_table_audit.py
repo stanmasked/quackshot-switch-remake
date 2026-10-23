@@ -86,7 +86,9 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
             source.write_bytes(data)
             stream = io.StringIO()
             with mock.patch.object(AUDIT, "audit_pinned_rom",
-                                   return_value={"status": "synthetic"}):
+                                   return_value={"status": "synthetic"}), mock.patch.object(
+                                       AUDIT, "TABLE_BASE", base
+                                   ):
                 with mock.patch.object(sys, "argv", [
                     "quackshot_animation_table_audit.py", "--rom", str(source),
                     "--animation-pairs",
