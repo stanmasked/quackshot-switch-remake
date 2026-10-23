@@ -56,6 +56,7 @@
 #define QS_CITY_AIR_REWARD_SIZE 10.0f
 #define QS_CITY_AIR_REWARD_FX_TICKS 16 /* presentation-only earned burst */
 #define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
+#define QS_CITY_UP_FIRE_POSE_TICKS 20 /* observed stationary UP+fire window */
 
 #ifdef __cplusplus
 extern "C" {
@@ -104,6 +105,7 @@ typedef struct {
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
+    int reference_up_fire_frames; /* visual pose only; original first-city 20-frame window */
     QsWeapon weapon;
     char terrain[QS_ROWS][QS_COLUMNS];
     QsPlayer hero;
