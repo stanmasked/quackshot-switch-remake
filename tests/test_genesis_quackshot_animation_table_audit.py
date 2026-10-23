@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 MODULE_PATH = (
@@ -479,6 +480,30 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                     self.assertNotEqual(completed.returncode, 0)
                     self.assertIn("output must differ from source ROM", completed.stderr)
                     self.assertEqual(source.read_bytes(), original)
+
+    def test_cli_report_creation_is_exclusive_and_preserves_existing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "synthetic.gen"
+            source.write_bytes(bytes([1, 2, 3]))
+            report = Path(directory) / "report.json"
+            existing = "private preexisting content"
+            report.write_text(existing, encoding="utf-8")
+            argv = ["quackshot_animation_table_audit.py", "--rom", str(source),
+                    "--output", str(report)]
+            with mock.patch.object(AUDIT, "audit_pinned_rom", return_value={"status": "synthetic"}):
+                with mock.patch.object(sys, "argv", argv):
+                    with self.assertRaises(SystemExit) as captured:
+                        AUDIT.main()
+                self.assertEqual(captured.exception.code, 1)
+                self.assertEqual(report.read_text(encoding="utf-8"), existing)
+                self.assertEqual(source.read_bytes(), bytes([1, 2, 3]))
+                report.unlink()
+                with mock.patch.object(sys, "argv", argv):
+                    AUDIT.main()
+                self.assertEqual(
+                    __import__("json").loads(report.read_text(encoding="utf-8")),
+                    {"status": "synthetic"},
+                )
 
     def test_pinned_rom_audit_rejects_non_reference_hash(self):
         data = bytearray(0x300)
