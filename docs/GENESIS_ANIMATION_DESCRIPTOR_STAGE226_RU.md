@@ -211,3 +211,13 @@ A cross-check against the private numeric summary documented in `QuackShot_Stage
 The current library search finds historical Stage13–17 gameplay summaries and Stage213–215 tracking summaries, but no indexed Stage225 raw numeric archive containing `candidate_flag_0x0D` samples. The new probe field is validated synthetically; its actual values across idle, movement, jump and landing remain unmeasured in the accessible indexed evidence. Do not assign semantics or alter Switch physics until those controlled samples exist.
 
 Next: finish the remaining Portable `compare-city-timeline` job; then, if the private Stage225 archive or ROM can be located in the connected sources/session, run bounded snapshots at matched transition frames and report only aggregate numeric values. Keep the original ROM and raw memory private.
+
+## Stage239 — CI завершён, граничные проверки подтверждены
+
+Все шесть workflow для ревизии с тестом включительной границы курсора завершились успешно: Genesis motion repeatability, Switch NRO, Genesis libretro core, evidence integrity, ROM metadata и Portable gameplay core. В Portable Core успешно прошли SDL2 rendered-frame/camera-latch проверки, Debug/Release для GCC и Clang, а также `compare-city-timeline`, включая межкомпиляторный fingerprint из 20 геометрических случаев.
+
+Пара тестов границ теперь проверяет: курсор равен пределу дескриптора — разрешён при наличии данных; курсор выше предела — отклонён; курсор в пределах лимита, но адрес за концом ROM — отклонён независимо. Эти проверки защищают исследовательский парсер от чтения посторонних ROM-слов и от случайного off-by-one.
+
+## Stage240 — дальнейшая работа
+
+Следующий полезный шаг — аудит согласованности результатов `summarize_directory` и `resolve_nested_record`: для всех 42 каталоговых записей проверить числовые инварианты, не предполагая, что все 42 являются независимыми верхнеуровневыми дескрипторами (записи 26/27 уже являются внутренними ссылками). Проверить, что отчёт явно различает верхнеуровневые кандидаты, внутренние ссылки и записи, чья граница выводится по следующему большему смещению. Добавить синтетические тесты на несортированные ссылки и перекрывающиеся диапазоны, прежде чем менять интерпретацию формата. Флаг `+0x0D` остаётся без семантической метки, пока не найдены реальные числовые выборки по контролируемым игровым состояниям.
