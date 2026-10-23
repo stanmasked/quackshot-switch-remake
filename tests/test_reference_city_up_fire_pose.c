@@ -120,7 +120,9 @@ static void movement_pause_retry_and_damage(void) {
     g = fresh(QS_PHYSICS_REFERENCE_CITY);
     in = none(); in.up = in.fire = 1; qs_step(&g, in);
     g.enemies[0].active = 1;
-    g.enemies[0].x = g.enemies[0].min_x = g.enemies[0].max_x = g.hero.x;
+    /* Put the foe behind the forward shot, but overlapping the hero. */
+    g.enemies[0].x = g.enemies[0].min_x = g.enemies[0].max_x =
+        g.hero.x - 12.0f;
     g.enemies[0].y = g.hero.y;
     qs_step(&g, none());
     CHECK(g.hero.hearts == 2 && g.reference_up_fire_frames == 0);
