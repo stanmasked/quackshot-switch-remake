@@ -161,6 +161,26 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
         self.assertEqual(resolved["threshold_action"], "inherit_existing_threshold")
 
+    def test_threshold_inheritance_requires_exact_ff_marker(self):
+        for header_second in (0x00, 0x04, 0x7F, 0x80, 0xFE):
+            with self.subTest(header_second=header_second):
+                data = self.make_nested_record(header_second=header_second)
+                resolved = AUDIT.resolve_nested_record(
+                    data, selector=0, cursor=0, table_base=0x100
+                )
+                self.assertEqual(
+                    resolved["threshold_action"], "set_threshold_from_header"
+                )
+
+    def test_exact_ff_header_byte_inherits_threshold(self):
+        data = self.make_nested_record(header_second=0xFF)
+        resolved = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        self.assertEqual(
+            resolved["threshold_action"], "inherit_existing_threshold"
+        )
+
     def test_high_bit_sequence_offset_uses_alternate_layout(self):
         data = self.make_nested_record(sequence_word=0x8010)
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
