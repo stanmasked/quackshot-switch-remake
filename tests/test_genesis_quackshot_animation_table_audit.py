@@ -230,6 +230,15 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
                         data, selector=0, cursor=cursor, table_base=0x100
                     )
 
+    def test_rejects_sequence_word_smaller_than_header(self):
+        for sequence_word in (0, 1):
+            with self.subTest(sequence_word=sequence_word):
+                data = self.make_nested_record(sequence_word=sequence_word)
+                with self.assertRaisesRegex(ValueError, "smaller than its two-byte header"):
+                    AUDIT.resolve_nested_record(
+                        data, selector=0, cursor=0, table_base=0x100
+                    )
+
     def test_rejects_cursor_outside_rom(self):
         data = self.make_nested_record()
         with self.assertRaisesRegex(ValueError, "cursor is outside the ROM"):
