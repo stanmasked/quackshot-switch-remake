@@ -267,3 +267,9 @@ CI for the new code revisions is pending. The six required Actions workflows pas
 ## Stage246 — malformed directory boundary tests
 
 Added two synthetic regression tests for the numeric-only parser: reject invalid table-base values (negative, boolean, float and string) without coercion, and reject a truncated first directory word or truncated complete directory body. The test commit is `403daf3abccfaec94a3f7eed24ed95e891b1e3c1`. The six current workflows have been created for this PR head, but remain queued at this check; earlier runs were partly cancelled by the updated head and must not be counted as complete. No original ROM or extracted assets were added. The private resource folder on Drive remains the canonical destination for future extracted assets; it is currently empty.
+
+## Stage247 — special control boundary handling
+
+All six required CI workflows completed successfully for the previous test/documentation revision `a95a5e49e49921de4e8f974a7235debdf11f29cb`. A separate parser inspection then found that `resolve_nested_record` required three or five payload bytes before inspecting the leading control byte, even for high-bit control records that return without consuming those payload bytes. The numeric-only parser now validates the single control byte first, returns the special-control summary without requesting unused payload, and still requires the full payload for regular control records. Fix: `f229e65d1e5e0db8667a87bab14e50383c4a75c1`; synthetic positive and negative boundary tests: `f98fb26e3d69817cc1c7b7a731227da63dfb9bd4`. CI for the new code is not yet confirmed. This is defensive parser correctness, not evidence that every special-control structure in the original game has been identified.
+
+Storage rule remains unchanged: the ROM and extracted proprietary resources remain private on Google Drive, original source unchanged, no raw captures or assets added to GitHub. Switch physics unchanged.
