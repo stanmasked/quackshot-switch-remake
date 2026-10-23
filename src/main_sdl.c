@@ -1,4 +1,5 @@
 #include "qs_game.h"
+#include "qs_reference_projectile_curve.h"
 #include "qs_trace.h"
 #include "qs_motion.h"
 #include "qs_parallax.h"
