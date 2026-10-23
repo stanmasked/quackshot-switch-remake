@@ -177,6 +177,10 @@ def resolve_nested_record(rom_bytes, selector, cursor, table_base=TABLE_BASE):
 
     header_first = rom_bytes[descriptor]
     header_second = rom_bytes[descriptor + 1]
+    # The first descriptor-header byte is the maximum valid sequence cursor
+    # (observed sequences include cursor 0 through this value).
+    if cursor > header_first:
+        raise ValueError("cursor exceeds selected descriptor sequence limit")
     cursor_word = descriptor + 2 + 2 * cursor
     if cursor_word + 2 > len(rom_bytes):
         raise ValueError("selected sequence cursor is outside the ROM")
