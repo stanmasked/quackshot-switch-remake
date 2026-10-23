@@ -96,6 +96,10 @@ def summarize_directory(rom_bytes, table_base=TABLE_BASE):
     # The first 16 entries form the initial monotonic descriptor run. The
     # following entries include two references into that run's first records.
     primary_offsets = offsets[:16]
+    if any(left >= right for left, right in zip(primary_offsets, primary_offsets[1:])):
+        raise ValueError(
+            "first 16 descriptor candidates are not strictly increasing"
+        )
     primary_records = []
     for index, start in enumerate(primary_offsets):
         if index + 1 < len(primary_offsets):
