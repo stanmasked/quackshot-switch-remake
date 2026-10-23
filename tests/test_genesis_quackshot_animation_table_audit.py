@@ -39,6 +39,19 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertTrue(parsed["all_targets_word_aligned"])
         self.assertTrue(parsed["all_targets_in_bounds"])
 
+    def test_rejects_invalid_table_base_types_and_negative_values(self):
+        data = self.make_directory(0x100, [8, 0x20, 0x12, 0x10], size=0x200)
+        for table_base in (-1, True, 0.5, "256"):
+            with self.subTest(table_base=table_base):
+                with self.assertRaises(ValueError):
+                    AUDIT.parse_offset_directory(data, table_base)
+
+    def test_rejects_truncated_directory_header_and_body(self):
+        with self.assertRaisesRegex(ValueError, "too short for the first directory word"):
+            AUDIT.parse_offset_directory(bytearray([0]), 0)
+        with self.assertRaisesRegex(ValueError, "too short for the complete offset directory"):
+            AUDIT.parse_offset_directory(bytearray([0, 8]), 0)
+
     def test_rejects_odd_directory_byte_length(self):
         data = self.make_directory(0x100, [9], size=0x200)
         with self.assertRaisesRegex(ValueError, "positive even"):
