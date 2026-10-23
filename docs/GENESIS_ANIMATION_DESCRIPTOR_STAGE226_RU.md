@@ -181,3 +181,13 @@ All six workflows for the test commit completed successfully: evidence integrity
 ## Stage235 — next audit
 
 First verify all workflows for the alternate-layout boundary test. Then extend the numeric-only object-state evidence for flag byte `+0x0D` across existing controlled scenarios (idle, right, left, jump and landing), if the matching private evidence is available. Keep the analysis descriptive until state transitions are independently confirmed; do not infer a flag's meaning solely from correlation. Compare the one known orientation-transition mismatch separately from stable frames. No gameplay physics changes until original-game evidence supports them.
+
+## Stage235 — расширено числовое наблюдение флага объекта
+
+В probe добавлен байт `+0x0D` в ограниченный список числовых полей снимка объекта. Изменения в коммите `c41f3b15bcab574bca02e3e871c04c4621b254a7`; тест выходной схемы обновлён в `e52735490a3437b25e29790f37135620346d494f`.
+
+Это только инструментирование: поле возвращается как одно числовое значение, сырая RAM по-прежнему не экспортируется. Никакой смысл флагу пока не присваивается. После CI нужно получить ограниченные выборки в существующих контролируемых сценариях (idle, RIGHT, LEFT, stationary jump и landing) и проверить, меняется ли байт до, во время или после перехода состояния. Корреляция не считается доказательством причинности.
+
+Все шесть workflow для документации Stage234 (`3f55fe5a1720a3c3321abd5f91d7ea85206de1fd`) прошли успешно. Отдельные задачи для теста альтернативной раскладки (`d380cb42df619d80174c932eb37d6aa9d9770555`) были отменены при обновлении ветки, а не завершены успешно; новая ревизия должна получить собственный полный CI.
+
+ROM, сырые дампы и кадры не добавлялись. Физика Switch не менялась.
