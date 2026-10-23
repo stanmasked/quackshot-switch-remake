@@ -233,7 +233,11 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
     def test_rejects_sequence_word_smaller_than_header(self):
         for sequence_word in (0, 1):
             with self.subTest(sequence_word=sequence_word):
-                data = self.make_nested_record(sequence_word=sequence_word)
+                # Build a valid record first. Building directly with a short
+                # offset would overwrite the sequence word with the payload.
+                data = self.make_nested_record(sequence_word=0x10)
+                descriptor = 0x100 + 8
+                data[descriptor + 2:descriptor + 4] = sequence_word.to_bytes(2, "big")
                 with self.assertRaisesRegex(ValueError, "smaller than its two-byte header"):
                     AUDIT.resolve_nested_record(
                         data, selector=0, cursor=0, table_base=0x100
