@@ -1,4 +1,7 @@
 import hashlib
+import contextlib
+import io
+import json
 import importlib.util
 import subprocess
 import sys
@@ -77,6 +80,23 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertEqual(len(summary["exceptions"]), 1)
         self.assertEqual(summary["exceptions"][0]["selectors"], [2, 3])
         self.assertEqual(summary["exceptions"][0]["special_control_count"], 1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "synthetic.gen"
+            source.write_bytes(data)
+            stream = io.StringIO()
+            with mock.patch.object(AUDIT, "audit_pinned_rom",
+                                   return_value={"status": "synthetic"}):
+                with mock.patch.object(sys, "argv", [
+                    "quackshot_animation_table_audit.py", "--rom", str(source),
+                    "--animation-pairs",
+                ]):
+                    with contextlib.redirect_stdout(stream):
+                        AUDIT.main()
+            payload = json.loads(stream.getvalue())
+            self.assertEqual(payload["animation_pairs"], summary)
+            self.assertNotIn("raw_bytes", payload)
+            self.assertNotIn("rom_bytes", payload)
 
     def test_rejects_odd_directory_byte_length(self):
         data = self.make_directory(0x100, [9], size=0x200)
