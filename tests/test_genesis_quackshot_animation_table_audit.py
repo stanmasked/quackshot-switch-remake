@@ -170,6 +170,19 @@ class AnimationOffsetDirectoryTests(unittest.TestCase):
         self.assertEqual(resolved["animation_byte_24"], 9)
         self.assertEqual(resolved["animation_byte_25"], 9)
 
+    def test_control_byte_below_high_bit_remains_regular_animation_data(self):
+        data = self.make_nested_record(
+            control=0x7F, animation_byte_24=0x12, animation_byte_25=0x34
+        )
+        resolved = AUDIT.resolve_nested_record(
+            data, selector=0, cursor=0, table_base=0x100
+        )
+        self.assertEqual(resolved["status"], "resolved")
+        self.assertFalse(resolved["special_control_path"])
+        self.assertEqual(resolved["control_byte"], 0x7F)
+        self.assertEqual(resolved["animation_byte_24"], 0x12)
+        self.assertEqual(resolved["animation_byte_25"], 0x34)
+
     def test_high_bit_control_byte_uses_special_path(self):
         data = self.make_nested_record(control=0x80)
         resolved = AUDIT.resolve_nested_record(data, selector=0, cursor=0, table_base=0x100)
