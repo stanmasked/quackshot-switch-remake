@@ -22,6 +22,7 @@ MANIFEST = "private-research-manifest.json"
 CORE_NAME = "genesis_plus_gx_libretro.so"
 ENTRYPOINTS = (
     "genesis_private_input_intervention_audit.py",
+    "genesis_full_frame_digest_audit.py",
     "genesis_private_cross_roi_consistency.py",
     "genesis_offline_numeric_report_audit.py",
     "genesis_private_bundle_launcher.py",

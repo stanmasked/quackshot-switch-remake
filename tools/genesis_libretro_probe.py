@@ -129,7 +129,48 @@ def setup_core(core_path):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False):
+def frame_digest_numeric(frame_bytes, width, height, pitch, pixel_format):
+    """Hash one transient full framebuffer; return only numeric metadata and SHA-256."""
+    if (type(frame_bytes) is not bytes or type(width) is not int or
+            type(height) is not int or type(pitch) is not int or
+            type(pixel_format) is not int or pixel_format not in (0, 1, 2) or
+            not 1 <= width <= 2048 or not 1 <= height <= 2048):
+        raise ValueError("invalid full-frame digest input")
+    bpp = 4 if pixel_format == 1 else 2
+    if pitch < width * bpp or pitch * height > 16 * 1024 * 1024 or len(frame_bytes) != pitch * height:
+        raise ValueError("invalid full-frame digest geometry")
+    visible_row_bytes = width * bpp
+    visible = b"".join(
+        frame_bytes[row * pitch:row * pitch + visible_row_bytes]
+        for row in range(height)
+    )
+    return {
+        "size": [width, height],
+        "pitch": pitch,
+        "pixel_format": pixel_format,
+        "byte_count": len(frame_bytes),
+        "sha256": hashlib.sha256(frame_bytes).hexdigest(),
+        "visible_byte_count": len(visible),
+        "visible_sha256": hashlib.sha256(visible).hexdigest(),
+    }
+
+
+def parse_frame_indices(spec, frame_count, limit=128):
+    """Parse a comma-separated set of frame indices without accepting ambiguity."""
+    if type(spec) is not str or type(frame_count) is not int or frame_count < 1:
+        raise ValueError("invalid video digest frame specification")
+    if spec == "":
+        return []
+    tokens = spec.split(",")
+    if len(tokens) > limit or any(not token.isascii() or not token.isdecimal() for token in tokens):
+        raise ValueError("video digest frames must be comma-separated decimal indices")
+    frames = [int(token) for token in tokens]
+    if len(set(frames)) != len(frames) or any(f < 0 or f >= frame_count for f in frames):
+        raise ValueError("video digest frames must be unique and within the run")
+    return sorted(frames)
+
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -160,6 +201,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         raise ValueError("visual components require a selected ROI and boolean flag")
     if video_roi_components and video_roi[2] * video_roi[3] > 65536:
         raise ValueError("visual components require at most 65536 ROI pixels")
+    if (type(video_digest_frames) not in (tuple, list) or
+            len(video_digest_frames) > 128 or
+            any(type(f) is not int or not 0 <= f < frames
+                for f in video_digest_frames) or
+            len(set(video_digest_frames)) != len(video_digest_frames)):
+        raise ValueError("video_digest_frames requires up to 128 unique valid frame indices")
+    digest_frame_set = set(video_digest_frames)
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
@@ -169,7 +217,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
              "input_polls": 0, "input_reads": 0, "input_nonzero_reads": 0,
              "video_roi_samples": [], "video_roi_error": None,
              "video_roi_vdp_samples": [], "video_roi_vdp_error": None,
-             "video_roi_components_samples": []}
+             "video_roi_components_samples": [], "video_frame_digests": [],
+             "video_digest_error": None}
     backing = C.create_string_buffer(rom_data)
     # Fullpath-only cores read the ROM privately from the caller's filesystem.
     # This path is never printed, exported, or included in numerical evidence.
@@ -243,6 +292,24 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     })
             except (ValueError, OverflowError, RuntimeError, TypeError):
                 state["video_roi_error"] = "invalid private visual ROI sample"
+        if state["frame"] in digest_frame_set:
+            try:
+                if not data or not width or not height:
+                    raise ValueError("missing digest framebuffer callback")
+                bpp = 4 if state["pixel_format"] == 1 else 2
+                count = int(pitch) * int(height)
+                if (width > 2048 or height > 2048 or pitch < width * bpp or
+                        count > 16 * 1024 * 1024):
+                    raise ValueError("unsupported digest framebuffer geometry")
+                frame_bytes = C.string_at(data, count)
+                numeric = frame_digest_numeric(
+                    frame_bytes, int(width), int(height), int(pitch),
+                    int(state["pixel_format"]))
+                state["video_frame_digests"].append({
+                    "frame": int(state["frame"]), **numeric
+                })
+            except (ValueError, OverflowError, RuntimeError, TypeError):
+                state["video_digest_error"] = "invalid full-frame digest sample"
         if not data or state["frame"] % video_stride or not width or not height:
             return
         bytes_per_pixel = 4 if state["pixel_format"] == 1 else 2
@@ -330,6 +397,11 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     "ram_changed_address_count": len(changed),
                     # Neither RAM values nor ROM bytes are exported.
                 })
+        if digest_frame_set:
+            if (state["video_digest_error"] is not None or
+                    sorted(row["frame"] for row in state["video_frame_digests"]) !=
+                    sorted(digest_frame_set)):
+                raise RuntimeError("Invalid full-frame digest callback cadence or geometry")
         if video_roi is not None:
             if (state["video_roi_error"] is not None or
                     sorted(row["frame"] for row in state["video_roi_samples"]) !=
@@ -368,6 +440,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "input_ranges": [{"first_frame": a, "end_exclusive": b, "button": n}
                              for a, b, n in schedule],
             "video_checkpoints": state["frame_checksums"],
+            "video_digest_frames_requested": sorted(digest_frame_set),
+            "video_frame_digests": (state["video_frame_digests"]
+                                    if digest_frame_set else None),
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -427,6 +502,8 @@ def main():
     parser.add_argument("--frames", type=int, default=1200)
     parser.add_argument("--video-stride", type=int, default=60,
                         help="Save frame checksums every N frames; use 1 for precise input-response timing")
+    parser.add_argument("--video-digest-frames", default="",
+                        help="Comma-separated frames to SHA-256 hash transiently; pixels are not saved")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -442,9 +519,11 @@ def main():
             if not 1 <= args.frames <= MAX_FRAMES:
                 raise ValueError(f"--frames must be 1..{MAX_FRAMES}")
             schedule = parse_script(args.input)
+            digest_frames = parse_frame_indices(args.video_digest_frames, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
-                              private_rom_path=args.rom, video_stride=args.video_stride)
+                              private_rom_path=args.rom, video_stride=args.video_stride,
+                              video_digest_frames=digest_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
