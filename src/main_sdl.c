@@ -4762,6 +4762,14 @@ int main(int argc, char **argv) {
     FILE *city_up_guest_file = NULL;
     /* Stage270: observe actual SDL renderer pixels, never synthetic raster. */
     FILE *city_up_raster_file = NULL;
+    /* Stage275: independent real SDL-pad right-facing horizontal yellow
+     * shot. A first-shot gate limits expensive renderer counterfactuals. */
+    FILE *city_horizontal_guest_file = NULL;
+    FILE *city_horizontal_raster_file = NULL;
+    unsigned city_horizontal_guest_records = 0;
+    unsigned city_horizontal_raster_records = 0;
+    int city_horizontal_first_shot_frame = -1;
+    int city_horizontal_raster_last_frame = -1;
     unsigned city_up_raster_records = 0;
     int city_up_raster_last_frame = -1;
     unsigned city_up_guest_records = 0;
@@ -4920,6 +4928,24 @@ int main(int argc, char **argv) {
         }
         if(!city_up_raster_file)
             fprintf(stderr,"QuackShot: CITY upward renderer pixel CSV unavailable (non-fatal)\n");
+        city_horizontal_guest_file=fopen("sdmc:/switch/quackshot-city-horizontal-guest.csv","w");
+        if(city_horizontal_guest_file &&
+           (fputs("seq,frame,attempt,mode,stage,fire,up,grounded,pending,active,attached,red,x_milli,y_milli,vx_milli,source\n",
+                  city_horizontal_guest_file)<0 ||
+            fflush(city_horizontal_guest_file)!=0)) {
+            fclose(city_horizontal_guest_file);
+            city_horizontal_guest_file=NULL;
+        }
+        city_horizontal_raster_file=fopen("sdmc:/switch/quackshot-city-horizontal-raster.csv","w");
+        if(city_horizontal_raster_file &&
+           (fputs("seq,frame,x_milli,y_milli,render_argb,bg_argb,readback_ok,baseline_ok,restored_ok,source\n",
+                  city_horizontal_raster_file)<0 ||
+            fflush(city_horizontal_raster_file)!=0)) {
+            fclose(city_horizontal_raster_file);
+            city_horizontal_raster_file=NULL;
+        }
+        if(!city_horizontal_guest_file || !city_horizontal_raster_file)
+            fprintf(stderr,"QuackShot: CITY horizontal guest pixel witnesses unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -5115,6 +5141,37 @@ int main(int argc, char **argv) {
                 } else {
                     fclose(city_up_guest_file);
                     city_up_guest_file=NULL;
+                }
+            }
+            /* Stage275: every original in-game tick from the real
+             * read_input(pad) -> qs_step(), no injected QsInput. The shot
+             * values are observed after physics and collisions, so the
+             * verifier can enforce the one-tick delayed spawn and motion.
+             * Never log copied ROM graphics or any private originals. */
+            if(city_horizontal_guest_file && pad &&
+               old_mode==QS_STAGE && old_stage==0 &&
+               game.mode==QS_STAGE && game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               city_horizontal_guest_records<320u) {
+                const QsShot *shot=NULL;
+                for(int slot=0;slot<QS_MAX_SHOTS;++slot)
+                    if(game.shots[slot].active) {shot=&game.shots[slot];break;}
+                if(shot && city_horizontal_first_shot_frame<0)
+                    city_horizontal_first_shot_frame=game.frames;
+                if(fprintf(city_horizontal_guest_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,live_city_horizontal_pad_qs_step\n",
+                   city_horizontal_guest_records,game.frames,game.city_attempt_frames,
+                   (int)game.mode,game.stage,in.fire!=0,in.up!=0,
+                   game.hero.grounded!=0,game.pending_reference_shot!=0,
+                   shot!=NULL,shot?shot->attached!=0:0,shot?shot->red!=0:0,
+                   shot?(int)(shot->x*1000.0f):-1,
+                   shot?(int)(shot->y*1000.0f):-1,
+                   shot?(int)(shot->vx*1000.0f):0)>=0 &&
+                   fflush(city_horizontal_guest_file)==0)
+                    ++city_horizontal_guest_records;
+                else {
+                    fclose(city_horizontal_guest_file);
+                    city_horizontal_guest_file=NULL;
                 }
             }
             /* Stage 154: only samples from the actual CITY level entered
@@ -5430,6 +5487,69 @@ int main(int argc, char **argv) {
             city_up_raster_last_frame=(int)game.frames;
         }
 #endif
+#ifdef __SWITCH__
+        /* Stage275: actual SDL framebuffer positive and same-frame
+         * background-only negative control of the first right-facing
+         * yellow horizontal projectile from the real gamepad. Sampling
+         * every other shot frame keeps headless software GPU pressure
+         * bounded; all observations retain exact game-frame linkage. */
+        if(city_horizontal_raster_file && pad &&
+           game.mode==QS_STAGE && game.stage==0 &&
+           game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+           city_horizontal_first_shot_frame>=0 &&
+           game.frames>=city_horizontal_first_shot_frame &&
+           game.frames<=city_horizontal_first_shot_frame+26 &&
+           (game.frames-city_horizontal_first_shot_frame)%2==0 &&
+           game.frames!=city_horizontal_raster_last_frame &&
+           city_horizontal_raster_records<18u) {
+            const QsShot *shot=&game.shots[0];
+            if(shot->active && !shot->attached && !shot->red &&
+               shot->vx>0.0f) {
+                QsParallax parallax=qs_parallax_offsets(&game);
+                SDL_Rect vp={0,0,0,0},p={0,0,1,1};
+                float sx=0.0f,sy=0.0f;
+                int ow=0,oh=0,success=0,bg_ok=0,restored=0;
+                uint32_t fore=0,bg=0,again=0;
+                SDL_RenderGetViewport(renderer,&vp);
+                SDL_RenderGetScale(renderer,&sx,&sy);
+                if(SDL_GetRendererOutputSize(renderer,&ow,&oh)==0 &&
+                   sx>=0.5f && sy>=0.5f && sx<16.0f && sy<16.0f) {
+                    int screen_x=(int)shot->x-parallax.front_px;
+                    int screen_y=(int)shot->y;
+                    p.x=vp.x+(int)((screen_x+2.5f)*sx);
+                    p.y=vp.y+(int)((screen_y+1.5f)*sy);
+                    if(p.x>=0 && p.y>=0 && p.x<ow && p.y<oh &&
+                       SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                            &fore,(int)sizeof(fore))==0) {
+                        success=1;
+                        QsGame without=game;
+                        without.shots[0].active=0;
+                        render_stage(renderer,&without);
+                        if(SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                                &bg,(int)sizeof(bg))==0)
+                            bg_ok=1;
+                        render_stage(renderer,&game);
+                        if(SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                                &again,(int)sizeof(again))==0 &&
+                           again==fore)
+                            restored=1;
+                    }
+                }
+                if(fprintf(city_horizontal_raster_file,
+                   "%u,%d,%d,%d,%u,%u,%d,%d,%d,live_city_horizontal_sdl_readback\n",
+                   city_horizontal_raster_records,game.frames,
+                   (int)(shot->x*1000.0f),(int)(shot->y*1000.0f),
+                   (unsigned)fore,(unsigned)bg,success,bg_ok,restored)>=0 &&
+                   fflush(city_horizontal_raster_file)==0)
+                    ++city_horizontal_raster_records;
+                else {
+                    fclose(city_horizontal_raster_file);
+                    city_horizontal_raster_file=NULL;
+                }
+            }
+            city_horizontal_raster_last_frame=game.frames;
+        }
+#endif
         SDL_RenderPresent(renderer);
         if (!shown_first_frame) {
             shown_first_frame = 1;
@@ -5456,6 +5576,8 @@ int main(int argc, char **argv) {
     if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
     if(city_up_guest_file)fclose(city_up_guest_file);
     if(city_up_raster_file)fclose(city_up_raster_file);
+    if(city_horizontal_guest_file)fclose(city_horizontal_guest_file);
+    if(city_horizontal_raster_file)fclose(city_horizontal_raster_file);
 #endif
     qs_trace_close(&trace);
     return 0;
