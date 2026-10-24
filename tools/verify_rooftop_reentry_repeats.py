@@ -7,7 +7,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_rooftop_guest_trace import read_trace
 from tools.verify_rooftop_reentry_trace import read_edges, verify_reentry
 
-PIN = "c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66"
+PIN = "8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
 EVENTS = (
     "ROOFTOP_MENU_SENT", "ROOFTOP_APPROACH_GUEST",
     "ROOFTOP_FIRE_SENT", "ROOFTOP_BRIDGE_OPEN_GUEST",

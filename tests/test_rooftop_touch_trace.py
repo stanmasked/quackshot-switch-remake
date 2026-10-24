@@ -114,7 +114,7 @@ class TouchRepeats(unittest.TestCase):
         with self.assertRaises(TouchRepeatError):verify_two(self.root)
     def test_absent_observed_emulator_rejected(self):
         p=self.root/"rooftop-touch-evidence-2"/"metadata.txt"
-        p.write_text(p.read_text().replace("emulator_sha256_observed=8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642\\n",""))
+        p.write_text(p.read_text().replace("emulator_sha256_observed=8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642\n",""))
         with self.assertRaises(TouchRepeatError):verify_two(self.root)
     def test_missing_emulator_integrity(self):
         p=self.root/"rooftop-touch-evidence-1"/"checksum.txt"

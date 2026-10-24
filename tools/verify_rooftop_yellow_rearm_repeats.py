@@ -9,7 +9,7 @@ from tools.verify_rooftop_red_to_yellow import read_weapon
 from tools.verify_rooftop_red_trace import read_city
 from tools.verify_rooftop_guest_trace import read_trace
 from tools.verify_rooftop_reentry_trace import read_edges
-PIN="c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66"
+PIN="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
 EVENTS=(
 "CITY_MENU_SENT","CITY_RED_JUMP_APPROACH","CITY_RED_JUMP_SENT",
 "CITY_RED_PICKUP_GUEST","CITY_EXIT_GUEST","CITY_EXIT_SENT","ROOFTOP_MENU_SENT",

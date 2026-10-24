@@ -28,7 +28,7 @@ def verify_two(root):
             raise RooftopRepeatError("invalid NRO SHA256")
         if metadata.get("runner_exit")!="0":
             raise RooftopRepeatError("incomplete host/controller session")
-        if metadata.get("emulator_sha256_expected")!="c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66":
+        if metadata.get("emulator_sha256_expected")!="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642":
             raise RooftopRepeatError("emulator digest changed")
         if "OK" not in (directory/"checksum.txt").read_text(encoding="utf-8"):
             raise RooftopRepeatError("downloaded emulator integrity not proved")
