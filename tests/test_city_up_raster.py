@@ -61,7 +61,10 @@ class RasterGuestProtocol(unittest.TestCase):
     def test_bad_schema(self):
         self.reject(lambda n,r:r[6].update(manipulated="true"))
     def test_no_guest_video_alignment(self):
-        self.reject(lambda n,r:n[13].update(visible="0"))
+        numeric,raster=examples()
+        numeric[13].update(visible="0")
+        with self.assertRaises(ValueError):
+            verify_pair(numeric,raster)
 
 if __name__=="__main__":
     unittest.main()

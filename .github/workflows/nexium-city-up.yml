@@ -10,7 +10,9 @@ on:
       - "tools/nexium_city_up_probe.sh"
       - "tools/verify_city_up_guest.py"
       - "tools/verify_city_up_repeats.py"
+      - "tools/verify_city_up_raster.py"
       - "tests/test_city_up_guest.py"
+      - "tests/test_city_up_raster.py"
       - ".github/workflows/nexium-city-up.yml"
   workflow_dispatch:
 
@@ -61,8 +63,9 @@ jobs:
       - name: Verify syntax and adversarial synthetic tests
         run: |
           bash -n tools/nexium_city_up_probe.sh
-          python3 -m py_compile tools/verify_city_up_guest.py tools/verify_city_up_repeats.py
+          python3 -m py_compile tools/verify_city_up_guest.py tools/verify_city_up_repeats.py tools/verify_city_up_raster.py
           python3 -m unittest discover -s tests -p test_city_up_guest.py -v
+          python3 -m unittest discover -s tests -p test_city_up_raster.py -v
       - name: Install headless software Vulkan dependencies
         run: |
           sudo apt-get update -qq
@@ -81,6 +84,7 @@ jobs:
             city-up-evidence/*.log
             city-up-evidence/*.json
             city-up-evidence/guest-city-up.csv
+            city-up-evidence/guest-city-up-raster.csv
             city-up-evidence/xdg-config/NeXium/logs/*.log
           retention-days: 7
           if-no-files-found: warn

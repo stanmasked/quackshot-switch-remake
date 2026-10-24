@@ -112,4 +112,10 @@ for event in CITY_MENU_SENT CITY_GROUNDED_GUEST CITY_UP_FIRE_SENT CITY_UP_CAPTUR
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }
 python3 tools/verify_city_up_guest.py "$out/guest-city-up.csv" "$out/city-up-summary.json"
-echo "PASS: real virtual-controller UP+FIRE generated the bounded numeric NRO witness" > "$out/result.txt"
+find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
+ -name quackshot-city-up-raster.csv -print > "$out/raster-paths.txt"
+[ "$(wc -l < "$out/raster-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous SDL pixel witness" > "$out/result.txt"; exit 1; }
+IFS= read -r raster < "$out/raster-paths.txt"
+cp "$raster" "$out/guest-city-up-raster.csv"
+python3 tools/verify_city_up_raster.py "$out/guest-city-up.csv" "$out/guest-city-up-raster.csv" "$out/city-up-raster-summary.json"
+echo "PASS: real virtual-controller UP+FIRE and SDL pixel readback match the bounded NRO guest witness" > "$out/result.txt"

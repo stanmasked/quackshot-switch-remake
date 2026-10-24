@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_city_up_guest import verify,read_csv,WitnessError
+from tools.verify_city_up_raster import verify_pair,read_raster
 
 PIN="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
 EVENTS=("NEXIUM_WINDOW_READY","NEXIUM_GUEST_FRAMES_READY",
@@ -29,6 +30,7 @@ def metadata(path):
 
 def compare(root):
     reports=[]
+    raster_reports=[]
     signatures=set()
     for number in (1,2):
         directory=pathlib.Path(root)/("city-up-evidence-"+str(number))
@@ -52,10 +54,16 @@ def compare(root):
         positions=[host.find(event) for event in EVENTS]
         if any(pos<0 for pos in positions) or positions!=sorted(positions):
             raise RepeatError("invalid chronological virtual-controller evidence")
-        result=verify(read_csv(directory/"guest-city-up.csv"))
+        rows=read_csv(directory/"guest-city-up.csv")
+        result=verify(rows)
         saved=json.loads((directory/"city-up-summary.json").read_text(encoding="utf-8"))
         if result!=saved:
             raise RepeatError("guest numeric summary differs from original CSV")
+        raster=verify_pair(rows,read_raster(directory/"guest-city-up-raster.csv"))
+        original=json.loads((directory/"city-up-raster-summary.json").read_text(encoding="utf-8"))
+        if raster!=original:
+            raise RepeatError("raster proof differs from independent SDL readback CSV")
+        raster_reports.append(raster)
         reports.append(result)
         signatures.add(nro)
     if len(signatures)!=1:
@@ -64,7 +72,7 @@ def compare(root):
         raise RepeatError("unreasonable launch scheduling spread")
     return {"status":"PASS","guest_runs":2,"same_nro_sha256":next(iter(signatures)),
             "emulator_sha256":PIN,"launch_frame_spread":abs(reports[0]["shot_frame"]-reports[1]["shot_frame"]),
-            "runs":reports,"scope":"numeric guest actor only; no raster/collision claims"}
+            "runs":reports,"raster_runs":raster_reports,"scope":"actual NRO SDL pixel readback; no external screenshot/collision claim"}
 
 def main(argv):
     if len(argv)!=3:
@@ -74,7 +82,7 @@ def main(argv):
     except (OSError,ValueError,KeyError,TypeError,WitnessError) as exc:
         raise SystemExit("FAIL: independent CITY UP guest proof: "+str(exc)) from exc
     pathlib.Path(argv[2]).write_text(json.dumps(result,sort_keys=True)+"\n",encoding="utf-8")
-    print("TWO_CITY_UP_GUESTS_NUMERIC_PASS",json.dumps(result,sort_keys=True))
+    print("TWO_CITY_UP_GUESTS_RASTER_PASS",json.dumps(result,sort_keys=True))
 
 if __name__=="__main__":
     main(sys.argv)
