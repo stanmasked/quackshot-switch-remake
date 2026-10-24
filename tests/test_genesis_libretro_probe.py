@@ -211,6 +211,114 @@ class GenesisFrontendTests(unittest.TestCase):
             probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
                            sat_snapshot_frames=tuple(range(129)))
 
+    def test_collision_profile_snapshot_decodes_object_boxes_and_overlap(self):
+        ram = bytearray(0x10000)
+        rom = bytearray(1024 * 1024)
+
+        def put_byte(offset, value):
+            ram[offset ^ 1] = value
+
+        def put_word(offset, value):
+            ram[offset:offset + 2] = (value & 0xFFFF).to_bytes(2, "little")
+
+        def put_long(offset, value):
+            put_word(offset, (value >> 16) & 0xFFFF)
+            put_word(offset + 2, value & 0xFFFF)
+
+        put_word(0x8F54, 118)
+        put_word(0x8F56, 161)
+        put_word(0x8F58, 497)
+        put_word(0x8F5A, 521)
+
+        # Object type 3 at 0xFF9000 overlaps the player rectangle by the game's profile.
+        put_word(0x9000, 3)
+        put_word(0x9002, 1)
+        put_long(0x9010, 528 << 16)
+        put_long(0x9014, 176 << 16)
+        put_long(0x9020, 0x0005ADD4)
+        put_byte(0x9024, 0x3D)
+        put_byte(0x900C, 0x00)
+        put_byte(0x900D, 0x02)
+        put_byte(0x9015, 0xB0)
+
+        # Object type 6 at 0xFF9040 is left of the player and does not overlap.
+        put_word(0x9040, 6)
+        put_word(0x9042, 1)
+        put_long(0x9050, 404 << 16)
+        put_long(0x9054, 156 << 16)
+        put_long(0x9060, 0x0005ADD4)
+        put_byte(0x9064, 0x40)
+
+        table = probe.COLLISION_PROFILE_TABLE_OFFSET
+        rom[table + 0x3D * 4:table + 0x3D * 4 + 4] = bytes((0xD8, 0x28, 0xF6, 0x14))
+        rom[table + 0x40 * 4:table + 0x40 * 4 + 4] = bytes((0xFA, 0x04, 0xFE, 0x04))
+
+        put_byte(0xEE08, 0x00)
+        put_byte(0xEE09, 0xFF)
+        put_byte(0xEE62, 0x00)
+        result = probe._collect_collision_profile_snapshot(bytes(ram), bytes(rom), 2353)
+        self.assertEqual(result["schema"], "quackshot_private_collision_profile_numeric_v1")
+        self.assertEqual(result["player_collision_rectangle"],
+                         {"x_min": 497, "x_max": 521, "y_min": 118, "y_max": 161})
+        self.assertEqual(result["global_event_ee09"], "0xFF")
+        self.assertFalse(result["raw_rom_exported"])
+        self.assertFalse(result["raw_ram_exported"])
+        self.assertFalse(result["collision_profile_bytes_exported"])
+
+        obj3, obj6 = result["objects"]
+        self.assertEqual(obj3["cpu_address"], "0xFF9000")
+        self.assertEqual(obj3["object_type"], 3)
+        self.assertEqual(obj3["substate"], 1)
+        self.assertEqual(obj3["collision_profile_index"], 0x3D)
+        self.assertEqual(obj3["collision_profile_offsets_ymin_ymax_xmin_xmax"],
+                         [-40, 40, -10, 20])
+        self.assertEqual(obj3["collision_bounds"],
+                         {"x_min": 518, "x_max": 548, "y_min": 136, "y_max": 216})
+        self.assertTrue(obj3["overlaps_player_collision_rectangle"])
+        self.assertEqual(obj3["intersection_with_player"],
+                         {"x_min": 518, "x_max": 521, "y_min": 136, "y_max": 161})
+
+        self.assertEqual(obj6["cpu_address"], "0xFF9040")
+        self.assertEqual(obj6["collision_profile_offsets_ymin_ymax_xmin_xmax"],
+                         [-6, 4, -2, 4])
+        self.assertEqual(obj6["collision_bounds"],
+                         {"x_min": 402, "x_max": 408, "y_min": 150, "y_max": 160})
+        self.assertFalse(obj6["overlaps_player_collision_rectangle"])
+        self.assertIsNone(obj6["intersection_with_player"])
+
+    def test_collision_profile_snapshot_fails_closed_for_short_rom(self):
+        with self.assertRaisesRegex(RuntimeError, "too small"):
+            probe._collect_collision_profile_snapshot(bytes(0x10000), bytes(0x20000), 0)
+
+    def test_run_core_rejects_invalid_collision_profile_snapshot_frames(self):
+        invalid = ((-1,), (2,), (0, 0), [0, "1"])
+        for frames in invalid:
+            with self.subTest(frames=frames), self.assertRaisesRegex(
+                    ValueError, "collision_profile_snapshot_frames"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               collision_profile_snapshot_frames=frames)
+
+    def test_run_core_rejects_more_than_24_collision_profile_snapshot_frames(self):
+        with self.assertRaisesRegex(ValueError, "collision_profile_snapshot_frames"):
+            probe.run_core(None, {"need_fullpath": False}, b"", "mock", 25, [],
+                           collision_profile_snapshot_frames=tuple(range(25)))
+
+    def test_collision_profile_rejects_reversed_player_rectangle(self):
+        ram = bytearray(65536)
+        rom = bytes(probe.COLLISION_PROFILE_TABLE_OFFSET + 1024)
+        ram[0x8F58:0x8F5A] = (500).to_bytes(2, "little")
+        ram[0x8F5A:0x8F5C] = (400).to_bytes(2, "little")
+        with self.assertRaisesRegex(ValueError, "player collision rectangle"):
+            probe._collect_collision_profile_snapshot(bytes(ram), rom, 0)
+
+    def test_collision_profile_rejects_nonbyte_inputs_and_invalid_frame(self):
+        rom = bytes(probe.COLLISION_PROFILE_TABLE_OFFSET + 1024)
+        for raw in (bytearray(65536), bytes(65535)):
+            with self.assertRaises(RuntimeError):
+                probe._collect_collision_profile_snapshot(raw, rom, 0)
+        with self.assertRaises(ValueError):
+            probe._collect_collision_profile_snapshot(bytes(65536), rom, True)
+
     def test_candidate_object_state_decodes_only_allowlisted_numeric_fields(self):
         ram = bytearray(probe.CANDIDATE_OBJECT_RAM_OFFSET +
                         probe.CANDIDATE_OBJECT_RECORD_BYTES)

@@ -14,6 +14,11 @@ import zlib
 
 from genesis_blue_roi_numeric import blue_roi_numeric, validate_roi
 from genesis_blue_roi_components import blue_roi_components_numeric
+from genesis_collision_profile_numeric import (
+    _collect_collision_profile_snapshot,
+    COLLISION_PROFILE_TABLE_OFFSET,
+    MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES,
+)
 
 MAX_ROM_BYTES = 8 * 1024 * 1024
 MAX_FRAMES = 10000
@@ -502,7 +507,7 @@ def _collect_candidate_object_state(ram_bytes, frame):
     }
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_state_snapshot_frames=()):
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_state_snapshot_frames=(), collision_profile_snapshot_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -555,6 +560,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         raise ValueError(
             "object_state_snapshot_frames requires up to 128 unique valid frame indices")
     object_state_frame_set = set(object_state_snapshot_frames)
+    if (type(collision_profile_snapshot_frames) not in (tuple, list) or
+            len(collision_profile_snapshot_frames) > MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES or
+            any(type(f) is not int or not 0 <= f < frames
+                for f in collision_profile_snapshot_frames) or
+            len(set(collision_profile_snapshot_frames)) != len(collision_profile_snapshot_frames)):
+        raise ValueError("collision_profile_snapshot_frames requires up to 24 unique valid frame indices")
+    collision_profile_frame_set = set(collision_profile_snapshot_frames)
     trace_windows = []
     for label, candidate in (
         ("cpu_write_trace_window", cpu_write_trace_window),
@@ -719,6 +731,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
     sat_api, sat_snapshots = None, []
     object_state_snapshots = []
+    collision_profile_snapshots = []
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -761,6 +774,12 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 ram_bytes = C.string_at(ram_ptr, ram_len)
                 object_state_snapshots.append(
                     _collect_candidate_object_state(ram_bytes, frame))
+            if frame in collision_profile_frame_set:
+                ram_ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
+                if not ram_ptr or ram_len != 65536:
+                    raise RuntimeError("Core RAM cannot satisfy collision-profile snapshot")
+                collision_profile_snapshots.append(_collect_collision_profile_snapshot(
+                    C.string_at(ram_ptr, ram_len), rom_data, frame))
             if state["video_callbacks_current_step"] == 0:
                 state["frames_without_video_callback"] += 1
             elif state["video_callbacks_current_step"] > 1:
@@ -856,6 +875,20 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 "audio_exported": False,
                 "sprite_identity_verified": False,
             } if sat_frame_set else None),
+            "collision_profile_trace": ({
+                "schema": "quackshot_private_collision_profile_trace_v1",
+                "status": "COMPLETE",
+                "frame_indices_requested": sorted(collision_profile_frame_set),
+                "sampling_phase": "post_retro_run_before_next_input",
+                "max_frames": MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES,
+                "frames": collision_profile_snapshots,
+                "raw_rom_exported": False,
+                "raw_ram_exported": False,
+                "collision_profile_bytes_exported": False,
+                "frame_pixels_exported": False,
+                "collision_geometry_verified": False,
+                "safe_to_modify_switch_physics": False,
+            } if collision_profile_frame_set else None),
             "candidate_object_state_trace": ({
                 "schema": "quackshot_private_candidate_object_state_numeric_v1",
                 "status": "COMPLETE",
@@ -955,6 +988,8 @@ def main():
                         help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
     parser.add_argument("--sat-snapshot-frames", default="",
                         help="Comma-separated frames for decoded numeric VDP sprite attributes only (max 128 frames; no raw VRAM)")
+    parser.add_argument("--collision-profile-snapshot-frames", default="",
+                        help="Private opt-in numeric collision boxes for up to 24 selected frames")
     parser.add_argument("--object-state-snapshot-frames", default="",
                         help="Comma-separated frames for a fixed allowlist of candidate-object numeric fields only (max 128; no raw RAM)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
@@ -979,6 +1014,9 @@ def main():
             sat_frames = parse_frame_indices(args.sat_snapshot_frames, args.frames)
             object_state_frames = parse_frame_indices(
                 args.object_state_snapshot_frames, args.frames)
+            collision_profile_frames = parse_frame_indices(
+                args.collision_profile_snapshot_frames, args.frames,
+                limit=MAX_COLLISION_PROFILE_SNAPSHOT_FRAMES)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
@@ -986,7 +1024,8 @@ def main():
                               cpu_write_trace_window=cpu_trace_window,
                               cpu_control_flow_trace_window=cpu_control_flow_trace_window,
                               sat_snapshot_frames=sat_frames,
-                              object_state_snapshot_frames=object_state_frames)
+                              object_state_snapshot_frames=object_state_frames,
+                              collision_profile_snapshot_frames=collision_profile_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
