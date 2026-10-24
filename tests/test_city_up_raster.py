@@ -17,7 +17,9 @@ def examples():
         guest=rows[9+3+age]
         payload=dict(seq=seq,frame=int(guest["frame"]),age=age,
                      shot_x=int(guest["x"]),shot_y=int(guest["y"]),
-                     gold_argb=GOLD,cyan_argb=CYAN,readback_ok=1,
+                     gold_argb=GOLD,cyan_argb=CYAN,
+                     bg_gold_argb=0xff85bad4,bg_cyan_argb=0xff85bad4,
+                     readback_ok=1,baseline_ok=1,restored_ok=1,
                      scale_x_milli=3000,scale_y_milli=3000,source=SOURCE)
         raster.append({key:str(payload[key]) for key in COLUMNS})
     return rows,raster
@@ -32,6 +34,14 @@ class RasterGuestProtocol(unittest.TestCase):
             verify_pair(rows,frames)
     def test_no_gold(self):
         self.reject(lambda n,r:r[0].update(gold_argb="0"))
+    def test_fake_gold_on_background(self):
+        self.reject(lambda n,r:r[0].update(bg_gold_argb=str(GOLD)))
+    def test_fake_blue_on_background(self):
+        self.reject(lambda n,r:r[1].update(bg_cyan_argb=str(CYAN)))
+    def test_missing_negative_control(self):
+        self.reject(lambda n,r:r[2].update(baseline_ok="0"))
+    def test_render_not_restored(self):
+        self.reject(lambda n,r:r[2].update(restored_ok="0"))
     def test_wrong_blue(self):
         self.reject(lambda n,r:r[2].update(cyan_argb=str(GOLD)))
     def test_fake_readback_success(self):
