@@ -4674,6 +4674,10 @@ int main(int argc, char **argv) {
     /* Stage269: read-only, bounded numeric witness of actual UP+FIRE
      * pad inputs and the dedicated CITY vertical projectile. No assets. */
     FILE *city_up_guest_file = NULL;
+    /* Stage270: observe actual SDL renderer pixels, never synthetic raster. */
+    FILE *city_up_raster_file = NULL;
+    unsigned city_up_raster_records = 0;
+    int city_up_raster_last_frame = -1;
     unsigned city_up_guest_records = 0;
     unsigned rooftop_red_acquire_records=0;
     unsigned rooftop_transition_records=0;
@@ -4821,6 +4825,15 @@ int main(int argc, char **argv) {
         }
         if(!city_up_guest_file)
             fprintf(stderr,"QuackShot: CITY upward numeric witness CSV unavailable (non-fatal)\n");
+        city_up_raster_file=fopen("sdmc:/switch/quackshot-city-up-raster.csv","w");
+        if(city_up_raster_file &&
+           (fputs("seq,frame,age,shot_x,shot_y,gold_argb,cyan_argb,readback_ok,scale_x_milli,scale_y_milli,source\n",
+                  city_up_raster_file)<0 || fflush(city_up_raster_file)!=0)) {
+            fclose(city_up_raster_file);
+            city_up_raster_file=NULL;
+        }
+        if(!city_up_raster_file)
+            fprintf(stderr,"QuackShot: CITY upward renderer pixel CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -5255,6 +5268,57 @@ int main(int argc, char **argv) {
         }
         if (game.mode == QS_MAP) render_map(renderer, &game);
         else render_stage(renderer, &game);
+#ifdef __SWITCH__
+        /* Stage270: independent real SDL GPU/CPU readback after actual
+         * render_stage(), before Present(). Pixel reads cannot alter
+         * physics, input, collision, or the original guest CSV.
+         * Skip repeated renders of one simulation tick; collect bounded
+         * visible ages only, with exact display-scale coordinates. */
+        if (city_up_raster_file && pad &&
+            game.mode==QS_STAGE && game.stage==0 &&
+            game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+            (int)game.frames!=city_up_raster_last_frame &&
+            city_up_raster_records<48u) {
+            int shot_x,shot_y;
+            if(qs_city_up_projectile_position(&game,&shot_x,&shot_y)) {
+                QsParallax p=qs_parallax_offsets(&game);
+                SDL_Rect viewport={0,0,0,0}, a={0,0,1,1}, b={0,0,1,1};
+                float sx=0.0f,sy=0.0f;
+                int ow=0,oh=0,valid=0;
+                uint32_t gold=0,cyan=0;
+                SDL_RenderGetViewport(renderer,&viewport);
+                SDL_RenderGetScale(renderer,&sx,&sy);
+                if(SDL_GetRendererOutputSize(renderer,&ow,&oh)==0 &&
+                   sx>0.0f && sy>0.0f && sx<16.0f && sy<16.0f) {
+                    int px=shot_x-p.front_px;
+                    a.x=viewport.x+(int)((px+1.5f)*sx);
+                    a.y=viewport.y+(int)((shot_y+1.5f)*sy);
+                    b.x=viewport.x+(int)((px+3.5f)*sx);
+                    b.y=viewport.y+(int)((shot_y+3.5f)*sy);
+                    if(a.x>=0 && a.y>=0 && b.x>=0 && b.y>=0 &&
+                       a.x<ow && b.x<ow && a.y<oh && b.y<oh &&
+                       SDL_RenderReadPixels(renderer,&a,SDL_PIXELFORMAT_ARGB8888,
+                                            &gold,(int)sizeof(gold))==0 &&
+                       SDL_RenderReadPixels(renderer,&b,SDL_PIXELFORMAT_ARGB8888,
+                                            &cyan,(int)sizeof(cyan))==0)
+                        valid=1;
+                }
+                if(fprintf(city_up_raster_file,
+                  "%u,%d,%d,%d,%d,%u,%u,%d,%d,%d,live_city_up_sdl_pixel_readback\n",
+                  city_up_raster_records,game.frames,
+                  game.reference_up_projectile.age,shot_x,shot_y,
+                  (unsigned)gold,(unsigned)cyan,valid,
+                  (int)(sx*1000.0f),(int)(sy*1000.0f))>=0 &&
+                  fflush(city_up_raster_file)==0) {
+                    ++city_up_raster_records;
+                } else {
+                    fclose(city_up_raster_file);
+                    city_up_raster_file=NULL;
+                }
+            }
+            city_up_raster_last_frame=(int)game.frames;
+        }
+#endif
         SDL_RenderPresent(renderer);
         if (!shown_first_frame) {
             shown_first_frame = 1;
@@ -5280,6 +5344,7 @@ int main(int argc, char **argv) {
     if(rooftop_transition_file)fclose(rooftop_transition_file);
     if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
     if(city_up_guest_file)fclose(city_up_guest_file);
+    if(city_up_raster_file)fclose(city_up_raster_file);
 #endif
     qs_trace_close(&trace);
     return 0;
