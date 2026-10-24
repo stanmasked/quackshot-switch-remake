@@ -8,7 +8,7 @@ from tools.verify_rooftop_second_red_trace import verify_second_red,verify_host_
 from tools.verify_rooftop_red_trace import read_city
 from tools.verify_rooftop_guest_trace import read_trace
 from tools.verify_rooftop_reentry_trace import read_edges
-PIN="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
+PIN="d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
 EVENTS=(
 "CITY_MENU_SENT","CITY_RED_JUMP_APPROACH","CITY_RED_JUMP_SENT",
 "CITY_RED_PICKUP_GUEST","CITY_EXIT_GUEST","CITY_EXIT_SENT","ROOFTOP_MENU_SENT",

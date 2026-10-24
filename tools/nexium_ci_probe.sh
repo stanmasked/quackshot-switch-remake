@@ -22,9 +22,9 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 release="https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz"
 # Published asset digest from the official GitHub Releases API, checked
-# on 2026-10-23 (release asset 668991773, updated 12:00:34Z). Nightly changes
+# on 2026-10-24 (official asset 670955988, updated 01:39:32Z). Nightly changes
 # MUST fail closed and be manually verified against the new release digest.
-expected="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
+expected="d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
 
 {
     echo "emulator=NeXium experimental nightly"

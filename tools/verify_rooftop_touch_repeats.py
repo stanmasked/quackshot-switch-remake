@@ -8,7 +8,7 @@ from tools.verify_rooftop_guest_trace import read_trace
 from tools.verify_rooftop_touch_trace import verify_touch
 
 # GitHub release asset SHA-256, validated in two genuine emulator guest runs.
-PIN = "8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
+PIN = "d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
 
 class TouchRepeatError(ValueError):
     pass

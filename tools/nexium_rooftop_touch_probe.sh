@@ -7,8 +7,8 @@ nro="$(realpath "$1")"; out="$(realpath -m "$2")"; profile="$3"
 case "$profile" in 1|2) ;; *) echo "invalid repeat" >&2; exit 2;; esac
 mkdir -p "$out"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-# Pinned to GitHub release asset digest verified on 2026-10-23; keep fail-closed.
-expected=8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642
+# Pinned to GitHub release asset digest verified on 2026-10-24; keep fail-closed.
+expected=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180
 {
  echo "profile=$profile"
  echo "source=real_virtual_controller_rooftop_touch_guest"

@@ -9,7 +9,7 @@ sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_city_up_guest import verify,read_csv,WitnessError
 from tools.verify_city_up_raster import verify_pair,read_raster
 
-PIN="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
+PIN="d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
 EVENTS=("NEXIUM_WINDOW_READY","NEXIUM_GUEST_FRAMES_READY",
         "CITY_MENU_SENT","CITY_GROUNDED_GUEST","CITY_UP_FIRE_SENT",
         "CITY_UP_CAPTURE_COMPLETE")
