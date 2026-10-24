@@ -5,6 +5,7 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_city_up_guest import verify,read_csv,WitnessError
 
 PIN="8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"
