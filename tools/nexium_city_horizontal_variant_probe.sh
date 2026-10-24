@@ -110,18 +110,25 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
     sleep 0.12
    done
    [ "$red_ready" = 1 ] || { echo "BLOCKED: real red pickup witness unavailable"; exit 1; }
-   # The pickup is above the floor. Approach on the real pad, then hold
-   # physical B+jump while moving right; no position or unlock injection.
-   xdotool keydown --clearmodifiers Right
-   sleep 0.70
-   xdotool keydown --clearmodifiers v
-   sleep 0.35
-   xdotool keyup v
-   sleep 0.05
-   xdotool keyup Right
+   # Follow the already validated Stage154 route: move right until the
+   # real guest reaches x=101, then tap physical Nintendo B/jump (NeXium X)
+   # while continuing right. No host-side position or unlock injection.
+   xdotool keydown d
+   approach=0
+   for i in $(seq 1 250); do
+    sleep 0.025
+    IFS=, read -r seq frame mode stage x y grounded bits red_before red_after weapon pickup_before pickup_after source <<< "$(tail -n1 "$redlog")"
+    if [ "$stage" = "0" ] && [[ "$x" =~ ^[0-9]+$ ]] && [ "$x" -ge 101000 ]; then
+     echo "CITY_RED_JUMP_APPROACH frame=$frame x_milli=$x"
+     approach=1; break
+    fi
+   done
+   [ "$approach" = 1 ] || { xdotool keyup d; echo "BLOCKED: CITY did not reach real jump approach"; exit 1; }
+   xdotool keydown x; sleep 0.20; xdotool keyup x
    echo CITY_RED_PICKUP_APPROACH_SENT
    pickup_frame=""
-   for i in $(seq 1 100); do
+   for i in $(seq 1 230); do
+    sleep 0.035
     pickup_frame="$(while IFS=, read -r seq frame mode stage x y grounded bits red_before red_after weapon pickup_before pickup_after source; do
      if [ "$red_before" = "0" ] && [ "$red_after" = "1" ] &&
         [ "$weapon" = "1" ] && [ "$pickup_before" = "1" ] && [ "$pickup_after" = "0" ]; then
@@ -129,8 +136,8 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
      fi
     done < "$redlog")"
     [ -n "$pickup_frame" ] && break
-    sleep 0.12
    done
+   xdotool keyup d
    [ -n "$pickup_frame" ] || { echo "BLOCKED: physical jump did not acquire red pickup"; exit 1; }
    echo "CITY_RED_PICKUP_CONFIRMED frame=$pickup_frame"
    # Weapon is set by the pickup itself. Turn left and fire with that live weapon.
