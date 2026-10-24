@@ -238,16 +238,19 @@ jobs:
           # Keep the single definition in cpuhook.c and make the header declaration external.
           sed -i 's/^void (\*cpu_hook)/extern void (*cpu_hook)/' emulator-core-trace/core/debug/cpuhook.h
           grep -q '^extern void (\*cpu_hook)' emulator-core-trace/core/debug/cpuhook.h
-          sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*; quackshot_research_cpu_pc_trace_*;/' emulator-core-trace/libretro/link.T
+          sed -i 's/global: retro_\*; quackshot_research_vdp_hscroll;/global: retro_*; quackshot_research_vdp_hscroll; quackshot_research_cpu_trace_*; quackshot_research_cpu_pc_trace_*; quackshot_research_sat_*;/' emulator-core-trace/libretro/link.T
           grep -q 'quackshot_research_cpu_trace_reset' emulator-core-trace/libretro/libretro.c
           grep -Fq 'quackshot_research_cpu_trace_*' emulator-core-trace/libretro/link.T
           grep -Fq 'quackshot_research_cpu_pc_trace_*' emulator-core-trace/libretro/link.T
+          grep -Fq 'quackshot_research_sat_*' emulator-core-trace/libretro/link.T
           make -C emulator-core-trace -f Makefile.libretro clean
           make -C emulator-core-trace -f Makefile.libretro -j2 platform=unix HAVE_CHD=0 HAVE_CDROM=0 HOOK_CPU=1 TARGET_NAME=genesis_plus_gx_cpu_trace
           test -s emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_reset$'
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_trace_read$'
           nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_cpu_pc_trace_read$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_count$'
+          nm -D emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so | grep ' quackshot_research_sat_read$'
           ldd emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so
           mkdir -p cpu-trace-emulator/tools
           cp emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so cpu-trace-emulator/
@@ -256,10 +259,10 @@ jobs:
           sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
-            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write and PC/A0/CCR tracing.' \
-            'PC trace records only selected PCs while A0 identifies the candidate 0xFFA2C0 object; CCR is masked to five bits.' \
+            'Separate research-only build with HOOK_CPU=1 and bounded numeric Work RAM write, PC/A0/CCR and parsed VDP SAT tracing.' \
+            'PC trace records selected PCs and A0/CCR; SAT API returns decoded coordinates/attributes only, never raw VRAM bytes.' \
             'Build-only fix: cpuhook.h declares cpu_hook extern; cpuhook.c retains its single definition.' \
-            'No original game ROM, raw RAM dump, instruction bytes, framebuffer, graphics or audio included.' \
+            'No original game ROM, raw RAM/VRAM dump, instruction bytes, framebuffer, graphics or audio included.' \
             'See LICENSE.txt; modified upstream source is included in the source archive.' \
             > cpu-trace-emulator/BUILD_PROVENANCE.txt
           tar --exclude='.git' --exclude='*.o' --exclude='*.so' --exclude='*.a' \
@@ -286,6 +289,7 @@ jobs:
             --core emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so \
             --rom ci-only-cpu-trace.gen --frames 90 --video-stride 1 \
             --cpu-write-trace-window 0:89 --cpu-control-flow-trace-window 0:89 \
+            --sat-snapshot-frames 0,89 \
             --output ci-only-cpu-trace-observation.json
           python3 - <<'PY'
           import json
@@ -316,8 +320,28 @@ jobs:
           assert pc_trace['raw_rom_exported'] is False, pc_trace
           assert pc_trace['raw_ram_exported'] is False, pc_trace
           assert pc_trace['instruction_bytes_exported'] is False, pc_trace
+          sat = report['sat_sprite_trace']
+          assert sat['schema'] == 'quackshot_private_genesis_vdp_sat_numeric_v1', sat
+          assert sat['status'] == 'COMPLETE', sat
+          assert sat['frame_indices_requested'] == [0, 89], sat
+          assert len(sat['frames']) == 2, sat
+          assert sat['raw_vram_exported'] is False and sat['raw_sat_bytes_exported'] is False, sat
+          assert sat['frame_pixels_exported'] is False and sat['audio_exported'] is False, sat
+          for snapshot in sat['frames']:
+            assert snapshot['entry_count'] == len(snapshot['sprites']) <= 80, snapshot
+            for sprite in snapshot['sprites']:
+              assert 0 <= sprite['sprite_index'] < 80, sprite
+              assert -128 <= sprite['x_screen'] <= 383, sprite
+              assert -128 <= sprite['y_screen'] <= 383, sprite
+              assert sprite['width'] in (8, 16, 24, 32), sprite
+              assert sprite['height'] in (8, 16, 24, 32), sprite
+              assert 0 <= sprite['pattern_index'] <= 0x7FF, sprite
+              assert 0 <= sprite['palette'] <= 3, sprite
+              assert sprite['priority'] in (0, 1) and sprite['hflip'] in (0, 1) and sprite['vflip'] in (0, 1), sprite
+              assert 0 <= sprite['next_link'] < 80, sprite
           assert 'raw_pixels' not in report and 'frame_pixels' not in report, report
           print('STAGE221_SYNTHETIC_M68K_PC_A0_CCR_TRACE_PASS')
+          print('STAGE223_SYNTHETIC_NUMERIC_VDP_SAT_PASS')
           PY
           rm -f ci-only-cpu-trace.gen ci-only-cpu-trace-observation.json
           find cpu-trace-emulator -type f -print0 | xargs -0 file

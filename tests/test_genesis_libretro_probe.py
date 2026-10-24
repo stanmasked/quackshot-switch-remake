@@ -164,6 +164,19 @@ class GenesisFrontendTests(unittest.TestCase):
                            cpu_write_trace_window=(0, 1),
                            cpu_control_flow_trace_window=(2, 3))
 
+    def test_run_core_rejects_invalid_sat_snapshot_frames_before_core_access(self):
+        invalid = ((-1,), (2,), (0, 0), [0, "1"])
+        for frames in invalid:
+            with self.subTest(frames=frames), self.assertRaisesRegex(
+                    ValueError, "sat_snapshot_frames"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               sat_snapshot_frames=frames)
+
+    def test_run_core_rejects_more_than_128_sat_snapshot_frames_before_core_access(self):
+        with self.assertRaisesRegex(ValueError, "sat_snapshot_frames"):
+            probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
+                           sat_snapshot_frames=tuple(range(129)))
+
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json
         root = Path(__file__).resolve().parents[1]

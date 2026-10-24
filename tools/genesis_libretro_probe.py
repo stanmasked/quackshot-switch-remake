@@ -18,6 +18,8 @@ from genesis_blue_roi_components import blue_roi_components_numeric
 MAX_ROM_BYTES = 8 * 1024 * 1024
 MAX_FRAMES = 10000
 MAX_CPU_TRACE_WINDOW = 128
+MAX_SAT_SNAPSHOT_FRAMES = 128
+MAX_SAT_SPRITES = 80
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -343,7 +345,73 @@ def _collect_cpu_pc_trace(api, window):
         "safe_to_modify_switch_physics": False,
     }
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None):
+
+def _prepare_sat_api(core):
+    """Bind parsed numeric VDP SAT exports; no raw VRAM interface is used."""
+    names = ("quackshot_research_sat_count", "quackshot_research_sat_read")
+    try:
+        api = {name: getattr(core, name) for name in names}
+    except AttributeError as error:
+        raise RuntimeError("SAT snapshot requested but core lacks Stage223 numeric SAT exports") from error
+    api["quackshot_research_sat_count"].argtypes = []
+    api["quackshot_research_sat_count"].restype = C.c_uint32
+    api["quackshot_research_sat_read"].argtypes = (
+        [C.c_uint32, C.POINTER(C.c_uint32), C.POINTER(C.c_int), C.POINTER(C.c_int)] +
+        [C.POINTER(C.c_uint32)] * 8
+    )
+    api["quackshot_research_sat_read"].restype = C.c_int
+    return api
+
+
+def _collect_sat_snapshot(api, frame):
+    """Return decoded sprite metadata only; never raw SAT/VRAM words."""
+    count = int(api["quackshot_research_sat_count"]())
+    if not 0 <= count <= MAX_SAT_SPRITES:
+        raise RuntimeError("VDP SAT core returned an invalid sprite count")
+    sprites = []
+    for entry_index in range(count):
+        sprite_index = C.c_uint32()
+        x_screen = C.c_int()
+        y_screen = C.c_int()
+        slots = [C.c_uint32() for _ in range(8)]
+        ok = api["quackshot_research_sat_read"](
+            entry_index, C.byref(sprite_index), C.byref(x_screen),
+            C.byref(y_screen), *(C.byref(slot) for slot in slots)
+        )
+        if not ok:
+            raise RuntimeError("VDP SAT entry disappeared while reading")
+        width, height, pattern, palette, priority, hflip, vflip, next_link = (
+            int(slot.value) for slot in slots
+        )
+        sprite_index = int(sprite_index.value)
+        x_screen, y_screen = int(x_screen.value), int(y_screen.value)
+        if (not 0 <= sprite_index < MAX_SAT_SPRITES or
+                not -128 <= x_screen <= 383 or
+                not -128 <= y_screen <= 383 or
+                width not in (8, 16, 24, 32) or
+                height not in (8, 16, 24, 32) or
+                not 0 <= pattern <= 0x7FF or
+                not 0 <= palette <= 3 or
+                priority not in (0, 1) or hflip not in (0, 1) or
+                vflip not in (0, 1) or not 0 <= next_link < MAX_SAT_SPRITES):
+            raise RuntimeError("VDP SAT core returned invalid decoded sprite metadata")
+        sprites.append({
+            "entry_index": entry_index,
+            "sprite_index": sprite_index,
+            "x_screen": x_screen,
+            "y_screen": y_screen,
+            "width": width,
+            "height": height,
+            "pattern_index": pattern,
+            "palette": palette,
+            "priority": priority,
+            "hflip": hflip,
+            "vflip": vflip,
+            "next_link": next_link,
+        })
+    return {"frame": frame, "entry_count": count, "sprites": sprites}
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -381,6 +449,13 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(video_digest_frames)) != len(video_digest_frames)):
         raise ValueError("video_digest_frames requires up to 128 unique valid frame indices")
     digest_frame_set = set(video_digest_frames)
+    if (type(sat_snapshot_frames) not in (tuple, list) or
+            len(sat_snapshot_frames) > MAX_SAT_SNAPSHOT_FRAMES or
+            any(type(f) is not int or not 0 <= f < frames
+                for f in sat_snapshot_frames) or
+            len(set(sat_snapshot_frames)) != len(sat_snapshot_frames)):
+        raise ValueError("sat_snapshot_frames requires up to 128 unique valid frame indices")
+    sat_frame_set = set(sat_snapshot_frames)
     trace_windows = []
     for label, candidate in (
         ("cpu_write_trace_window", cpu_write_trace_window),
@@ -543,6 +618,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     core.retro_set_input_state(input_state)
     initialized, loaded = False, False
     cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
+    sat_api, sat_snapshots = None, []
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -554,6 +630,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         if trace_window is not None:
             cpu_trace_api = _prepare_cpu_trace_api(core, trace_window)
             cpu_trace_active = True
+        if sat_frame_set:
+            sat_api = _prepare_sat_api(core)
         core.retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD)
         av = AvInfo()
         core.retro_get_system_av_info(C.byref(av))
@@ -573,6 +651,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 core.retro_run()
             finally:
                 state["inside_retro_run"] = False
+            if frame in sat_frame_set:
+                sat_snapshots.append(_collect_sat_snapshot(sat_api, frame))
             if state["video_callbacks_current_step"] == 0:
                 state["frames_without_video_callback"] += 1
             elif state["video_callbacks_current_step"] > 1:
@@ -601,6 +681,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             if cpu_control_flow_trace_window is not None:
                 cpu_pc_trace_result = _collect_cpu_pc_trace(cpu_trace_api, trace_window)
             cpu_trace_active = False
+        if sat_frame_set and sorted(row["frame"] for row in sat_snapshots) != sorted(sat_frame_set):
+            raise RuntimeError("Invalid VDP SAT snapshot frame cadence")
         if digest_frame_set:
             if (state["video_digest_error"] is not None or
                     sorted(row["frame"] for row in state["video_frame_digests"]) !=
@@ -649,6 +731,19 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                                     if digest_frame_set else None),
             "cpu_write_trace": cpu_trace_result,
             "cpu_control_flow_trace": cpu_pc_trace_result,
+            "sat_sprite_trace": ({
+                "schema": "quackshot_private_genesis_vdp_sat_numeric_v1",
+                "status": "COMPLETE",
+                "frame_indices_requested": sorted(sat_frame_set),
+                "max_frames": MAX_SAT_SNAPSHOT_FRAMES,
+                "max_sprites_per_frame": MAX_SAT_SPRITES,
+                "frames": sat_snapshots,
+                "raw_vram_exported": False,
+                "raw_sat_bytes_exported": False,
+                "frame_pixels_exported": False,
+                "audio_exported": False,
+                "sprite_identity_verified": False,
+            } if sat_frame_set else None),
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -716,6 +811,8 @@ def main():
                         help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM-write PC tracing (max 128 frames)")
     parser.add_argument("--cpu-control-flow-trace-window", default="",
                         help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
+    parser.add_argument("--sat-snapshot-frames", default="",
+                        help="Comma-separated frames for decoded numeric VDP sprite attributes only (max 128 frames; no raw VRAM)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -735,12 +832,14 @@ def main():
             cpu_trace_window = parse_cpu_trace_window(args.cpu_write_trace_window, args.frames)
             cpu_control_flow_trace_window = parse_cpu_trace_window(
                 args.cpu_control_flow_trace_window, args.frames)
+            sat_frames = parse_frame_indices(args.sat_snapshot_frames, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
                               video_digest_frames=digest_frames,
                               cpu_write_trace_window=cpu_trace_window,
-                              cpu_control_flow_trace_window=cpu_control_flow_trace_window)
+                              cpu_control_flow_trace_window=cpu_control_flow_trace_window,
+                              sat_snapshot_frames=sat_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
