@@ -11,6 +11,7 @@ on:
       - "tools/verify_city_horizontal_variant.py"
       - "tools/verify_city_horizontal_variant_repeats.py"
       - "tests/test_city_horizontal_variant.py"
+      - "docs/CITY_HORIZONTAL_BOUNDARY_STAGE277_RU.md"
       - ".github/workflows/nexium-city-horizontal-variants.yml"
   workflow_dispatch:
 

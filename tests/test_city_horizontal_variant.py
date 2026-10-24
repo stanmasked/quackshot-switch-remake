@@ -14,9 +14,10 @@ def fixture(variant):
     fire_i=60
     start_x=170000 if red else 130000
     shot_y=149000 if red else 197000
+    active_frames=start_x//5500+1
     numeric=[]
     for i in range(120):
-        active=int(fire_i+1<=i<fire_i+24)
+        active=int(fire_i+1<=i<fire_i+1+active_frames)
         age=i-(fire_i+1)
         obj=dict(seq=i,frame=1000+i,attempt=i+1,mode=1,stage=0,
                  fire=int(fire_i<=i<fire_i+8),up=0,grounded=1,
@@ -55,9 +56,15 @@ def fixture(variant):
 
 class HorizontalVariant(unittest.TestCase):
     def test_left_yellow_valid(self):
-        self.assertEqual(verify_variant_rows(*fixture("left-yellow"),"left-yellow")["status"],"PASS")
+        result=verify_variant_rows(*fixture("left-yellow"),"left-yellow")
+        self.assertEqual(result["status"],"PASS")
+        self.assertEqual(result["numeric"]["boundary_despawn"]["status"],"PASS")
+        self.assertEqual(result["numeric"]["boundary_despawn"]["active_ticks"],24)
     def test_left_red_valid(self):
-        self.assertEqual(verify_variant_rows(*fixture("left-red"),"left-red")["status"],"PASS")
+        result=verify_variant_rows(*fixture("left-red"),"left-red")
+        self.assertEqual(result["status"],"PASS")
+        self.assertEqual(result["numeric"]["boundary_despawn"]["status"],"PASS")
+        self.assertEqual(result["numeric"]["boundary_despawn"]["active_ticks"],31)
     def reject(self,variant,change):
         n,p,r=fixture(variant)
         change(n,p,r)
@@ -95,6 +102,20 @@ class HorizontalVariant(unittest.TestCase):
         self.reject("left-yellow",lambda n,p,r:n[90].update(fire="1"))
     def test_no_fire(self):
         self.reject("left-red",lambda n,p,r:n[60].update(fire="0"))
+    def test_premature_despawn_before_left_edge(self):
+        def change(n,p,r):
+            n[84].update(active="0",attached="0",red="0",x_milli="-1",y_milli="-1",vx_milli="0")
+        self.reject("left-yellow",change)
+    def test_projectile_persists_past_left_boundary(self):
+        def change(n,p,r):
+            n[85].update(active="1",attached="0",red="0",x_milli="0",y_milli="197000",vx_milli="-5500")
+        self.reject("left-yellow",change)
+    def test_boundary_last_position_drift(self):
+        self.reject("left-yellow",lambda n,p,r:n[84].update(x_milli="6000"))
+    def test_projectile_reappears_after_boundary(self):
+        def change(n,p,r):
+            n[86].update(active="1",attached="0",red="0",x_milli="0",y_milli="197000",vx_milli="-5500")
+        self.reject("left-yellow",change)
     def test_unknown_variant(self):
         n,p,r=fixture("left-yellow")
         with self.assertRaises(HorizontalError): verify_variant_rows(n,p,r,"right-red")

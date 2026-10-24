@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage276: authenticate real NRO left-facing yellow/red horizontal shots."""
+"""Stage276–277: authenticate left-facing shots and left-world-boundary despawn."""
 import json
 import pathlib
 import sys
@@ -74,12 +74,51 @@ def verify_numeric_rows(rows, variant):
             raise HorizontalError("leftward world trajectory is not continuous")
     if any(p["fire"] and p["pending"] for p in data[fire+1:]):
         raise HorizontalError("unexpected second queued shot")
+    # Stage277: prove the shot is retired by crossing the left world edge,
+    # not by timer expiry, a dropped sample, or a stale active flag.
+    active_indices=[i for i,p in enumerate(data) if p["active"]]
+    if not active_indices or active_indices[0]!=first:
+        raise HorizontalError("leftward projectile does not start on the delayed-shot frame")
+    last_active_index=active_indices[-1]
+    if active_indices!=list(range(first,last_active_index+1)):
+        raise HorizontalError("projectile active interval has a gap or reappears")
+    speed=abs(5500*direction)
+    expected_active_ticks=start_x//speed+1
+    if not 1<=expected_active_ticks<65:
+        raise HorizontalError("scenario cannot distinguish boundary despawn from shot lifetime")
+    if len(active_indices)!=expected_active_ticks:
+        raise HorizontalError("projectile did not remain active through the exact left-boundary approach")
+    for age,index in enumerate(active_indices):
+        expected_x=start_x+5500*direction*age
+        if abs(data[index]["x_milli"]-expected_x)>1:
+            raise HorizontalError("left-boundary trajectory drift")
+    last=data[last_active_index]
+    if not 0<=last["x_milli"]<speed:
+        raise HorizontalError("last active sample is not inside the final boundary interval")
+    next_x=last["x_milli"]+5500*direction
+    if next_x>=0:
+        raise HorizontalError("projected next position does not cross the left world boundary")
+    if last_active_index+1>=len(data):
+        raise HorizontalError("trace ends before the first inactive boundary witness")
+    inactive=data[last_active_index+1]
+    if (inactive["active"]!=0 or inactive["x_milli"]!=-1 or inactive["y_milli"]!=-1 or
+        inactive["vx_milli"]!=0 or inactive["attached"]!=0 or inactive["red"]!=0):
+        raise HorizontalError("projectile fields were not cleared on the first post-boundary tick")
+    if any(p["active"] for p in data[last_active_index+1:]):
+        raise HorizontalError("projectile reappeared after left-boundary despawn")
+    boundary={"status":"PASS","active_ticks":len(active_indices),
+              "start_x_milli":start_x,"last_active_frame":last["frame"],
+              "last_active_x_milli":last["x_milli"],
+              "first_inactive_frame":inactive["frame"],
+              "next_projected_x_milli":next_x,"world_left_milli":0,
+              "scope":"original_free_reference_city_NRO_world_boundary_guard"}
     return {"status":"PASS","variant":variant,"source":NUMERIC_SOURCE,
             "frames":len(data),"fire_frame":data[fire]["frame"],
             "shot_frame":data[first]["frame"],"observed_positions":15,
             "start_x_milli":start_x,"y_milli":expected_y,
             "velocity_milli_per_tick":5500*direction,
-            "red":expected_red,"scope":"original_free_reference_city_NRO_pad_game_core"}
+            "red":expected_red,"boundary_despawn":boundary,
+            "scope":"original_free_reference_city_NRO_pad_game_core"}
 
 def verify_pixel_rows(numeric_rows, pixel_rows, variant):
     expected_red, direction=variant_spec(variant)
