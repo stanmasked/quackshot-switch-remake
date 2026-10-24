@@ -33,6 +33,8 @@ on:
       - "tests/test_genesis_full_frame_digest_audit.py"
       - "tests/test_ci_genesis_vdp_video_callback_smoke.py"
       - "tests/test_genesis_libretro_probe.py"
+      - "tools/genesis_collision_profile_numeric.py"
+      - "docs/GENESIS_COLLISION_PROFILE_STAGE281_RU.md"
       - "tools/genesis_counter_transition_audit.py"
       - "tests/test_genesis_counter_transition_audit.py"
       - "tools/genesis_vdp_scroll_probe.py"
@@ -181,11 +183,12 @@ jobs:
         run: |
           mkdir -p rom-free-emulator
           cp emulator-core/genesis_plus_gx_libretro.so emulator-core/LICENSE.txt rom-free-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
+          cp tools/genesis_libretro_probe.py tools/genesis_collision_profile_numeric.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py tools/genesis_input_causality.py tools/genesis_playable_physics.py tools/genesis_fixedpoint_motion.py tools/genesis_city_obstacle_probe.py tools/genesis_camera_state_probe.py tools/genesis_vdp_scroll_probe.py tools/genesis_camera_phase_model.py rom-free-emulator/
           (
             cd rom-free-emulator
             PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
           import genesis_libretro_probe
+          import genesis_collision_profile_numeric
           import genesis_blue_roi_numeric
           import genesis_blue_roi_components
           import genesis_vdp_scroll_probe
@@ -263,7 +266,7 @@ jobs:
           mkdir -p cpu-trace-emulator/tools
           cp emulator-core-trace/genesis_plus_gx_cpu_trace_libretro.so cpu-trace-emulator/
           cp emulator-core-trace/LICENSE.txt cpu-trace-emulator/
-          cp tools/genesis_libretro_probe.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py cpu-trace-emulator/tools/
+          cp tools/genesis_libretro_probe.py tools/genesis_collision_profile_numeric.py tools/genesis_blue_roi_numeric.py tools/genesis_blue_roi_components.py cpu-trace-emulator/tools/
           sha256sum cpu-trace-emulator/genesis_plus_gx_cpu_trace_libretro.so > cpu-trace-emulator/emulator-sha256.txt
           printf '%s\n' 'Upstream: https://github.com/libretro/Genesis-Plus-GX' \
             'Pinned source commit: aa74d79634cd230f65cce4180e92688e53883d2f' \
