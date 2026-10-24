@@ -207,6 +207,7 @@ CPU_TRACE_WATCH_RANGES = (
 CPU_PC_TRACE_RANGES = (
     (0x0206, 0x0208),  # synthetic CI instruction only
     (0x5D20, 0x5DE0),  # coordinate/state writers
+    (0x6100, 0x6160),  # object-state dispatch and movement gate
     (0x5E90, 0x5F80),  # animation/state helper
     (0x6A40, 0x6B80),  # candidate countdown and its branches
     (0x94C0, 0x94E4),  # fixed-size state copy helper

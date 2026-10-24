@@ -86,6 +86,7 @@ static int quackshot_cpu_pc_trace_watched(unsigned int pc)
     return
         quackshot_cpu_trace_overlaps(pc, 1, 0x00000206U, 0x00000208U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x005D20U, 0x005DE0U) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x006100U, 0x006160U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x005E90U, 0x005F80U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x006A40U, 0x006B80U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x0094C0U, 0x0094E4U);
