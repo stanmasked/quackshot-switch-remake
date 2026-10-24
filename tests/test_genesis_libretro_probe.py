@@ -152,6 +152,18 @@ class GenesisFrontendTests(unittest.TestCase):
                 probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
                                cpu_write_trace_window=window)
 
+    def test_run_core_rejects_invalid_control_flow_windows_before_core_access(self):
+        for window in ((0, 2), (2, 1), (-1, 0), (0, 128), [0, "1"]):
+            with self.subTest(window=window), self.assertRaisesRegex(ValueError, "cpu_control_flow_trace_window"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               cpu_control_flow_trace_window=window)
+
+    def test_run_core_rejects_mismatched_cpu_trace_windows_before_core_access(self):
+        with self.assertRaisesRegex(ValueError, "windows must match"):
+            probe.run_core(None, {"need_fullpath": False}, b"", "mock", 4, [],
+                           cpu_write_trace_window=(0, 1),
+                           cpu_control_flow_trace_window=(2, 3))
+
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json
         root = Path(__file__).resolve().parents[1]

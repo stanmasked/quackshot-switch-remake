@@ -194,11 +194,22 @@ CPU_TRACE_WATCH_RANGES = (
     (0x8F52, 0x8F5A),
     (0x9025, 0x9029),
     (0x904E, 0x9052),
-    (0xA2D0, 0xA2E8),
-    (0xEE3F, 0xEE43),
-    (0xEF00, 0xEF04),
+    (0x8F96, 0x8F9A),
+    (0xA2C0, 0xA2F0),
+    (0xEE03, 0xEE04),
+    (0xEE08, 0xEE0B),
+    (0xEE41, 0xEE46),
+    (0xEE58, 0xEE59),
+    (0xEE66, 0xEE67),
     (0xF374, 0xF378),
-    (0xFEE8, 0xFEF0),
+)
+
+CPU_PC_TRACE_RANGES = (
+    (0x0206, 0x0208),  # synthetic CI instruction only
+    (0x5D20, 0x5DE0),  # coordinate/state writers
+    (0x5E90, 0x5F80),  # animation/state helper
+    (0x6A40, 0x6B80),  # candidate countdown and its branches
+    (0x94C0, 0x94E4),  # fixed-size state copy helper
 )
 
 
@@ -211,6 +222,9 @@ def _prepare_cpu_trace_api(core, window):
         "quackshot_research_cpu_trace_count",
         "quackshot_research_cpu_trace_overflow",
         "quackshot_research_cpu_trace_read",
+        "quackshot_research_cpu_pc_trace_count",
+        "quackshot_research_cpu_pc_trace_overflow",
+        "quackshot_research_cpu_pc_trace_read",
     )
     try:
         api = {name: getattr(core, name) for name in names}
@@ -230,6 +244,14 @@ def _prepare_cpu_trace_api(core, window):
         [C.c_uint32] + [C.POINTER(C.c_uint32)] * 5
     )
     api["quackshot_research_cpu_trace_read"].restype = C.c_int
+    api["quackshot_research_cpu_pc_trace_count"].argtypes = []
+    api["quackshot_research_cpu_pc_trace_count"].restype = C.c_uint32
+    api["quackshot_research_cpu_pc_trace_overflow"].argtypes = []
+    api["quackshot_research_cpu_pc_trace_overflow"].restype = C.c_uint32
+    api["quackshot_research_cpu_pc_trace_read"].argtypes = (
+        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 4
+    )
+    api["quackshot_research_cpu_pc_trace_read"].restype = C.c_int
     if not api["quackshot_research_cpu_trace_reset"](*window):
         raise RuntimeError("CPU trace core rejected the bounded frame window")
     return api
@@ -277,7 +299,50 @@ def _collect_cpu_trace(api, window):
         "safe_to_modify_switch_physics": False,
     }
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None):
+
+def _collect_cpu_pc_trace(api, window):
+    """Read only selected instruction PCs, A0 and CCR; no instruction bytes."""
+    api["quackshot_research_cpu_trace_stop"]()
+    count = int(api["quackshot_research_cpu_pc_trace_count"]())
+    overflow = int(api["quackshot_research_cpu_pc_trace_overflow"]())
+    events = []
+    for index in range(count):
+        slots = [C.c_uint32() for _ in range(4)]
+        ok = api["quackshot_research_cpu_pc_trace_read"](
+            index, *(C.byref(slot) for slot in slots)
+        )
+        if not ok:
+            raise RuntimeError("CPU PC trace event disappeared while reading")
+        frame, pc, a0, ccr = (int(slot.value) for slot in slots)
+        events.append({
+            "frame": frame,
+            "instruction_pc": pc,
+            "a0_address": a0,
+            "ccr_low5": ccr,
+        })
+    return {
+        "schema": "quackshot_private_m68k_control_flow_trace_v1",
+        "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
+        "frame_window_inclusive": list(window),
+        "pc_ranges": [
+            {"start_inclusive": f"0x{start:06X}",
+             "end_exclusive": f"0x{end:06X}"}
+            for start, end in CPU_PC_TRACE_RANGES
+        ],
+        "object_pointer_filter": "A0 low 24 bits equal 0xFFA2C0",
+        "event_count": count,
+        "overflow_count": overflow,
+        "events": events,
+        "raw_rom_exported": False,
+        "raw_ram_exported": False,
+        "instruction_bytes_exported": False,
+        "frame_pixels_exported": False,
+        "player_identity_verified": False,
+        "collision_geometry_verified": False,
+        "safe_to_modify_switch_physics": False,
+    }
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -315,16 +380,25 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(video_digest_frames)) != len(video_digest_frames)):
         raise ValueError("video_digest_frames requires up to 128 unique valid frame indices")
     digest_frame_set = set(video_digest_frames)
-    trace_window = cpu_write_trace_window
-    if trace_window is not None:
-        if (type(trace_window) not in (tuple, list) or len(trace_window) != 2 or
-                any(type(f) is not int for f in trace_window)):
-            raise ValueError("cpu_write_trace_window must be a pair of integer frame indices")
-        trace_window = (trace_window[0], trace_window[1])
-        if (trace_window[0] < 0 or trace_window[0] > trace_window[1] or
-                trace_window[1] >= frames or
-                trace_window[1] - trace_window[0] + 1 > MAX_CPU_TRACE_WINDOW):
-            raise ValueError("cpu_write_trace_window must be in range and at most 128 frames")
+    trace_windows = []
+    for label, candidate in (
+        ("cpu_write_trace_window", cpu_write_trace_window),
+        ("cpu_control_flow_trace_window", cpu_control_flow_trace_window),
+    ):
+        if candidate is None:
+            continue
+        if (type(candidate) not in (tuple, list) or len(candidate) != 2 or
+                any(type(f) is not int for f in candidate)):
+            raise ValueError(label + " must be a pair of integer frame indices")
+        candidate = (candidate[0], candidate[1])
+        if (candidate[0] < 0 or candidate[0] > candidate[1] or
+                candidate[1] >= frames or
+                candidate[1] - candidate[0] + 1 > MAX_CPU_TRACE_WINDOW):
+            raise ValueError(label + " must be in range and at most 128 frames")
+        trace_windows.append(candidate)
+    if len(set(trace_windows)) > 1:
+        raise ValueError("CPU write and control-flow trace windows must match")
+    trace_window = trace_windows[0] if trace_windows else None
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
@@ -467,7 +541,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     core.retro_set_input_poll(input_poll)
     core.retro_set_input_state(input_state)
     initialized, loaded = False, False
-    cpu_trace_api, cpu_trace_active, cpu_trace_result = None, False, None
+    cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -521,7 +595,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     # Neither RAM values nor ROM bytes are exported.
                 })
         if cpu_trace_active:
-            cpu_trace_result = _collect_cpu_trace(cpu_trace_api, trace_window)
+            if cpu_write_trace_window is not None:
+                cpu_trace_result = _collect_cpu_trace(cpu_trace_api, trace_window)
+            if cpu_control_flow_trace_window is not None:
+                cpu_pc_trace_result = _collect_cpu_pc_trace(cpu_trace_api, trace_window)
             cpu_trace_active = False
         if digest_frame_set:
             if (state["video_digest_error"] is not None or
@@ -570,6 +647,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "video_frame_digests": (state["video_frame_digests"]
                                     if digest_frame_set else None),
             "cpu_write_trace": cpu_trace_result,
+            "cpu_control_flow_trace": cpu_pc_trace_result,
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -635,6 +713,8 @@ def main():
                         help="Comma-separated frames to SHA-256 hash transiently; pixels are not saved")
     parser.add_argument("--cpu-write-trace-window", default="",
                         help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM-write PC tracing (max 128 frames)")
+    parser.add_argument("--cpu-control-flow-trace-window", default="",
+                        help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -652,11 +732,14 @@ def main():
             schedule = parse_script(args.input)
             digest_frames = parse_frame_indices(args.video_digest_frames, args.frames)
             cpu_trace_window = parse_cpu_trace_window(args.cpu_write_trace_window, args.frames)
+            cpu_control_flow_trace_window = parse_cpu_trace_window(
+                args.cpu_control_flow_trace_window, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
                               video_digest_frames=digest_frames,
-                              cpu_write_trace_window=cpu_trace_window)
+                              cpu_write_trace_window=cpu_trace_window,
+                              cpu_control_flow_trace_window=cpu_control_flow_trace_window)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
