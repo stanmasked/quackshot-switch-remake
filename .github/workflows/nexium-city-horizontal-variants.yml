@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: city-horizontal-probe-nro
+          name: city-horizontal-variant-probe-nro
           path: emulator-input
       - name: Verify syntax and adversarial synthetic tests
         run: |
