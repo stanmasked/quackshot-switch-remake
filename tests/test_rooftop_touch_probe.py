@@ -61,6 +61,19 @@ class RooftopTouchStartupTest(unittest.TestCase):
                 self.assertIn(pin,script)
                 self.assertNotIn(stale,script)
 
+    def test_snapshot_bound_to_real_contact_before_scene_exit(self):
+        # The genuine NRO CSV must be sealed before a later unrelated
+        # death/respawn during the emulator's timeout can append rows.
+        self.assertIn('cp "$guest" "$5"', INNER)
+        self.assertIn('ROOFTOP_CONTACT_CSV_SEALED', INNER)
+        self.assertIn('"$out/guest-rooftop.csv"', SCRIPT)
+        self.assertLess(INNER.index('ROOFTOP_NO_BRIDGE_GUEST'),
+                        INNER.index('cp "$guest" "$5"'))
+        self.assertLess(INNER.index('cp "$guest" "$5"'),
+                        INNER.index('ROOFTOP_EXIT_SENT=virtual_START'))
+        self.assertIn('BLOCKED: no sealed guest contact snapshot', SCRIPT)
+        self.assertNotIn('cp "$guest" "$out/guest-rooftop.csv"', SCRIPT)
+
     def test_nested_shell_remains_valid(self):
         verdict = check_route(SCRIPT_PATH)
         self.assertEqual(verdict["status"], "PASS")

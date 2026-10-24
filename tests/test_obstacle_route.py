@@ -21,6 +21,27 @@ def scenario():
 class TestObstacle(unittest.TestCase):
     def setUp(self):self.rows=scenario()
     def test_valid_sequence(self):self.assertGreater(verify(self.rows)["checkpoint_tick"],0)
+    def test_host_delayed_pit_button_seen_at_313_pixels(self):
+        # Model the real profile-5 NRO witness: physical B begins only
+        # after the host's valid x=287px pre-send anchor.
+        for row in self.rows:
+            x=int(row["x_milli"])
+            if 275000<=x<310000:
+                row["input_bits"]="2"
+            elif 311000<=x<=318000:
+                row["input_bits"]="6"
+        self.assertLess(0,verify(self.rows)["pit_jump_tick"])
+
+    def test_too_late_pit_button_cannot_satisfy_witness(self):
+        for row in self.rows:
+            x=int(row["x_milli"])
+            if 275000<=x<=318000:
+                row["input_bits"]="2"
+            elif 325000<=x<=337000:
+                row["input_bits"]="6"
+        with self.assertRaisesRegex(ValueError,"event missing"):
+            verify(self.rows)
+
     def test_wrong_provenance(self):
         self.rows[1]["source"]="qs_step_simulated_inputs"
         with self.assertRaisesRegex(ValueError,"forged source"):verify(self.rows)
