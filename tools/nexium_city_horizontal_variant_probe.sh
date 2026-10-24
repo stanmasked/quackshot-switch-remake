@@ -84,7 +84,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
   if [ "$variant" = "left-yellow" ]; then
    # Move right on the real floor to provide enough leftward projectile runway.
    xdotool keydown --clearmodifiers Right
-   sleep 0.80
+   sleep 1.20
    xdotool keyup Right
    xdotool keydown --clearmodifiers Left
    sleep 0.15

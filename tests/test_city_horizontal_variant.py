@@ -15,7 +15,7 @@ def fixture(variant):
     start_x=170000 if red else 130000
     numeric=[]
     for i in range(120):
-        active=int(fire_i+1<=i<fire_i+61)
+        active=int(fire_i+1<=i<fire_i+24)
         age=i-(fire_i+1)
         obj=dict(seq=i,frame=1000+i,attempt=i+1,mode=1,stage=0,
                  fire=int(fire_i<=i<fire_i+8),up=0,grounded=1,
