@@ -212,6 +212,13 @@ CPU_TRACE_WATCH_RANGES = (
     (0xF374, 0xF378),
 )
 
+CPU_TRACE_READ_WATCH_RANGES = (
+    (0x8F94, 0x8F9A),
+    (0xA2C8, 0xA2CE),
+    (0xA2E4, 0xA2E8),
+    (0xEE56, 0xEE5A),
+)
+
 CPU_PC_TRACE_RANGES = (
     (0x9A26, 0x9A40),  # descriptor lookup and header
     (0x9AC2, 0x9ADC),  # nested cursor offset and normal stream path
@@ -226,7 +233,7 @@ CPU_PC_TRACE_RANGES = (
 
 
 def _prepare_cpu_trace_api(core, window):
-    """Bind only the numeric, bounded CPU write-trace exports."""
+    """Bind numeric, bounded CPU access-trace exports."""
     names = (
         "quackshot_research_cpu_trace_reset",
         "quackshot_research_cpu_trace_set_frame",
@@ -242,7 +249,7 @@ def _prepare_cpu_trace_api(core, window):
     try:
         api = {name: getattr(core, name) for name in names}
     except AttributeError as error:
-        raise RuntimeError("CPU write trace requested but core lacks Stage219 trace exports") from error
+        raise RuntimeError("CPU access trace requested but core lacks Stage278 trace exports") from error
     api["quackshot_research_cpu_trace_reset"].argtypes = [C.c_uint32, C.c_uint32]
     api["quackshot_research_cpu_trace_reset"].restype = C.c_int
     api["quackshot_research_cpu_trace_set_frame"].argtypes = [C.c_uint32]
@@ -254,7 +261,7 @@ def _prepare_cpu_trace_api(core, window):
     api["quackshot_research_cpu_trace_overflow"].argtypes = []
     api["quackshot_research_cpu_trace_overflow"].restype = C.c_uint32
     api["quackshot_research_cpu_trace_read"].argtypes = (
-        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 5
+        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 6
     )
     api["quackshot_research_cpu_trace_read"].restype = C.c_int
     api["quackshot_research_cpu_pc_trace_count"].argtypes = []
@@ -272,36 +279,53 @@ def _prepare_cpu_trace_api(core, window):
     return api
 
 
+def _decode_cpu_trace_event(frame, pc, address, width, value, kind):
+    """Decode one numeric access event without exposing memory bytes."""
+    if kind not in (1, 2):
+        raise RuntimeError("CPU trace API version mismatch or invalid access kind")
+    access_kind = "R" if kind == 1 else "W"
+    event = {
+        "frame": frame,
+        "instruction_pc": pc,
+        "cpu_address": address,
+        "ram_offset": address & 0xFFFF,
+        "width_bytes": width,
+        "access_kind": access_kind,
+        "access_value": value,
+    }
+    if access_kind == "W":
+        event["write_value"] = value
+    return event
+
+
 def _collect_cpu_trace(api, window):
-    """Read numeric write events only; no opcode, ROM, RAM or pixel bytes."""
+    """Read numeric allowlisted accesses only; no opcode, ROM, RAM or pixel bytes."""
     api["quackshot_research_cpu_trace_stop"]()
     count = int(api["quackshot_research_cpu_trace_count"]())
     overflow = int(api["quackshot_research_cpu_trace_overflow"]())
     events = []
     for index in range(count):
-        slots = [C.c_uint32() for _ in range(5)]
+        slots = [C.c_uint32() for _ in range(6)]
         ok = api["quackshot_research_cpu_trace_read"](
             index, *(C.byref(slot) for slot in slots)
         )
         if not ok:
             raise RuntimeError("CPU trace event disappeared while reading")
-        frame, pc, address, width, value = (int(slot.value) for slot in slots)
-        events.append({
-            "frame": frame,
-            "instruction_pc": pc,
-            "cpu_address": address,
-            "ram_offset": address & 0xFFFF,
-            "width_bytes": width,
-            "write_value": value,
-        })
+        frame, pc, address, width, value, kind = (int(slot.value) for slot in slots)
+        events.append(_decode_cpu_trace_event(frame, pc, address, width, value, kind))
     return {
-        "schema": "quackshot_private_m68k_cpu_write_trace_v1",
+        "schema": "quackshot_private_m68k_cpu_access_trace_v2",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
-        "watch_ranges": [
+        "write_watch_ranges": [
             {"start_inclusive": f"0x{start:04X}",
              "end_exclusive": f"0x{end:04X}"}
             for start, end in CPU_TRACE_WATCH_RANGES
+        ],
+        "read_watch_ranges": [
+            {"start_inclusive": f"0x{start:04X}",
+             "end_exclusive": f"0x{end:04X}"}
+            for start, end in CPU_TRACE_READ_WATCH_RANGES
         ],
         "event_count": count,
         "overflow_count": overflow,
@@ -816,7 +840,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "video_digest_frames_requested": sorted(digest_frame_set),
             "video_frame_digests": (state["video_frame_digests"]
                                     if digest_frame_set else None),
-            "cpu_write_trace": cpu_trace_result,
+            "cpu_access_trace": cpu_trace_result,
             "cpu_control_flow_trace": cpu_pc_trace_result,
             "sat_sprite_trace": ({
                 "schema": "quackshot_private_genesis_vdp_sat_numeric_v1",
@@ -923,8 +947,9 @@ def main():
                         help="Save frame checksums every N frames; use 1 for precise input-response timing")
     parser.add_argument("--video-digest-frames", default="",
                         help="Comma-separated frames to SHA-256 hash transiently; pixels are not saved")
-    parser.add_argument("--cpu-write-trace-window", default="",
-                        help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM-write PC tracing (max 128 frames)")
+    parser.add_argument("--cpu-write-trace-window", "--cpu-access-trace-window",
+                        dest="cpu_write_trace_window", default="",
+                        help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM access tracing (max 128 frames)")
     parser.add_argument("--cpu-control-flow-trace-window", default="",
                         help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
     parser.add_argument("--sat-snapshot-frames", default="",
