@@ -4671,6 +4671,10 @@ int main(int argc, char **argv) {
     FILE *rooftop_transition_file = NULL;
     /* Stage 154: independent, guest-only witnessed CITY red pickup. */
     FILE *rooftop_red_acquire_file = NULL;
+    /* Stage269: read-only, bounded numeric witness of actual UP+FIRE
+     * pad inputs and the dedicated CITY vertical projectile. No assets. */
+    FILE *city_up_guest_file = NULL;
+    unsigned city_up_guest_records = 0;
     unsigned rooftop_red_acquire_records=0;
     unsigned rooftop_transition_records=0;
     unsigned rooftop_guest_records=0;
@@ -4808,6 +4812,15 @@ int main(int argc, char **argv) {
         }
         if(!rooftop_red_acquire_file)
             fprintf(stderr,"QuackShot: red pickup guest CSV unavailable (non-fatal)\n");
+        city_up_guest_file=fopen("sdmc:/switch/quackshot-city-up-guest.csv","w");
+        if(city_up_guest_file &&
+           (fputs("seq,frame,attempt,mode,stage,up,fire,grounded,active,age,visible,x,y,legacy_shots,source\n",
+                  city_up_guest_file)<0 || fflush(city_up_guest_file)!=0)) {
+            fclose(city_up_guest_file);
+            city_up_guest_file=NULL;
+        }
+        if(!city_up_guest_file)
+            fprintf(stderr,"QuackShot: CITY upward numeric witness CSV unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4974,6 +4987,37 @@ int main(int argc, char **argv) {
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
 #ifdef __SWITCH__
+            /* Stage269: never synthesize QsInput. The following samples
+             * originate from read_input(pad) and the actual qs_step()
+             * above. Invisible coordinates are explicitly -1; neither
+             * unknown collision logic nor original image data is inferred.
+             * Retain consecutive frames to show the launch delay and
+             * exact removal after the bounded 20-position interval. */
+            if(city_up_guest_file && pad &&
+               old_mode==QS_STAGE && old_stage==0 &&
+               game.mode==QS_STAGE && game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               city_up_guest_records<320u) {
+                int px=-1,py=-1;
+                int visible=qs_city_up_projectile_position(&game,&px,&py);
+                int ordinary_shots=0;
+                int slot;
+                for(slot=0;slot<QS_MAX_SHOTS;++slot)
+                    ordinary_shots+=game.shots[slot].active!=0;
+                if(fprintf(city_up_guest_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,live_city_up_pad_qs_step\n",
+                   city_up_guest_records,game.frames,game.city_attempt_frames,
+                   (int)game.mode,game.stage,in.up!=0,in.fire!=0,
+                   game.hero.grounded!=0,game.reference_up_projectile.active,
+                   game.reference_up_projectile.age,visible,px,py,
+                   ordinary_shots)>=0 &&
+                   fflush(city_up_guest_file)==0) {
+                    ++city_up_guest_records;
+                } else {
+                    fclose(city_up_guest_file);
+                    city_up_guest_file=NULL;
+                }
+            }
             /* Stage 154: only samples from the actual CITY level entered
              * via pad. Observe the real pickup before and after qs_step:
              * logging cannot manufacture an unlocked weapon or a pickup.
@@ -5235,6 +5279,7 @@ int main(int argc, char **argv) {
     if(rooftop_weapon_file)fclose(rooftop_weapon_file);
     if(rooftop_transition_file)fclose(rooftop_transition_file);
     if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
+    if(city_up_guest_file)fclose(city_up_guest_file);
 #endif
     qs_trace_close(&trace);
     return 0;
