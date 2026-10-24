@@ -1,0 +1,107 @@
+name: NeXium CITY Horizontal Projectile
+on:
+  pull_request:
+    paths:
+      - "src/main_sdl.c"
+      - "src/qs_game.c"
+      - "include/**"
+      - "Makefile"
+      - "tools/nexium_city_horizontal_probe.sh"
+      - "tools/verify_city_horizontal_guest.py"
+      - "tools/verify_city_horizontal_repeats.py"
+      - "tests/test_city_horizontal_guest.py"
+      - ".github/workflows/nexium-city-horizontal.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure devkitPro tools
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build verified NRO from this commit
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-probe-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+
+  guest:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: city-horizontal-probe-nro
+          path: emulator-input
+      - name: Verify syntax and adversarial synthetic tests
+        run: |
+          bash -n tools/nexium_city_horizontal_probe.sh
+          python3 -m py_compile tools/verify_city_horizontal_guest.py tools/verify_city_horizontal_repeats.py
+          python3 -m unittest discover -s tests -p test_city_horizontal_guest.py -v
+      - name: Install headless software Vulkan dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 libgl1 libpulse0
+      - name: Drive actual controller Horizontal FIRE and verify guest actor positions
+        run: bash tools/nexium_city_horizontal_probe.sh emulator-input/quackshot-prototype.nro city-horizontal-evidence ${{ matrix.repeat }}
+      - name: Save diagnostic files on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-evidence-${{ matrix.repeat }}
+          path: |
+            city-horizontal-evidence/*.txt
+            city-horizontal-evidence/*.log
+            city-horizontal-evidence/*.json
+            city-horizontal-evidence/guest-city-horizontal.csv
+            city-horizontal-evidence/guest-city-horizontal-raster.csv
+            city-horizontal-evidence/xdg-config/NeXium/logs/*.log
+          retention-days: 7
+          if-no-files-found: warn
+
+  compare:
+    needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: city-horizontal-evidence-*
+          path: collected-evidence
+      - name: Independently authenticate two genuine horizontal shot + SDL guest traces
+        run: python3 tools/verify_city_horizontal_repeats.py collected-evidence city-horizontal-two-run-summary.json
+      - name: Save comparison manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-two-run-summary
+          path: city-horizontal-two-run-summary.json
+          retention-days: 7
+          if-no-files-found: warn
