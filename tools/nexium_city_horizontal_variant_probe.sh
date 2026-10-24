@@ -122,7 +122,12 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
    echo CITY_RED_PICKUP_APPROACH_SENT
    pickup_frame=""
    for i in $(seq 1 100); do
-    pickup_frame="$(awk -F, '$9==0 && $10==1 && $11==1 && $12==1 && $13==0 {print $2; exit}' "$redlog")"
+    pickup_frame="$(while IFS=, read -r seq frame mode stage x y grounded bits red_before red_after weapon pickup_before pickup_after source; do
+     if [ "$red_before" = "0" ] && [ "$red_after" = "1" ] &&
+        [ "$weapon" = "1" ] && [ "$pickup_before" = "1" ] && [ "$pickup_after" = "0" ]; then
+      echo "$frame"; break
+     fi
+    done < "$redlog")"
     [ -n "$pickup_frame" ] && break
     sleep 0.12
    done
