@@ -98,6 +98,7 @@ static int quackshot_cpu_trace_read_watched(unsigned int address, int width)
         quackshot_cpu_trace_overlaps(offset, w, 0x8F94U, 0x8F9AU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xA2C8U, 0xA2CEU) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xA2E4U, 0xA2E8U) ||
+        quackshot_cpu_trace_overlaps(offset, w, 0xEE03U, 0xEE04U) ||
         quackshot_cpu_trace_overlaps(offset, w, 0xEE56U, 0xEE5AU);
 }
 
@@ -113,6 +114,7 @@ static int quackshot_cpu_pc_trace_watched(unsigned int pc)
         quackshot_cpu_trace_overlaps(pc, 1, 0x005D20U, 0x005DE0U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x006100U, 0x006160U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x005E90U, 0x005F80U) ||
+        quackshot_cpu_trace_overlaps(pc, 1, 0x0064D0U, 0x006560U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x006A40U, 0x006B80U) ||
         quackshot_cpu_trace_overlaps(pc, 1, 0x0094C0U, 0x0094E4U);
 }

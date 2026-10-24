@@ -319,6 +319,7 @@ jobs:
           }, read_event
           assert 'write_value' not in read_event, read_event
           assert {'start_inclusive': '0xA2E4', 'end_exclusive': '0xA2E8'} in trace['read_watch_ranges'], trace
+          assert {'start_inclusive': '0xEE03', 'end_exclusive': '0xEE04'} in trace['read_watch_ranges'], trace
           assert trace['raw_rom_exported'] is False, trace
           assert trace['raw_ram_exported'] is False, trace
           assert trace['instruction_bytes_exported'] is False, trace
@@ -326,6 +327,7 @@ jobs:
           assert pc_trace['schema'] == 'quackshot_private_m68k_control_flow_trace_v2', pc_trace
           assert pc_trace['status'] == 'COMPLETE' and pc_trace['overflow_count'] == 0, pc_trace
           assert pc_trace['frame_window_inclusive'] == [0, 89], pc_trace
+          assert {'start_inclusive': '0x0064D0', 'end_exclusive': '0x006560'} in pc_trace['pc_ranges'], pc_trace
           assert pc_trace['event_count'] == 1 and len(pc_trace['events']) == 1, pc_trace
           pc_event = pc_trace['events'][0]
           assert pc_event['frame'] == 0 and pc_event['instruction_pc'] == 0x206, pc_event

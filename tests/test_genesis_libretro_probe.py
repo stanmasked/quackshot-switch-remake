@@ -164,8 +164,14 @@ class GenesisFrontendTests(unittest.TestCase):
     def test_cpu_read_trace_ranges_are_narrow_allowlist(self):
         self.assertEqual(probe.CPU_TRACE_READ_WATCH_RANGES, (
             (0x8F94, 0x8F9A), (0xA2C8, 0xA2CE),
-            (0xA2E4, 0xA2E8), (0xEE56, 0xEE5A),
+            (0xA2E4, 0xA2E8), (0xEE03, 0xEE04),
+            (0xEE56, 0xEE5A),
         ))
+
+    def test_cpu_pc_trace_ranges_cover_counter_zero_branch(self):
+        self.assertIn((0x64D0, 0x6560), probe.CPU_PC_TRACE_RANGES)
+        self.assertTrue(any(start <= 0x6540 < end for start, end in probe.CPU_PC_TRACE_RANGES))
+        self.assertTrue(any(start <= 0x654C < end for start, end in probe.CPU_PC_TRACE_RANGES))
 
     def test_parse_cpu_trace_window_is_inclusive_and_strict(self):
         self.assertEqual(probe.parse_cpu_trace_window("3:5", 10), (3, 5))

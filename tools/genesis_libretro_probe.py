@@ -216,8 +216,8 @@ CPU_TRACE_READ_WATCH_RANGES = (
     (0x8F94, 0x8F9A),
     (0xA2C8, 0xA2CE),
     (0xA2E4, 0xA2E8),
-    (0xEE56, 0xEE5A),
-)
+    (0xEE03, 0xEE04),
+    (0xEE56, 0xEE5A),)
 
 CPU_PC_TRACE_RANGES = (
     (0x9A26, 0x9A40),  # descriptor lookup and header
@@ -227,6 +227,7 @@ CPU_PC_TRACE_RANGES = (
     (0x5D20, 0x5DE0),  # coordinate/state writers
     (0x6100, 0x6160),  # object-state dispatch and movement gate
     (0x5E90, 0x5F80),  # animation/state helper
+    (0x64D0, 0x6560),  # object-relative counter and zero branch
     (0x6A40, 0x6B80),  # candidate countdown and its branches
     (0x94C0, 0x94E4),  # fixed-size state copy helper
 )
