@@ -69,7 +69,11 @@ def verify_numeric(rows):
         raise HorizontalError("prototype spawn world x differs from stationary start")
     for j in range(15):
         p=data[first+j]
-        if not p["active"] or p["x_milli"]!=57500+5500*j:
+        # Actual NRO uses single-precision float accumulation; casting
+        # 73.99999f to integer milli-pixels yields 73999, not 74000.
+        # Allow at most ONE milli-pixel truncation error, never a full
+        # pixel or a missed/misordered simulation tick.
+        if not p["active"] or abs(p["x_milli"]-(57500+5500*j))>1:
             raise HorizontalError("horizontal world trajectory not continuous")
     if any(p["fire"] and p["pending"] for p in data[fire+1:]):
         raise HorizontalError("unexpected second queued shot")

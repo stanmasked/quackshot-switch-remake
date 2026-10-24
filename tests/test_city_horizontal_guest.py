@@ -50,6 +50,12 @@ class GuestProof(unittest.TestCase):
         self.reject(lambda n,r:n[12].update(pending="0"),True)
     def test_early_shot(self):
         self.reject(lambda n,r:n[6].update(pending="1"),True)
+    def test_real_float32_truncation_one_millipixel(self):
+        n,r=fixture()
+        n[16]["x_milli"]=str(int(n[16]["x_milli"])-1)
+        self.assertEqual(verify_numeric(n)["observed_positions"],15)
+    def test_two_millipixel_drift_is_rejected(self):
+        self.reject(lambda n,r:n[16].update(x_milli=str(int(n[16]["x_milli"])-2)),True)
     def test_wrong_velocity(self):
         self.reject(lambda n,r:n[16].update(vx_milli="6000"),True)
     def test_wrong_y(self):
