@@ -4325,6 +4325,91 @@ static int run_vertical_projectile_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+/*
+ * Stage273: actual SDL framebuffer proof for the existing horizontal
+ * projectile in the original-free CITY reference scene.
+ *
+ * Two independent weapon colors and two facing directions. Generate
+ * the game state through qs_step() with a genuine fire rising edge and
+ * its documented one-step delayed creation; never plant a projectile
+ * or fabricate pixels. A COPY of the same frame with only the chosen
+ * shot disabled is the independent negative control. Redraw the real
+ * state afterward, including the original actor, before continuing.
+ *
+ * Desktop software SDL smoke only. This is NOT yet an authenticated
+ * Switch/NeXium gamepad raster witness or collision-fidelity proof.
+ */
+static int run_horizontal_projectile_counterfactual_sdl_smoke(
+    SDL_Renderer *renderer) {
+    const uint32_t gold=UINT32_C(0xffffe16c);
+    const uint32_t red=UINT32_C(0xffe64a4e);
+    int direction,weapon_choice;
+    for (weapon_choice=0;weapon_choice<2;++weapon_choice) {
+        for (direction=-1;direction<=1;direction+=2) {
+            QsGame g,without;
+            QsInput in={0};
+            int shot=-1,old_x=0,t;
+            uint32_t before=0,visible=0,background=0,restored=0;
+            uint32_t expected=weapon_choice?red:gold;
+            qs_init(&g);
+            g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+            qs_begin_stage(&g,0);
+            memset(g.enemies,0,sizeof(g.enemies));
+            memset(g.pickups,0,sizeof(g.pickups));
+            g.hero.x=90;
+            g.hero.y=188;
+            g.hero.facing=direction;
+            g.hero.hurt_frames=0;
+            g.red_unlocked=weapon_choice!=0;
+            g.weapon=weapon_choice?QS_RED:QS_YELLOW;
+            qs_step(&g,in);
+            if (g.mode!=QS_STAGE || !g.hero.grounded) return 0;
+            in.fire=1;
+            qs_step(&g,in);
+            if (g.pending_reference_shot!=1) return 0;
+            for(t=0;t<QS_MAX_SHOTS;++t)
+                if(g.shots[t].active) return 0;
+            in=(QsInput){0};
+            qs_step(&g,in);
+            for(t=0;t<QS_MAX_SHOTS;++t)
+                if(g.shots[t].active) {
+                    if(shot!=-1) return 0;
+                    shot=t;
+                }
+            if(shot<0 || g.shots[shot].red!=weapon_choice ||
+               g.shots[shot].attached ||
+               g.shots[shot].vx*direction<=0.0f) return 0;
+            for(t=0;t<3;++t) {
+                int x,y;
+                QsParallax camera=qs_parallax_offsets(&g);
+                if(!g.shots[shot].active || g.shots[shot].attached)
+                    return 0;
+                x=(int)g.shots[shot].x-camera.front_px+3;
+                y=(int)g.shots[shot].y+1;
+                if(x<0 || y<0 || x>=QS_VIEW_W || y>=QS_VIEW_H)
+                    return 0;
+                /* Shot exists and was drawn in the positive frame. */
+                if(!read_multishot_pixel(renderer,&g,x,y,&visible) ||
+                   visible!=expected) return 0;
+                without=g;
+                without.shots[shot].active=0;
+                if(!read_multishot_pixel(renderer,&without,x,y,&background) ||
+                   background==expected) return 0;
+                if(!read_multishot_pixel(renderer,&g,x,y,&restored) ||
+                   restored!=expected) return 0;
+                if(t>0 && (int)g.shots[shot].x==old_x) return 0;
+                old_x=(int)g.shots[shot].x;
+                if(t<2) qs_step(&g,in);
+            }
+            /* A late neutral frame cannot re-trigger FIRE. */
+            if(g.pending_reference_shot!=0) return 0;
+            before+=visible^background^restored;
+        }
+    }
+    puts("HORIZONTAL_PROJECTILE_COUNTERFACTUAL_SDL_PASS: real qs_step delayed fire; yellow/red x left/right; three frame-local positive/negative/restored pixel checks per case");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4422,6 +4507,7 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
     if (!run_upward_pose_sdl_smoke(renderer)) return 1;
     if (!run_vertical_projectile_sdl_smoke(renderer)) return 1;
+    if (!run_horizontal_projectile_counterfactual_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
