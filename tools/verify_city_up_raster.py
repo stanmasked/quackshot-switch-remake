@@ -12,7 +12,8 @@ sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_city_up_guest import read_csv as read_numeric, verify as verify_numeric
 
 COLUMNS=("seq","frame","age","shot_x","shot_y","gold_argb","cyan_argb",
-         "readback_ok","scale_x_milli","scale_y_milli","source")
+         "bg_gold_argb","bg_cyan_argb","readback_ok","baseline_ok",
+         "restored_ok","scale_x_milli","scale_y_milli","source")
 SOURCE="live_city_up_sdl_pixel_readback"
 GOLD=0xffffe16c
 CYAN=0xff70a7dd
@@ -42,7 +43,8 @@ def verify_pair(numeric_rows,raster_rows):
         n=numbers
         if (n["seq"]!=seq or n["frame"]<=last_frame or
             n["age"]<=last_age or not 0<=n["age"]<20 or
-            n["readback_ok"]!=1 or
+            n["readback_ok"]!=1 or n["baseline_ok"]!=1 or
+            n["restored_ok"]!=1 or
             not 500<=n["scale_x_milli"]<=16000 or
             not 500<=n["scale_y_milli"]<=16000):
             raise RasterError("invalid age, sequence, scale or failed real pixel readback")
@@ -53,6 +55,8 @@ def verify_pair(numeric_rows,raster_rows):
             raise RasterError("SDL pixel result not tied to matching guest frame/position")
         if n["gold_argb"]!=GOLD or n["cyan_argb"]!=CYAN:
             raise RasterError("actual SDL framebuffer lacked gold/cyan shot pixels")
+        if n["bg_gold_argb"]==GOLD or n["bg_cyan_argb"]==CYAN:
+            raise RasterError("shot pixels persist when projectile disabled in independent scene copy")
         ages.append(n["age"])
         last_frame=n["frame"]
         last_age=n["age"]
@@ -63,7 +67,8 @@ def verify_pair(numeric_rows,raster_rows):
             "last_age":ages[-1],"rendered_ages":ages,
             "numeric_guest_frames":numerical["frames"],
             "gold_argb":GOLD,"cyan_argb":CYAN,
-            "scope":"SDL_NRO_framebuffer_pixels_not_external_display_or_collision"}
+            "negative_controls":len(ages),"restored_frames":len(ages),
+            "scope":"same_frame_SDL_NRO_positive_and_negative_controls_not_collision"}
 
 def main(argv):
     if len(argv)!=4:
