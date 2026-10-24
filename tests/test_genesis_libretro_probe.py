@@ -144,6 +144,29 @@ class GenesisFrontendTests(unittest.TestCase):
         self.assertIn((0x9AC2, 0x9ADC), probe.CPU_PC_TRACE_RANGES)
         self.assertIn((0x9B3C, 0x9B4A), probe.CPU_PC_TRACE_RANGES)
 
+    def test_cpu_access_trace_decoder_distinguishes_reads_and_writes(self):
+        write = probe._decode_cpu_trace_event(0, 0x206, 0xFFA2E6, 2, 0x1234, 2)
+        self.assertEqual(write, {
+            "frame": 0, "instruction_pc": 0x206, "cpu_address": 0xFFA2E6,
+            "ram_offset": 0xA2E6, "width_bytes": 2, "access_kind": "W",
+            "access_value": 0x1234, "write_value": 0x1234,
+        })
+        read = probe._decode_cpu_trace_event(0, 0x20E, 0xFFA2E6, 2, 0x1234, 1)
+        self.assertEqual(read, {
+            "frame": 0, "instruction_pc": 0x20E, "cpu_address": 0xFFA2E6,
+            "ram_offset": 0xA2E6, "width_bytes": 2, "access_kind": "R",
+            "access_value": 0x1234,
+        })
+        self.assertNotIn("write_value", read)
+        with self.assertRaisesRegex(RuntimeError, "access kind"):
+            probe._decode_cpu_trace_event(0, 0x20E, 0xFFA2E6, 2, 0x1234, 0)
+
+    def test_cpu_read_trace_ranges_are_narrow_allowlist(self):
+        self.assertEqual(probe.CPU_TRACE_READ_WATCH_RANGES, (
+            (0x8F94, 0x8F9A), (0xA2C8, 0xA2CE),
+            (0xA2E4, 0xA2E8), (0xEE56, 0xEE5A),
+        ))
+
     def test_parse_cpu_trace_window_is_inclusive_and_strict(self):
         self.assertEqual(probe.parse_cpu_trace_window("3:5", 10), (3, 5))
         self.assertIsNone(probe.parse_cpu_trace_window("", 10))
