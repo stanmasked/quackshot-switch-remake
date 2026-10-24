@@ -139,6 +139,11 @@ class GenesisFrontendTests(unittest.TestCase):
                                video_digest_frames=frames)
 
 
+    def test_control_flow_trace_ranges_cover_animation_pointer_paths(self):
+        self.assertIn((0x9A26, 0x9A40), probe.CPU_PC_TRACE_RANGES)
+        self.assertIn((0x9AC2, 0x9ADC), probe.CPU_PC_TRACE_RANGES)
+        self.assertIn((0x9B3C, 0x9B4A), probe.CPU_PC_TRACE_RANGES)
+
     def test_parse_cpu_trace_window_is_inclusive_and_strict(self):
         self.assertEqual(probe.parse_cpu_trace_window("3:5", 10), (3, 5))
         self.assertIsNone(probe.parse_cpu_trace_window("", 10))
@@ -176,6 +181,68 @@ class GenesisFrontendTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sat_snapshot_frames"):
             probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
                            sat_snapshot_frames=tuple(range(129)))
+
+    def test_candidate_object_state_decodes_only_allowlisted_numeric_fields(self):
+        ram = bytearray(probe.CANDIDATE_OBJECT_RAM_OFFSET +
+                        probe.CANDIDATE_OBJECT_RECORD_BYTES)
+        def put_word(offset, value):
+            start = probe.CANDIDATE_OBJECT_RAM_OFFSET + offset
+            ram[start:start + 2] = value.to_bytes(2, "little")
+        put_word(0x04, 0x001B)
+        put_word(0x06, 0x000C)
+        put_word(0x08, 0x0508)
+        ram[probe.CANDIDATE_OBJECT_RAM_OFFSET + (0x0D ^ 1)] = 0xA5
+        put_word(0x10, 61)
+        put_word(0x12, 0x8000)
+        put_word(0x14, 176)
+        put_word(0x16, 0x4000)
+        put_word(0x20, 0x0002)
+        put_word(0x22, 0x1372)
+        result = probe._collect_candidate_object_state(bytes(ram), 7)
+        self.assertEqual(result["frame"], 7)
+        self.assertEqual(result["world_x"], {
+            "integer": 61, "fraction_u16": 0x8000, "fixed_16_16": 61.5})
+        self.assertEqual(result["world_y"], {
+            "integer": 176, "fraction_u16": 0x4000, "fixed_16_16": 176.25})
+        self.assertEqual(result["selected_words"], {"0x04": 0x001B, "0x06": 0x000C})
+        self.assertEqual(result["selected_bytes"], {"0x08": 0x05, "0x09": 0x08})
+        self.assertEqual(result["candidate_flag_0x0D"], 0xA5)
+        self.assertEqual(probe.CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS,
+                         (0x08, 0x09))
+        self.assertEqual(result["pointer_0x20"], {
+            "value_u32": 0x00021372, "hex": "0x00021372"})
+        self.assertNotIn("raw_ram", result)
+        self.assertNotIn("bytes", result)
+
+    def test_candidate_flag_byte_preserves_full_unsigned_range(self):
+        ram = bytearray(probe.CANDIDATE_OBJECT_RAM_OFFSET +
+                        probe.CANDIDATE_OBJECT_RECORD_BYTES)
+        offset = probe.CANDIDATE_OBJECT_RAM_OFFSET + (0x0D ^ 1)
+        for flag in (0x00, 0x01, 0x7F, 0x80, 0xA5, 0xFF):
+            with self.subTest(flag=flag):
+                ram[offset] = flag
+                result = probe._collect_candidate_object_state(bytes(ram), 0)
+                self.assertEqual(result["candidate_flag_0x0D"], flag)
+                self.assertEqual(
+                    result["selected_bytes"], {"0x08": 0x00, "0x09": 0x00}
+                )
+
+    def test_candidate_object_state_rejects_short_ram(self):
+        with self.assertRaisesRegex(RuntimeError, "too short"):
+            probe._collect_candidate_object_state(bytes(0xA2FF), 0)
+
+    def test_run_core_rejects_invalid_object_state_snapshot_frames_before_core_access(self):
+        invalid = ((-1,), (2,), (0, 0), [0, "1"])
+        for frames in invalid:
+            with self.subTest(frames=frames), self.assertRaisesRegex(
+                    ValueError, "object_state_snapshot_frames"):
+                probe.run_core(None, {"need_fullpath": False}, b"", "mock", 2, [],
+                               object_state_snapshot_frames=frames)
+
+    def test_run_core_rejects_more_than_128_object_state_snapshot_frames(self):
+        with self.assertRaisesRegex(ValueError, "object_state_snapshot_frames"):
+            probe.run_core(None, {"need_fullpath": False}, b"", "mock", 129, [],
+                           object_state_snapshot_frames=tuple(range(129)))
 
     def test_published_genesis_witness_matches_pinned_rom(self):
         import json

@@ -7,6 +7,9 @@ sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]))
 from tools.verify_rooftop_guest_trace import read_trace
 from tools.verify_rooftop_touch_trace import verify_touch
 
+# GitHub release asset SHA-256, validated in two genuine emulator guest runs.
+PIN = "d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
+
 class TouchRepeatError(ValueError):
     pass
 
@@ -25,7 +28,7 @@ def verify_two(root):
         sha=meta.get("nro_sha256","")
         if len(sha)!=64 or any(c not in "0123456789abcdef" for c in sha):
             raise TouchRepeatError("invalid NRO fingerprint")
-        if meta.get("runner_exit")!="0" or meta.get("emulator_sha256_expected")!="c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66":
+        if meta.get("runner_exit")!="0" or meta.get("emulator_sha256_expected")!=PIN or meta.get("emulator_sha256_observed")!=PIN:
             raise TouchRepeatError("host route or pinned emulator verification absent")
         if "OK" not in (path/"checksum.txt").read_text(encoding="utf-8"):
             raise TouchRepeatError("emulator download failed integrity check")

@@ -7,7 +7,8 @@ nro="$(realpath "$1")"; out="$(realpath -m "$2")"; profile="$3"
 case "$profile" in 1|2) ;; *) echo "invalid repeat" >&2; exit 2;; esac
 mkdir -p "$out"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-expected=c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
+# Pinned to GitHub release asset digest verified on 2026-10-24; keep fail-closed.
+expected=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180
 {
  echo "profile=$profile"
  echo "source=real_virtual_controller_rooftop_touch_guest"
@@ -17,6 +18,7 @@ expected=c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
 curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
  https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz \
  -o "$tmp/emulator.tgz" > "$out/download.log" 2>&1
+printf 'emulator_sha256_observed=%s\n' "$(sha256sum "$tmp/emulator.tgz" | cut -d ' ' -f1)" >> "$out/metadata.txt"
 echo "$expected  $tmp/emulator.tgz" | sha256sum -c - > "$out/checksum.txt"
 mkdir -p "$tmp/bin"
 tar -xzf "$tmp/emulator.tgz" -C "$tmp/bin" --no-same-owner
@@ -115,8 +117,27 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
    exit 1
   fi
   echo "ROOFTOP_NO_BRIDGE_GUEST frame=$frame x_milli=$x"
-  # Leave the guest stage using the ACTUAL controller Start; this also
-  # prevents late enemy contact from contaminating the negative probe.
+  # Stage272: seal a COPY of the guest-origin CSV while the no-fire
+  # contact is actually verified, before attempting a scene exit.
+  # NeXium may continue for hundreds of simulation ticks after the
+  # host route ended; a later unrelated death/respawn must not be
+  # mistaken for a teleport during this bounded contact experiment.
+  # Never fabricate rows, clip the CSV by hand, or alter NRO state.
+  snapshot_ok=0
+  for attempt in 1 2 3; do
+    cp "$guest" "$5" || { echo "BLOCKED: guest snapshot copy failed"; exit 1; }
+    if [ "$(wc -l < "$5")" -ge 100 ] &&
+       [ "$(tail -c 1 "$5" | wc -l)" = 1 ]; then
+      snapshot_ok=1
+      break
+    fi
+    sleep 0.02
+  done
+  [ "$snapshot_ok" = 1 ] ||
+    { echo "BLOCKED: incomplete guest snapshot at contact"; exit 1; }
+  echo "ROOFTOP_CONTACT_CSV_SEALED"
+  # Leave the guest stage using the ACTUAL controller Start; the
+  # already-sealed pre-exit guest CSV is independently authenticated.
   xdotool key --clearmodifiers m
   echo "ROOFTOP_EXIT_SENT=virtual_START"
  ) > "$4" 2>&1 &
@@ -131,7 +152,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
  # genuine NRO-produced projectile/bridge CSV separately after return.
  [ "$input_result" = 0 ] &&
    { [ "$emu_result" = 124 ] || [ "$emu_result" = 137 ] || [ "$emu_result" = 0 ]; }
-' bash "$emu" "$nro" "$out/emulator-stdout.log" "$out/input-injection.txt" > "$out/runner-status.log" 2>&1
+' bash "$emu" "$nro" "$out/emulator-stdout.log" "$out/input-injection.txt" "$out/guest-rooftop.csv" > "$out/runner-status.log" 2>&1
 rc=$?
 set -e
 echo "runner_exit=$rc" >> "$out/metadata.txt"
@@ -139,8 +160,11 @@ find "$HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" -type f \
  -name quackshot-rooftop-guest.csv -print > "$out/guest-paths.txt"
 [ "$(wc -l < "$out/guest-paths.txt")" = 1 ] || { echo "BLOCKED: missing/ambiguous guest file" > "$out/result.txt"; exit 1; }
 IFS= read -r guest < "$out/guest-paths.txt"
-cp "$guest" "$out/guest-rooftop.csv"
-for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_TOUCH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_EXIT_SENT; do
+# Require the snapshot from the authenticated live controller process,
+# NOT a late file copied after the emulator's timeout/possible respawn.
+[ -s "$out/guest-rooftop.csv" ] ||
+  { echo "BLOCKED: no sealed guest contact snapshot" > "$out/result.txt"; exit 1; }
+for event in ROOFTOP_MENU_SENT ROOFTOP_APPROACH_GUEST ROOFTOP_NO_BRIDGE_GUEST ROOFTOP_CONTACT_CSV_SEALED ROOFTOP_EXIT_SENT ROOFTOP_TOUCH_GUEST; do
  grep -q "^$event" "$out/input-injection.txt" || { echo "BLOCKED: missing host input event" > "$out/result.txt"; exit 1; }
 done
 [ "$rc" = 0 ] || { echo "BLOCKED: virtual-controller session did not finish" > "$out/result.txt"; exit 1; }

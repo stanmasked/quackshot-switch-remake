@@ -56,6 +56,7 @@
 #define QS_CITY_AIR_REWARD_SIZE 10.0f
 #define QS_CITY_AIR_REWARD_FX_TICKS 16 /* presentation-only earned burst */
 #define QS_CITY_TIMER_MAX 9999 /* HUD-safe capped city practice frames */
+#define QS_CITY_UP_FIRE_POSE_TICKS 20 /* observed stationary UP+fire window */
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,6 +75,12 @@ typedef struct {
 typedef struct { float x, y, vx, vy; int facing, grounded, hearts, hurt_frames; } QsPlayer;
 typedef struct { float x, y, min_x, max_x; int dir, stunned_frames, active; } QsEnemy;
 typedef struct { float x, y, vx; int active, attached, frames, red; } QsShot;
+/* Stage264: opt-in procedural vertical projectile, collision-free until proven.
+ * Age -3..-1 is hidden startup; 0..19 is the observed visible interval. */
+typedef struct {
+    int active, age, facing;
+    int world_x, world_y;
+} QsCityUpProjectile;
 typedef struct { float x, y; int kind, active; } QsPickup;
 
 typedef struct {
@@ -104,11 +111,13 @@ typedef struct {
     int pending_reference_shot; /* delayed one step only in opt-in city profile */
     int pending_reference_red; /* type latched at fire press, not dispatch */
     int reference_jump_steps; /* held jump duration; 15-frame first-city plateau */
+    int reference_up_fire_frames; /* visual pose only; original first-city 20-frame window */
     QsWeapon weapon;
     char terrain[QS_ROWS][QS_COLUMNS];
     QsPlayer hero;
     QsEnemy enemies[QS_MAX_ENEMIES];
     QsShot shots[QS_MAX_SHOTS];
+    QsCityUpProjectile reference_up_projectile;
     QsPickup pickups[QS_MAX_PICKUPS];
     float camera_x;        /* current simulation camera (city RAM 0x8524 proxy) */
     float render_camera_x; /* previous simulation-step camera, city VDP proxy */
@@ -118,6 +127,8 @@ typedef struct {
 void qs_init(QsGame *game);
 void qs_begin_stage(QsGame *game, int stage);
 void qs_step(QsGame *game, QsInput input);
+/* Read-only world position. Returns 0 without modifying outputs if hidden. */
+int qs_city_up_projectile_position(const QsGame *game, int *x, int *y);
 int qs_solid(const QsGame *game, int col, int row);
 const char *qs_stage_name(int stage);
 int qs_city_bonus_score(const QsGame *game); /* optional practice score, max 1000 */

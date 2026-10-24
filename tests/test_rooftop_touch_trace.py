@@ -72,7 +72,8 @@ class TouchRepeats(unittest.TestCase):
             (d/"metadata.txt").write_text(
                 f"profile={p}\nrunner_exit=0\n"+
                 "source=real_virtual_controller_rooftop_touch_guest\n"+
-                "emulator_sha256_expected=c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66\n"+
+                "emulator_sha256_expected=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180\n"+
+                "emulator_sha256_observed=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180\n"+
                 "nro_sha256="+"a"*64+"\n")
             (d/"checksum.txt").write_text("archive: OK\n")
             (d/"result.txt").write_text(
@@ -100,6 +101,20 @@ class TouchRepeats(unittest.TestCase):
     def test_fake_host_fire(self):
         p=self.root/"rooftop-touch-evidence-1"/"input-injection.txt"
         p.write_text(p.read_text()+"ROOFTOP_FIRE_SENT\n")
+        with self.assertRaises(TouchRepeatError):verify_two(self.root)
+    def test_stale_emulator_pin_rejected(self):
+        p=self.root/"rooftop-touch-evidence-1"/"metadata.txt"
+        p.write_text(p.read_text().replace("emulator_sha256_expected=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180",
+            "emulator_sha256_expected=8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642"))
+        with self.assertRaises(TouchRepeatError):verify_two(self.root)
+    def test_mismatched_observed_emulator_rejected(self):
+        p=self.root/"rooftop-touch-evidence-2"/"metadata.txt"
+        p.write_text(p.read_text().replace("emulator_sha256_observed=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180",
+            "emulator_sha256_observed="+"f"*64))
+        with self.assertRaises(TouchRepeatError):verify_two(self.root)
+    def test_absent_observed_emulator_rejected(self):
+        p=self.root/"rooftop-touch-evidence-2"/"metadata.txt"
+        p.write_text(p.read_text().replace("emulator_sha256_observed=d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180\n",""))
         with self.assertRaises(TouchRepeatError):verify_two(self.root)
     def test_missing_emulator_integrity(self):
         p=self.root/"rooftop-touch-evidence-1"/"checksum.txt"

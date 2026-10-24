@@ -1,4 +1,5 @@
 #include "qs_game.h"
+#include "qs_reference_projectile_curve.h"
 #include "qs_trace.h"
 #include "qs_motion.h"
 #include "qs_parallax.h"
@@ -427,9 +428,36 @@ static void render_stage(SDL_Renderer *renderer, const QsGame *game) {
             rectangle(renderer, (int)s->x - cam, (int)s->y, s->attached ? 16 : 7, 4,
                       s->red ? color(230, 74, 78) : color(255, 225, 108));
     }
-    if ((game->hero.hurt_frames % 8) < 4)
-        rectangle(renderer, (int)game->hero.x - cam, (int)game->hero.y,
-                  12, 20, color(250, 237, 167));
+    /* Stage264: independent procedural vertical projectile; bounded to
+     * first-city SAT position samples, deliberately collision-free. */
+    {
+        int shot_x, shot_y;
+        if (qs_city_up_projectile_position(game, &shot_x, &shot_y)) {
+            rectangle(renderer, shot_x - cam, shot_y, 7, 7,
+                      color(255, 225, 108));
+            rectangle(renderer, shot_x + 2 - cam, shot_y + 2, 3, 3,
+                      color(112, 167, 221));
+        }
+    }
+    if ((game->hero.hurt_frames % 8) < 4) {
+        int hx = (int)game->hero.x - cam;
+        int hy = (int)game->hero.y;
+        rectangle(renderer, hx, hy, 12, 20, color(250, 237, 167));
+        /*
+         * Stage261: original-free, upward-aiming silhouette in the opt-in
+         * city research scene. Never hide the hero for the original ROM's
+         * single-frame SAT anomaly; its rendering mechanism is unproven.
+         */
+        if (game->physics_profile == QS_PHYSICS_REFERENCE_CITY &&
+            game->stage == 0 && game->reference_up_fire_frames > 0 &&
+            game->reference_up_fire_frames <= QS_CITY_UP_FIRE_POSE_TICKS) {
+            int muzzle_x = hx + (game->hero.facing > 0 ? 9 : 0);
+            rectangle(renderer, muzzle_x, hy - 7, 3, 9,
+                      color(112, 167, 221));
+            rectangle(renderer, muzzle_x - 1, hy - 9, 5, 3,
+                      color(255, 225, 108));
+        }
+    }
     rectangle(renderer, 0, 0, QS_VIEW_W, 15, color(28, 38, 54));
     for (i = 0; i < 3; i++)
         rectangle(renderer, 8 + i * 14, 4, 10, 8,
@@ -4170,6 +4198,218 @@ static int run_rooftop_bridge_sdl_smoke(SDL_Renderer *renderer) {
     return 1;
 }
 
+
+/*
+ * Stage262: inspect the ACTUAL ROM-free SDL raster of the Stage261 upward
+ * pose. No original game image is used as expected output. The pose must
+ * appear at the correct left/right muzzle and disappear when its 20 ticks
+ * expire; a normal shot must never accidentally create that muzzle.
+ */
+static int upward_pose_pixel(SDL_Renderer *renderer, const QsGame *game,
+                             int x, int y, uint32_t *pixel) {
+    uint64_t digest;
+    SDL_Rect rect = {x, y, 1, 1};
+    return capture_frame(renderer, game, &digest) &&
+           SDL_RenderReadPixels(renderer, &rect, SDL_PIXELFORMAT_ARGB8888,
+                                pixel, (int)sizeof(*pixel)) == 0;
+}
+
+static int run_upward_pose_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame right, left, fire_only;
+    QsInput input = {0};
+    uint32_t right_cap = 0, right_beam = 0, left_cap = 0;
+    uint32_t missing_cap = 0, baseline = 0, hero_pixel = 0;
+    const uint32_t gold = UINT32_C(0xffffe16c);
+    const uint32_t blue = UINT32_C(0xff70a7dd);
+    const uint32_t hero = UINT32_C(0xfffaeda7);
+    int count, hx, hy;
+
+    qs_init(&right);
+    right.physics_profile = QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&right, 0);
+    qs_step(&right, input); /* settle onto the synthetic ground */
+    if (!right.hero.grounded) return 0;
+
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (!upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &baseline) ||
+        baseline == gold) return 0;
+
+    left = right;
+    left.hero.facing = -1;
+    fire_only = right;
+    input.fire = input.up = 1;
+    qs_step(&right, input);
+    qs_step(&left, input);
+    input.up = 0;
+    qs_step(&fire_only, input);
+    if (right.reference_up_fire_frames != QS_CITY_UP_FIRE_POSE_TICKS ||
+        left.reference_up_fire_frames != QS_CITY_UP_FIRE_POSE_TICKS ||
+        fire_only.reference_up_fire_frames != 0) return 0;
+
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (!upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &right_cap) ||
+        !upward_pose_pixel(renderer, &right, hx + 10, hy - 5, &right_beam) ||
+        !upward_pose_pixel(renderer, &right, hx - 1, hy - 9, &missing_cap) ||
+        right_cap != gold || right_beam != blue || missing_cap == gold)
+        return 0;
+    hx = (int)left.hero.x;
+    hy = (int)left.hero.y;
+    if (!upward_pose_pixel(renderer, &left, hx - 1, hy - 9, &left_cap) ||
+        !upward_pose_pixel(renderer, &left, hx + 10, hy - 9, &missing_cap) ||
+        left_cap != gold || missing_cap == gold)
+        return 0;
+    hx = (int)fire_only.hero.x;
+    hy = (int)fire_only.hero.y;
+    if (!upward_pose_pixel(renderer, &fire_only, hx + 10, hy - 9,
+                           &missing_cap) || missing_cap == gold)
+        return 0;
+
+    input.up = 1;
+    for (count = 1; count <= QS_CITY_UP_FIRE_POSE_TICKS; ++count)
+        qs_step(&right, input);
+    hx = (int)right.hero.x;
+    hy = (int)right.hero.y;
+    if (right.reference_up_fire_frames != 0 ||
+        !upward_pose_pixel(renderer, &right, hx + 10, hy - 9, &missing_cap) ||
+        !upward_pose_pixel(renderer, &right, hx + 5, hy + 10, &hero_pixel) ||
+        missing_cap == gold || hero_pixel != hero)
+        return 0;
+
+    puts("UPWARD_POSE_SDL_PASS: left/right muzzle pixels, no ordinary-shot muzzle, 20-tick expiration and visible hero");
+    return 1;
+}
+
+
+/* Stage264: actual readback of independently drawn vertical projectile;
+ * no original sprite artwork, emulator screenshot or ROM participates. */
+static int run_vertical_projectile_sdl_smoke(SDL_Renderer *renderer) {
+    QsGame g;
+    QsInput input = {0};
+    int x=0, y=0, old_y=0, age;
+    uint32_t gold=0, cyan=0, absent=0;
+    const uint32_t expected_gold = UINT32_C(0xffffe16c);
+    const uint32_t expected_cyan = UINT32_C(0xff70a7dd);
+    qs_init(&g);
+    g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+    qs_begin_stage(&g,0);
+    qs_step(&g,input);
+    if (!g.hero.grounded) return 0;
+    input.up=input.fire=1;
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    input=(QsInput){0};
+    qs_step(&g,input);
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y) ||
+        !upward_pose_pixel(renderer,&g,x,y,&gold) ||
+        !upward_pose_pixel(renderer,&g,x+3,y+3,&cyan) ||
+        gold!=expected_gold || cyan!=expected_cyan) return 0;
+    old_y=y;
+    qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y) ||
+        old_y-y!=8 ||
+        !upward_pose_pixel(renderer,&g,x+3,y+3,&cyan) ||
+        cyan!=expected_cyan) return 0;
+    for(age=2;age<QS_REFERENCE_UPWARD_OBSERVED_FRAMES;age++)
+        qs_step(&g,input);
+    if (!qs_city_up_projectile_position(&g,&x,&y)) return 0;
+    qs_step(&g,input);
+    if (qs_city_up_projectile_position(&g,&x,&y) ||
+        !upward_pose_pixel(renderer,&g,60,166,&absent) ||
+        absent==expected_gold) return 0;
+    puts("VERTICAL_PROJECTILE_SDL_PASS: 3-frame delay, gold/cyan raster, measured vertical step and bounded disappearance");
+    return 1;
+}
+
+/*
+ * Stage273: actual SDL framebuffer proof for the existing horizontal
+ * projectile in the original-free CITY reference scene.
+ *
+ * Two independent weapon colors and two facing directions. Generate
+ * the game state through qs_step() with a genuine fire rising edge and
+ * its documented one-step delayed creation; never plant a projectile
+ * or fabricate pixels. A COPY of the same frame with only the chosen
+ * shot disabled is the independent negative control. Redraw the real
+ * state afterward, including the original actor, before continuing.
+ *
+ * Desktop software SDL smoke only. This is NOT yet an authenticated
+ * Switch/NeXium gamepad raster witness or collision-fidelity proof.
+ */
+static int run_horizontal_projectile_counterfactual_sdl_smoke(
+    SDL_Renderer *renderer) {
+    const uint32_t gold=UINT32_C(0xffffe16c);
+    const uint32_t red=UINT32_C(0xffe64a4e);
+    int direction,weapon_choice;
+    for (weapon_choice=0;weapon_choice<2;++weapon_choice) {
+        for (direction=-1;direction<=1;direction+=2) {
+            QsGame g,without;
+            QsInput in={0};
+            int shot=-1,old_x=0,t;
+            uint32_t before=0,visible=0,background=0,restored=0;
+            uint32_t expected=weapon_choice?red:gold;
+            qs_init(&g);
+            g.physics_profile=QS_PHYSICS_REFERENCE_CITY;
+            qs_begin_stage(&g,0);
+            memset(g.enemies,0,sizeof(g.enemies));
+            memset(g.pickups,0,sizeof(g.pickups));
+            g.hero.x=90;
+            g.hero.y=188;
+            g.hero.facing=direction;
+            g.hero.hurt_frames=0;
+            g.red_unlocked=weapon_choice!=0;
+            g.weapon=weapon_choice?QS_RED:QS_YELLOW;
+            qs_step(&g,in);
+            if (g.mode!=QS_STAGE || !g.hero.grounded) return 0;
+            in.fire=1;
+            qs_step(&g,in);
+            if (g.pending_reference_shot!=1) return 0;
+            for(t=0;t<QS_MAX_SHOTS;++t)
+                if(g.shots[t].active) return 0;
+            in=(QsInput){0};
+            qs_step(&g,in);
+            for(t=0;t<QS_MAX_SHOTS;++t)
+                if(g.shots[t].active) {
+                    if(shot!=-1) return 0;
+                    shot=t;
+                }
+            if(shot<0 || g.shots[shot].red!=weapon_choice ||
+               g.shots[shot].attached ||
+               g.shots[shot].vx*direction<=0.0f) return 0;
+            for(t=0;t<3;++t) {
+                int x,y;
+                QsParallax camera=qs_parallax_offsets(&g);
+                if(!g.shots[shot].active || g.shots[shot].attached)
+                    return 0;
+                x=(int)g.shots[shot].x-camera.front_px+3;
+                y=(int)g.shots[shot].y+1;
+                if(x<0 || y<0 || x>=QS_VIEW_W || y>=QS_VIEW_H)
+                    return 0;
+                /* Shot exists and was drawn in the positive frame. */
+                if(!read_multishot_pixel(renderer,&g,x,y,&visible) ||
+                   visible!=expected) return 0;
+                without=g;
+                without.shots[shot].active=0;
+                if(!read_multishot_pixel(renderer,&without,x,y,&background) ||
+                   background==expected) return 0;
+                if(!read_multishot_pixel(renderer,&g,x,y,&restored) ||
+                   restored!=expected) return 0;
+                if(t>0 && (int)g.shots[shot].x==old_x) return 0;
+                old_x=(int)g.shots[shot].x;
+                if(t<2) qs_step(&g,in);
+            }
+            /* A late neutral frame cannot re-trigger FIRE. */
+            if(g.pending_reference_shot!=0) return 0;
+            before+=visible^background^restored;
+        }
+    }
+    puts("HORIZONTAL_PROJECTILE_COUNTERFACTUAL_SDL_PASS: real qs_step delayed fire; yellow/red x left/right; three frame-local positive/negative/restored pixel checks per case");
+    return 1;
+}
+
 static int run_sdl_smoke(SDL_Renderer *renderer) {
 #if !defined(__SWITCH__) && SDL_VERSION_ATLEAST(2, 0, 14)
     if (!virtual_controller_smoke()) return 1;
@@ -4265,6 +4505,9 @@ static int run_sdl_smoke(SDL_Renderer *renderer) {
     if (!run_city_air_reward_fx_sdl_smoke(renderer)) return 1;
     if (!run_city_air_reward_hud_sdl_smoke(renderer)) return 1;
     if (!run_personal_best_sdl_smoke(renderer)) return 1;
+    if (!run_upward_pose_sdl_smoke(renderer)) return 1;
+    if (!run_vertical_projectile_sdl_smoke(renderer)) return 1;
+    if (!run_horizontal_projectile_counterfactual_sdl_smoke(renderer)) return 1;
     printf("SDL_SMOKE_PASS map=%016llx stage0=%016llx stage1=%016llx stage2=%016llx\n",
            (unsigned long long)reference[0],
            (unsigned long long)reference[1],
@@ -4514,6 +4757,22 @@ int main(int argc, char **argv) {
     FILE *rooftop_transition_file = NULL;
     /* Stage 154: independent, guest-only witnessed CITY red pickup. */
     FILE *rooftop_red_acquire_file = NULL;
+    /* Stage269: read-only, bounded numeric witness of actual UP+FIRE
+     * pad inputs and the dedicated CITY vertical projectile. No assets. */
+    FILE *city_up_guest_file = NULL;
+    /* Stage270: observe actual SDL renderer pixels, never synthetic raster. */
+    FILE *city_up_raster_file = NULL;
+    /* Stage275: independent real SDL-pad right-facing horizontal yellow
+     * shot. A first-shot gate limits expensive renderer counterfactuals. */
+    FILE *city_horizontal_guest_file = NULL;
+    FILE *city_horizontal_raster_file = NULL;
+    unsigned city_horizontal_guest_records = 0;
+    unsigned city_horizontal_raster_records = 0;
+    int city_horizontal_first_shot_frame = -1;
+    int city_horizontal_raster_last_frame = -1;
+    unsigned city_up_raster_records = 0;
+    int city_up_raster_last_frame = -1;
+    unsigned city_up_guest_records = 0;
     unsigned rooftop_red_acquire_records=0;
     unsigned rooftop_transition_records=0;
     unsigned rooftop_guest_records=0;
@@ -4651,6 +4910,42 @@ int main(int argc, char **argv) {
         }
         if(!rooftop_red_acquire_file)
             fprintf(stderr,"QuackShot: red pickup guest CSV unavailable (non-fatal)\n");
+        city_up_guest_file=fopen("sdmc:/switch/quackshot-city-up-guest.csv","w");
+        if(city_up_guest_file &&
+           (fputs("seq,frame,attempt,mode,stage,up,fire,grounded,active,age,visible,x,y,legacy_shots,source\n",
+                  city_up_guest_file)<0 || fflush(city_up_guest_file)!=0)) {
+            fclose(city_up_guest_file);
+            city_up_guest_file=NULL;
+        }
+        if(!city_up_guest_file)
+            fprintf(stderr,"QuackShot: CITY upward numeric witness CSV unavailable (non-fatal)\n");
+        city_up_raster_file=fopen("sdmc:/switch/quackshot-city-up-raster.csv","w");
+        if(city_up_raster_file &&
+           (fputs("seq,frame,age,shot_x,shot_y,gold_argb,cyan_argb,bg_gold_argb,bg_cyan_argb,readback_ok,baseline_ok,restored_ok,scale_x_milli,scale_y_milli,source\n",
+                  city_up_raster_file)<0 || fflush(city_up_raster_file)!=0)) {
+            fclose(city_up_raster_file);
+            city_up_raster_file=NULL;
+        }
+        if(!city_up_raster_file)
+            fprintf(stderr,"QuackShot: CITY upward renderer pixel CSV unavailable (non-fatal)\n");
+        city_horizontal_guest_file=fopen("sdmc:/switch/quackshot-city-horizontal-guest.csv","w");
+        if(city_horizontal_guest_file &&
+           (fputs("seq,frame,attempt,mode,stage,fire,up,grounded,pending,active,attached,red,x_milli,y_milli,vx_milli,source\n",
+                  city_horizontal_guest_file)<0 ||
+            fflush(city_horizontal_guest_file)!=0)) {
+            fclose(city_horizontal_guest_file);
+            city_horizontal_guest_file=NULL;
+        }
+        city_horizontal_raster_file=fopen("sdmc:/switch/quackshot-city-horizontal-raster.csv","w");
+        if(city_horizontal_raster_file &&
+           (fputs("seq,frame,x_milli,y_milli,render_argb,bg_argb,readback_ok,baseline_ok,restored_ok,source\n",
+                  city_horizontal_raster_file)<0 ||
+            fflush(city_horizontal_raster_file)!=0)) {
+            fclose(city_horizontal_raster_file);
+            city_horizontal_raster_file=NULL;
+        }
+        if(!city_horizontal_guest_file || !city_horizontal_raster_file)
+            fprintf(stderr,"QuackShot: CITY horizontal guest pixel witnesses unavailable (non-fatal)\n");
     }
 #endif
     /* Hidden CI windows cannot receive controller events unless enabled. */
@@ -4817,6 +5112,68 @@ int main(int argc, char **argv) {
                                      hero_x_before,hero_y_before,
                                      pad!=NULL,input_before,shots_before);
 #ifdef __SWITCH__
+            /* Stage269: never synthesize QsInput. The following samples
+             * originate from read_input(pad) and the actual qs_step()
+             * above. Invisible coordinates are explicitly -1; neither
+             * unknown collision logic nor original image data is inferred.
+             * Retain consecutive frames to show the launch delay and
+             * exact removal after the bounded 20-position interval. */
+            if(city_up_guest_file && pad &&
+               old_mode==QS_STAGE && old_stage==0 &&
+               game.mode==QS_STAGE && game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               city_up_guest_records<320u) {
+                int px=-1,py=-1;
+                int visible=qs_city_up_projectile_position(&game,&px,&py);
+                int ordinary_shots=0;
+                int slot;
+                for(slot=0;slot<QS_MAX_SHOTS;++slot)
+                    ordinary_shots+=game.shots[slot].active!=0;
+                if(fprintf(city_up_guest_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,live_city_up_pad_qs_step\n",
+                   city_up_guest_records,game.frames,game.city_attempt_frames,
+                   (int)game.mode,game.stage,in.up!=0,in.fire!=0,
+                   game.hero.grounded!=0,game.reference_up_projectile.active,
+                   game.reference_up_projectile.age,visible,px,py,
+                   ordinary_shots)>=0 &&
+                   fflush(city_up_guest_file)==0) {
+                    ++city_up_guest_records;
+                } else {
+                    fclose(city_up_guest_file);
+                    city_up_guest_file=NULL;
+                }
+            }
+            /* Stage275: every original in-game tick from the real
+             * read_input(pad) -> qs_step(), no injected QsInput. The shot
+             * values are observed after physics and collisions, so the
+             * verifier can enforce the one-tick delayed spawn and motion.
+             * Never log copied ROM graphics or any private originals. */
+            if(city_horizontal_guest_file && pad &&
+               old_mode==QS_STAGE && old_stage==0 &&
+               game.mode==QS_STAGE && game.stage==0 &&
+               game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+               city_horizontal_guest_records<320u) {
+                const QsShot *shot=NULL;
+                for(int slot=0;slot<QS_MAX_SHOTS;++slot)
+                    if(game.shots[slot].active) {shot=&game.shots[slot];break;}
+                if(shot && city_horizontal_first_shot_frame<0)
+                    city_horizontal_first_shot_frame=game.frames;
+                if(fprintf(city_horizontal_guest_file,
+                   "%u,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,live_city_horizontal_pad_qs_step\n",
+                   city_horizontal_guest_records,game.frames,game.city_attempt_frames,
+                   (int)game.mode,game.stage,in.fire!=0,in.up!=0,
+                   game.hero.grounded!=0,game.pending_reference_shot!=0,
+                   shot!=NULL,shot?shot->attached!=0:0,shot?shot->red!=0:0,
+                   shot?(int)(shot->x*1000.0f):-1,
+                   shot?(int)(shot->y*1000.0f):-1,
+                   shot?(int)(shot->vx*1000.0f):0)>=0 &&
+                   fflush(city_horizontal_guest_file)==0)
+                    ++city_horizontal_guest_records;
+                else {
+                    fclose(city_horizontal_guest_file);
+                    city_horizontal_guest_file=NULL;
+                }
+            }
             /* Stage 154: only samples from the actual CITY level entered
              * via pad. Observe the real pickup before and after qs_step:
              * logging cannot manufacture an unlocked weapon or a pickup.
@@ -5054,6 +5411,151 @@ int main(int argc, char **argv) {
         }
         if (game.mode == QS_MAP) render_map(renderer, &game);
         else render_stage(renderer, &game);
+#ifdef __SWITCH__
+        /* Stage270: independent real SDL GPU/CPU readback after actual
+         * render_stage(), before Present(). Pixel reads cannot alter
+         * physics, input, collision, or the original guest CSV.
+         * Skip repeated renders of one simulation tick; collect bounded
+         * visible ages only, with exact display-scale coordinates. */
+        if (city_up_raster_file && pad &&
+            game.mode==QS_STAGE && game.stage==0 &&
+            game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+            (int)game.frames!=city_up_raster_last_frame &&
+            city_up_raster_records<48u) {
+            int shot_x,shot_y;
+            if(qs_city_up_projectile_position(&game,&shot_x,&shot_y)) {
+                QsParallax p=qs_parallax_offsets(&game);
+                SDL_Rect viewport={0,0,0,0}, a={0,0,1,1}, b={0,0,1,1};
+                float sx=0.0f,sy=0.0f;
+                int ow=0,oh=0,valid=0,baseline_ok=0,restored_ok=0;
+                uint32_t gold=0,cyan=0,bg_gold=0,bg_cyan=0;
+                SDL_RenderGetViewport(renderer,&viewport);
+                SDL_RenderGetScale(renderer,&sx,&sy);
+                if(SDL_GetRendererOutputSize(renderer,&ow,&oh)==0 &&
+                   sx>0.0f && sy>0.0f && sx<16.0f && sy<16.0f) {
+                    int px=shot_x-p.front_px;
+                    a.x=viewport.x+(int)((px+1.5f)*sx);
+                    a.y=viewport.y+(int)((shot_y+1.5f)*sy);
+                    b.x=viewport.x+(int)((px+3.5f)*sx);
+                    b.y=viewport.y+(int)((shot_y+3.5f)*sy);
+                    if(a.x>=0 && a.y>=0 && b.x>=0 && b.y>=0 &&
+                       a.x<ow && b.x<ow && a.y<oh && b.y<oh &&
+                       SDL_RenderReadPixels(renderer,&a,SDL_PIXELFORMAT_ARGB8888,
+                                            &gold,(int)sizeof(gold))==0 &&
+                       SDL_RenderReadPixels(renderer,&b,SDL_PIXELFORMAT_ARGB8888,
+                                            &cyan,(int)sizeof(cyan))==0)
+                        valid=1;
+                    if(valid) {
+                        /* Stage271: negative control on the SAME frame.
+                         * Render a local COPY with only the experimental
+                         * actor disabled; never modify the real QsGame,
+                         * pad input, physics, colliders or numeric trace.
+                         * Restore the real scene before SDL Present. */
+                        QsGame without=game;
+                        uint32_t check_gold=0,check_cyan=0;
+                        without.reference_up_projectile.active=0;
+                        render_stage(renderer,&without);
+                        if(SDL_RenderReadPixels(renderer,&a,SDL_PIXELFORMAT_ARGB8888,
+                                                &bg_gold,(int)sizeof(bg_gold))==0 &&
+                           SDL_RenderReadPixels(renderer,&b,SDL_PIXELFORMAT_ARGB8888,
+                                                &bg_cyan,(int)sizeof(bg_cyan))==0)
+                            baseline_ok=1;
+                        render_stage(renderer,&game);
+                        if(SDL_RenderReadPixels(renderer,&a,SDL_PIXELFORMAT_ARGB8888,
+                                                &check_gold,(int)sizeof(check_gold))==0 &&
+                           SDL_RenderReadPixels(renderer,&b,SDL_PIXELFORMAT_ARGB8888,
+                                                &check_cyan,(int)sizeof(check_cyan))==0 &&
+                           check_gold==gold && check_cyan==cyan)
+                            restored_ok=1;
+                    }
+                }
+                if(fprintf(city_up_raster_file,
+                  "%u,%d,%d,%d,%d,%u,%u,%u,%u,%d,%d,%d,%d,%d,live_city_up_sdl_pixel_readback\n",
+                  city_up_raster_records,game.frames,
+                  game.reference_up_projectile.age,shot_x,shot_y,
+                  (unsigned)gold,(unsigned)cyan,
+                  (unsigned)bg_gold,(unsigned)bg_cyan,
+                  valid,baseline_ok,restored_ok,
+                  (int)(sx*1000.0f),(int)(sy*1000.0f))>=0 &&
+                  fflush(city_up_raster_file)==0) {
+                    ++city_up_raster_records;
+                } else {
+                    fclose(city_up_raster_file);
+                    city_up_raster_file=NULL;
+                }
+            }
+            city_up_raster_last_frame=(int)game.frames;
+        }
+#endif
+#ifdef __SWITCH__
+        /* Stage276: actual SDL framebuffer positive and same-frame
+         * background-only negative control of the first horizontal
+         * projectile, including left-facing and red variants. Sampling
+         * every other shot frame keeps headless software GPU pressure
+         * bounded; all observations retain exact game-frame linkage. */
+        if(city_horizontal_raster_file && pad &&
+           game.mode==QS_STAGE && game.stage==0 &&
+           game.physics_profile==QS_PHYSICS_REFERENCE_CITY &&
+           city_horizontal_first_shot_frame>=0 &&
+           game.frames>=city_horizontal_first_shot_frame &&
+           game.frames<=city_horizontal_first_shot_frame+26 &&
+           (game.frames-city_horizontal_first_shot_frame)%2==0 &&
+           game.frames!=city_horizontal_raster_last_frame &&
+           city_horizontal_raster_records<18u) {
+            const QsShot *shot=&game.shots[0];
+            if(shot->active && !shot->attached && shot->vx!=0.0f) {
+                QsParallax parallax=qs_parallax_offsets(&game);
+                SDL_Rect vp={0,0,0,0},p={0,0,1,1};
+                float sx=0.0f,sy=0.0f;
+                int ow=0,oh=0,success=0,bg_ok=0,restored=0,in_bounds=0;
+                uint32_t fore=0,bg=0,again=0;
+                SDL_RenderGetViewport(renderer,&vp);
+                SDL_RenderGetScale(renderer,&sx,&sy);
+                if(SDL_GetRendererOutputSize(renderer,&ow,&oh)==0 &&
+                   sx>=0.5f && sy>=0.5f && sx<16.0f && sy<16.0f) {
+                    int screen_x=(int)shot->x-parallax.front_px;
+                    int screen_y=(int)shot->y;
+                    p.x=vp.x+(int)((screen_x+2.5f)*sx);
+                    p.y=vp.y+(int)((screen_y+1.5f)*sy);
+                    in_bounds=p.x>=0 && p.y>=0 && p.x<ow && p.y<oh;
+                    if(in_bounds &&
+                       SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                            &fore,(int)sizeof(fore))==0) {
+                        success=1;
+                        QsGame without=game;
+                        without.shots[0].active=0;
+                        render_stage(renderer,&without);
+                        if(SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                                &bg,(int)sizeof(bg))==0)
+                            bg_ok=1;
+                        render_stage(renderer,&game);
+                        if(SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
+                                                &again,(int)sizeof(again))==0 &&
+                           again==fore)
+                            restored=1;
+                    }
+                }
+                /* A projectile that leaves the SDL viewport is no longer
+                 * a pixel sample. Do not poison an otherwise valid flight
+                 * with a synthetic readback failure; an in-bounds readback
+                 * error is still recorded and rejected by the verifier. */
+                if(in_bounds) {
+                    if(fprintf(city_horizontal_raster_file,
+                       "%u,%d,%d,%d,%u,%u,%d,%d,%d,live_city_horizontal_sdl_readback\n",
+                       city_horizontal_raster_records,game.frames,
+                       (int)(shot->x*1000.0f),(int)(shot->y*1000.0f),
+                       (unsigned)fore,(unsigned)bg,success,bg_ok,restored)>=0 &&
+                       fflush(city_horizontal_raster_file)==0)
+                        ++city_horizontal_raster_records;
+                    else {
+                        fclose(city_horizontal_raster_file);
+                        city_horizontal_raster_file=NULL;
+                    }
+                }
+            }
+            city_horizontal_raster_last_frame=game.frames;
+        }
+#endif
         SDL_RenderPresent(renderer);
         if (!shown_first_frame) {
             shown_first_frame = 1;
@@ -5078,6 +5580,10 @@ int main(int argc, char **argv) {
     if(rooftop_weapon_file)fclose(rooftop_weapon_file);
     if(rooftop_transition_file)fclose(rooftop_transition_file);
     if(rooftop_red_acquire_file)fclose(rooftop_red_acquire_file);
+    if(city_up_guest_file)fclose(city_up_guest_file);
+    if(city_up_raster_file)fclose(city_up_raster_file);
+    if(city_horizontal_guest_file)fclose(city_horizontal_guest_file);
+    if(city_horizontal_raster_file)fclose(city_horizontal_raster_file);
 #endif
     qs_trace_close(&trace);
     return 0;

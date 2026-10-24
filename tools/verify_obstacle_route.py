@@ -31,8 +31,14 @@ def verify(samples):
         raise ValueError("controller route did not start at spawn")
     if rows[0]["checkpoint"]:
         raise ValueError("checkpoint was preactivated")
+    # Stage272: the host legitimately starts B at x=287.468, but
+    # a 45-ms verified input edge delay moves the hero to x=313.468
+    # before the NRO first sees B. Do not confuse press reception
+    # with host launch position. Bound at 318px, still before crossing
+    # x=368px; preserve the independent airborne traversal, button
+    # and landmark chronology checks below.
     pit=[r for r in rows if (r["input_bits"]&6)==6 and
-         275000<=r["x_milli"]<=309000]
+         275000<=r["x_milli"]<=318000]
     roof=[r for r in rows if (r["input_bits"]&6)==6 and
           390000<=r["x_milli"]<=437000]
     crossing=[r for r in rows if r["x_milli"]>=368000]

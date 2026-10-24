@@ -20,6 +20,12 @@ MAX_FRAMES = 10000
 MAX_CPU_TRACE_WINDOW = 128
 MAX_SAT_SNAPSHOT_FRAMES = 128
 MAX_SAT_SPRITES = 80
+MAX_OBJECT_STATE_SNAPSHOT_FRAMES = 128
+CANDIDATE_OBJECT_RAM_OFFSET = 0xA2C0
+CANDIDATE_OBJECT_RECORD_BYTES = 0x40
+CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS = (0x04, 0x06)
+CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS = (0x08, 0x09)
+CANDIDATE_OBJECT_POINTER_OFFSET = 0x20
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -207,6 +213,9 @@ CPU_TRACE_WATCH_RANGES = (
 )
 
 CPU_PC_TRACE_RANGES = (
+    (0x9A26, 0x9A40),  # descriptor lookup and header
+    (0x9AC2, 0x9ADC),  # nested cursor offset and normal stream path
+    (0x9B3C, 0x9B4A),  # alternate-layout/mirror path
     (0x0206, 0x0208),  # synthetic CI instruction only
     (0x5D20, 0x5DE0),  # coordinate/state writers
     (0x6100, 0x6160),  # object-state dispatch and movement gate
@@ -228,6 +237,7 @@ def _prepare_cpu_trace_api(core, window):
         "quackshot_research_cpu_pc_trace_count",
         "quackshot_research_cpu_pc_trace_overflow",
         "quackshot_research_cpu_pc_trace_read",
+        "quackshot_research_cpu_pc_trace_a1",
     )
     try:
         api = {name: getattr(core, name) for name in names}
@@ -255,6 +265,8 @@ def _prepare_cpu_trace_api(core, window):
         [C.c_uint32] + [C.POINTER(C.c_uint32)] * 4
     )
     api["quackshot_research_cpu_pc_trace_read"].restype = C.c_int
+    api["quackshot_research_cpu_pc_trace_a1"].argtypes = [C.c_uint32]
+    api["quackshot_research_cpu_pc_trace_a1"].restype = C.c_uint32
     if not api["quackshot_research_cpu_trace_reset"](*window):
         raise RuntimeError("CPU trace core rejected the bounded frame window")
     return api
@@ -304,7 +316,7 @@ def _collect_cpu_trace(api, window):
 
 
 def _collect_cpu_pc_trace(api, window):
-    """Read only selected instruction PCs, A0 and CCR; no instruction bytes."""
+    """Read selected instruction PCs, A0/A1 and CCR only; no instruction bytes."""
     api["quackshot_research_cpu_trace_stop"]()
     count = int(api["quackshot_research_cpu_pc_trace_count"]())
     overflow = int(api["quackshot_research_cpu_pc_trace_overflow"]())
@@ -317,14 +329,16 @@ def _collect_cpu_pc_trace(api, window):
         if not ok:
             raise RuntimeError("CPU PC trace event disappeared while reading")
         frame, pc, a0, ccr = (int(slot.value) for slot in slots)
+        a1 = int(api["quackshot_research_cpu_pc_trace_a1"](index))
         events.append({
             "frame": frame,
             "instruction_pc": pc,
             "a0_address": a0,
+            "a1_address": a1,
             "ccr_low5": ccr,
         })
     return {
-        "schema": "quackshot_private_m68k_control_flow_trace_v1",
+        "schema": "quackshot_private_m68k_control_flow_trace_v2",
         "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
         "frame_window_inclusive": list(window),
         "pc_ranges": [
@@ -411,7 +425,59 @@ def _collect_sat_snapshot(api, frame):
         })
     return {"frame": frame, "entry_count": count, "sprites": sprites}
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=()):
+
+def _collect_candidate_object_state(ram_bytes, frame):
+    """Decode a fixed allowlist of numeric fields; never return raw RAM bytes."""
+    if type(ram_bytes) is not bytes or len(ram_bytes) < (
+            CANDIDATE_OBJECT_RAM_OFFSET + CANDIDATE_OBJECT_RECORD_BYTES):
+        raise RuntimeError("System RAM is too short for candidate object state sampling")
+    if type(frame) is not int or frame < 0:
+        raise ValueError("candidate object snapshot frame must be a nonnegative integer")
+
+    def word(offset):
+        start = CANDIDATE_OBJECT_RAM_OFFSET + offset
+        return int.from_bytes(ram_bytes[start:start + 2], "little", signed=False)
+
+    x_integer = int.from_bytes(
+        ram_bytes[CANDIDATE_OBJECT_RAM_OFFSET + 0x10:
+                  CANDIDATE_OBJECT_RAM_OFFSET + 0x12], "little", signed=True)
+    x_fraction = word(0x12)
+    y_integer = int.from_bytes(
+        ram_bytes[CANDIDATE_OBJECT_RAM_OFFSET + 0x14:
+                  CANDIDATE_OBJECT_RAM_OFFSET + 0x16], "little", signed=True)
+    y_fraction = word(0x16)
+    pointer_value = (word(CANDIDATE_OBJECT_POINTER_OFFSET) << 16) | word(
+        CANDIDATE_OBJECT_POINTER_OFFSET + 2)
+    return {
+        "frame": frame,
+        "world_x": {
+            "integer": x_integer,
+            "fraction_u16": x_fraction,
+            "fixed_16_16": round(x_integer + x_fraction / 65536.0, 6),
+        },
+        "world_y": {
+            "integer": y_integer,
+            "fraction_u16": y_fraction,
+            "fixed_16_16": round(y_integer + y_fraction / 65536.0, 6),
+        },
+        "selected_words": {
+            f"0x{offset:02X}": word(offset)
+            for offset in CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS
+        },
+        "selected_bytes": {
+            f"0x{offset:02X}": ram_bytes[
+                CANDIDATE_OBJECT_RAM_OFFSET + (offset ^ 1)]
+            for offset in CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS
+        },
+        "candidate_flag_0x0D": ram_bytes[CANDIDATE_OBJECT_RAM_OFFSET + (0x0D ^ 1)],
+        "pointer_0x20": {
+            "value_u32": pointer_value,
+            "hex": f"0x{pointer_value:08X}",
+        },
+    }
+
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None, cpu_control_flow_trace_window=None, sat_snapshot_frames=(), object_state_snapshot_frames=()):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -456,6 +522,14 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(sat_snapshot_frames)) != len(sat_snapshot_frames)):
         raise ValueError("sat_snapshot_frames requires up to 128 unique valid frame indices")
     sat_frame_set = set(sat_snapshot_frames)
+    if (type(object_state_snapshot_frames) not in (tuple, list) or
+            len(object_state_snapshot_frames) > MAX_OBJECT_STATE_SNAPSHOT_FRAMES or
+            any(type(f) is not int or not 0 <= f < frames
+                for f in object_state_snapshot_frames) or
+            len(set(object_state_snapshot_frames)) != len(object_state_snapshot_frames)):
+        raise ValueError(
+            "object_state_snapshot_frames requires up to 128 unique valid frame indices")
+    object_state_frame_set = set(object_state_snapshot_frames)
     trace_windows = []
     for label, candidate in (
         ("cpu_write_trace_window", cpu_write_trace_window),
@@ -619,6 +693,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     initialized, loaded = False, False
     cpu_trace_api, cpu_trace_active, cpu_trace_result, cpu_pc_trace_result = None, False, None, None
     sat_api, sat_snapshots = None, []
+    object_state_snapshots = []
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -653,6 +728,14 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 state["inside_retro_run"] = False
             if frame in sat_frame_set:
                 sat_snapshots.append(_collect_sat_snapshot(sat_api, frame))
+            if frame in object_state_frame_set:
+                ram_ptr = core.retro_get_memory_data(RETRO_MEMORY_SYSTEM_RAM)
+                if not ram_ptr or ram_len < (
+                        CANDIDATE_OBJECT_RAM_OFFSET + CANDIDATE_OBJECT_RECORD_BYTES):
+                    raise RuntimeError("Core system RAM cannot satisfy candidate object snapshot")
+                ram_bytes = C.string_at(ram_ptr, ram_len)
+                object_state_snapshots.append(
+                    _collect_candidate_object_state(ram_bytes, frame))
             if state["video_callbacks_current_step"] == 0:
                 state["frames_without_video_callback"] += 1
             elif state["video_callbacks_current_step"] > 1:
@@ -683,6 +766,10 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             cpu_trace_active = False
         if sat_frame_set and sorted(row["frame"] for row in sat_snapshots) != sorted(sat_frame_set):
             raise RuntimeError("Invalid VDP SAT snapshot frame cadence")
+        if (object_state_frame_set and
+                sorted(row["frame"] for row in object_state_snapshots) !=
+                sorted(object_state_frame_set)):
+            raise RuntimeError("Invalid candidate object snapshot frame cadence")
         if digest_frame_set:
             if (state["video_digest_error"] is not None or
                     sorted(row["frame"] for row in state["video_frame_digests"]) !=
@@ -744,6 +831,35 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                 "audio_exported": False,
                 "sprite_identity_verified": False,
             } if sat_frame_set else None),
+            "candidate_object_state_trace": ({
+                "schema": "quackshot_private_candidate_object_state_numeric_v1",
+                "status": "COMPLETE",
+                "frame_indices_requested": sorted(object_state_frame_set),
+                "sampling_phase": "post_retro_run_before_next_input",
+                "candidate_object_cpu_base": "0xFFA2C0",
+                "system_ram_offset": "0xA2C0",
+                "coordinate_format": "signed integer word + unsigned fraction word / 65536",
+                "selected_word_offsets": [
+                    f"0x{offset:02X}"
+                    for offset in CANDIDATE_OBJECT_SELECTED_WORD_OFFSETS
+                ],
+                "selected_byte_offsets": [
+                    f"0x{offset:02X}"
+                    for offset in CANDIDATE_OBJECT_SELECTED_BYTE_OFFSETS
+                ],
+                "pointer_offset": "0x20",
+                "frames": object_state_snapshots,
+                "raw_ram_exported": False,
+                "raw_rom_exported": False,
+                "raw_vram_exported": False,
+                "raw_sat_bytes_exported": False,
+                "frame_pixels_exported": False,
+                "audio_exported": False,
+                "object_identity_verified": False,
+                "animation_field_identity_verified": False,
+                "collision_geometry_verified": False,
+                "safe_to_modify_switch_physics": False,
+            } if object_state_frame_set else None),
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -813,6 +929,8 @@ def main():
                         help="Optional inclusive FIRST:LAST frame window for selected 68000 instruction PCs, A0 and CCR (max 128 frames)")
     parser.add_argument("--sat-snapshot-frames", default="",
                         help="Comma-separated frames for decoded numeric VDP sprite attributes only (max 128 frames; no raw VRAM)")
+    parser.add_argument("--object-state-snapshot-frames", default="",
+                        help="Comma-separated frames for a fixed allowlist of candidate-object numeric fields only (max 128; no raw RAM)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -833,13 +951,16 @@ def main():
             cpu_control_flow_trace_window = parse_cpu_trace_window(
                 args.cpu_control_flow_trace_window, args.frames)
             sat_frames = parse_frame_indices(args.sat_snapshot_frames, args.frames)
+            object_state_frames = parse_frame_indices(
+                args.object_state_snapshot_frames, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
                               video_digest_frames=digest_frames,
                               cpu_write_trace_window=cpu_trace_window,
                               cpu_control_flow_trace_window=cpu_control_flow_trace_window,
-                              sat_snapshot_frames=sat_frames)
+                              sat_snapshot_frames=sat_frames,
+                              object_state_snapshot_frames=object_state_frames)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)

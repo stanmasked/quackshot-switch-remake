@@ -51,6 +51,29 @@ class RooftopTouchStartupTest(unittest.TestCase):
                                 inner.index("xdotool key"))
                 self.assertEqual(check_route(path)["status"], "PASS")
 
+    def test_all_guest_probes_and_repeat_verifiers_pin_official_nightly(self):
+        paths=["tools/nexium_ci_probe.sh","tools/nexium_rooftop_probe.sh","tools/nexium_rooftop_red_probe.sh","tools/nexium_rooftop_red_to_yellow_probe.sh","tools/nexium_rooftop_reentry_probe.sh","tools/nexium_rooftop_second_red_probe.sh","tools/nexium_rooftop_yellow_rearm_probe.sh","tools/nexium_rooftop_yellow_reset_probe.sh","tools/nexium_rooftop_touch_probe.sh","tools/verify_rooftop_repeats.py","tools/verify_rooftop_red_repeats.py","tools/verify_rooftop_red_to_yellow_repeats.py","tools/verify_rooftop_reentry_repeats.py","tools/verify_rooftop_second_red_repeats.py","tools/verify_rooftop_yellow_rearm_repeats.py","tools/verify_rooftop_yellow_reset_repeats.py","tools/verify_rooftop_touch_repeats.py"]
+        pin="d08e89d15632c2ba3ef0521635286793885ac1eaabed6ab93f2d0ec7d5c10180"
+        stale="c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66"
+        for relative in paths:
+            with self.subTest(script=relative):
+                script=(ROOT/relative).read_text(encoding="utf-8")
+                self.assertIn(pin,script)
+                self.assertNotIn(stale,script)
+
+    def test_snapshot_bound_to_real_contact_before_scene_exit(self):
+        # The genuine NRO CSV must be sealed before a later unrelated
+        # death/respawn during the emulator's timeout can append rows.
+        self.assertIn('cp "$guest" "$5"', INNER)
+        self.assertIn('ROOFTOP_CONTACT_CSV_SEALED', INNER)
+        self.assertIn('"$out/guest-rooftop.csv"', SCRIPT)
+        self.assertLess(INNER.index('ROOFTOP_NO_BRIDGE_GUEST'),
+                        INNER.index('cp "$guest" "$5"'))
+        self.assertLess(INNER.index('cp "$guest" "$5"'),
+                        INNER.index('ROOFTOP_EXIT_SENT=virtual_START'))
+        self.assertIn('BLOCKED: no sealed guest contact snapshot', SCRIPT)
+        self.assertNotIn('cp "$guest" "$out/guest-rooftop.csv"', SCRIPT)
+
     def test_nested_shell_remains_valid(self):
         verdict = check_route(SCRIPT_PATH)
         self.assertEqual(verdict["status"], "PASS")
