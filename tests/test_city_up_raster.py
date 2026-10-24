@@ -27,6 +27,28 @@ def examples():
 class RasterGuestProtocol(unittest.TestCase):
     def test_valid_readback(self):
         self.assertEqual(verify_pair(*examples())["status"],"PASS")
+    def test_four_sparse_restored_readbacks_pass(self):
+        numerical,all_samples=examples()
+        # The real three-pass NeXium run only yielded four genuine samples
+        # with full same-frame background/foreground/restoration checks.
+        sparse=[all_samples[i].copy() for i in (0,5,7,9)]
+        for i,row in enumerate(sparse):
+            row["seq"]=str(i)
+        self.assertEqual(verify_pair(numerical,sparse)["negative_controls"],4)
+    def test_only_three_readbacks_rejected(self):
+        numerical,all_samples=examples()
+        sparse=[all_samples[i].copy() for i in (0,7,9)]
+        for i,row in enumerate(sparse):
+            row["seq"]=str(i)
+        with self.assertRaises(RasterError):
+            verify_pair(numerical,sparse)
+    def test_four_readbacks_without_late_age_rejected(self):
+        numerical,all_samples=examples()
+        sparse=[all_samples[i].copy() for i in (0,1,2,3)]
+        for i,row in enumerate(sparse):
+            row["seq"]=str(i)
+        with self.assertRaises(RasterError):
+            verify_pair(numerical,sparse)
     def reject(self,change):
         rows,frames=examples()
         change(rows,frames)
