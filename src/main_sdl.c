@@ -5507,7 +5507,7 @@ int main(int argc, char **argv) {
                 QsParallax parallax=qs_parallax_offsets(&game);
                 SDL_Rect vp={0,0,0,0},p={0,0,1,1};
                 float sx=0.0f,sy=0.0f;
-                int ow=0,oh=0,success=0,bg_ok=0,restored=0;
+                int ow=0,oh=0,success=0,bg_ok=0,restored=0,in_bounds=0;
                 uint32_t fore=0,bg=0,again=0;
                 SDL_RenderGetViewport(renderer,&vp);
                 SDL_RenderGetScale(renderer,&sx,&sy);
@@ -5517,7 +5517,8 @@ int main(int argc, char **argv) {
                     int screen_y=(int)shot->y;
                     p.x=vp.x+(int)((screen_x+2.5f)*sx);
                     p.y=vp.y+(int)((screen_y+1.5f)*sy);
-                    if(p.x>=0 && p.y>=0 && p.x<ow && p.y<oh &&
+                    in_bounds=p.x>=0 && p.y>=0 && p.x<ow && p.y<oh;
+                    if(in_bounds &&
                        SDL_RenderReadPixels(renderer,&p,SDL_PIXELFORMAT_ARGB8888,
                                             &fore,(int)sizeof(fore))==0) {
                         success=1;
@@ -5534,16 +5535,22 @@ int main(int argc, char **argv) {
                             restored=1;
                     }
                 }
-                if(fprintf(city_horizontal_raster_file,
-                   "%u,%d,%d,%d,%u,%u,%d,%d,%d,live_city_horizontal_sdl_readback\n",
-                   city_horizontal_raster_records,game.frames,
-                   (int)(shot->x*1000.0f),(int)(shot->y*1000.0f),
-                   (unsigned)fore,(unsigned)bg,success,bg_ok,restored)>=0 &&
-                   fflush(city_horizontal_raster_file)==0)
-                    ++city_horizontal_raster_records;
-                else {
-                    fclose(city_horizontal_raster_file);
-                    city_horizontal_raster_file=NULL;
+                /* A projectile that leaves the SDL viewport is no longer
+                 * a pixel sample. Do not poison an otherwise valid flight
+                 * with a synthetic readback failure; an in-bounds readback
+                 * error is still recorded and rejected by the verifier. */
+                if(in_bounds) {
+                    if(fprintf(city_horizontal_raster_file,
+                       "%u,%d,%d,%d,%u,%u,%d,%d,%d,live_city_horizontal_sdl_readback\n",
+                       city_horizontal_raster_records,game.frames,
+                       (int)(shot->x*1000.0f),(int)(shot->y*1000.0f),
+                       (unsigned)fore,(unsigned)bg,success,bg_ok,restored)>=0 &&
+                       fflush(city_horizontal_raster_file)==0)
+                        ++city_horizontal_raster_records;
+                    else {
+                        fclose(city_horizontal_raster_file);
+                        city_horizontal_raster_file=NULL;
+                    }
                 }
             }
             city_horizontal_raster_last_frame=game.frames;

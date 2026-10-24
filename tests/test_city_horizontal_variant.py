@@ -13,6 +13,7 @@ def fixture(variant):
     direction=-1
     fire_i=60
     start_x=170000 if red else 130000
+    shot_y=149000 if red else 197000
     numeric=[]
     for i in range(120):
         active=int(fire_i+1<=i<fire_i+24)
@@ -22,7 +23,7 @@ def fixture(variant):
                  pending=int(i==fire_i),active=active,attached=0,
                  red=red if active else 0,
                  x_milli=start_x+5500*direction*age if active else -1,
-                 y_milli=197000 if active else -1,
+                 y_milli=shot_y if active else -1,
                  vx_milli=5500*direction if active else 0,source=NUMERIC_SOURCE)
         numeric.append({k:str(obj[k]) for k in NUMERIC})
     color=RED_PIXEL if red else GOLD
@@ -68,6 +69,8 @@ class HorizontalVariant(unittest.TestCase):
         self.reject("left-yellow",lambda n,p,r:n[61].update(red="1"))
     def test_red_wrong_color(self):
         self.reject("left-red",lambda n,p,r:n[61].update(red="0"))
+    def test_red_wrong_height(self):
+        self.reject("left-red",lambda n,p,r:n[61].update(y_milli="197000"))
     def test_missing_pickup_transition(self):
         self.reject("left-red",lambda n,p,r:[q.update(red_after="0",weapon="0") for q in r])
     def test_pickup_after_fire(self):

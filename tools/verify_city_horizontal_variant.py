@@ -22,6 +22,9 @@ def variant_spec(variant):
 
 def verify_numeric_rows(rows, variant):
     expected_red, direction = variant_spec(variant)
+    # CITY's red pickup is on the raised platform; a red shot therefore
+    # launches at y=149, while the yellow control fires from the floor y=197.
+    expected_y = 149000 if expected_red else 197000
     if not 90 <= len(rows) <= 320:
         raise HorizontalError("not enough consecutive real guest frames")
     data=[]
@@ -42,7 +45,7 @@ def verify_numeric_rows(rows, variant):
             raise HorizontalError("guest frames are not consecutive")
         if q["active"]:
             if (q["red"]!=expected_red or q["attached"] or
-                q["vx_milli"]!=5500*direction or q["y_milli"]!=197000 or
+                q["vx_milli"]!=5500*direction or q["y_milli"]!=expected_y or
                 not 0<=q["x_milli"]<=1280000):
                 raise HorizontalError("wrong projectile color, direction or height")
         elif (q["x_milli"]!=-1 or q["y_milli"]!=-1 or q["vx_milli"]!=0 or
@@ -66,7 +69,7 @@ def verify_numeric_rows(rows, variant):
         p=data[first+j]
         expected_x=start_x+5500*direction*j
         if (not p["active"] or abs(p["x_milli"]-expected_x)>1 or
-            p["y_milli"]!=197000 or p["vx_milli"]!=5500*direction or
+            p["y_milli"]!=expected_y or p["vx_milli"]!=5500*direction or
             p["red"]!=expected_red):
             raise HorizontalError("leftward world trajectory is not continuous")
     if any(p["fire"] and p["pending"] for p in data[fire+1:]):
@@ -74,7 +77,7 @@ def verify_numeric_rows(rows, variant):
     return {"status":"PASS","variant":variant,"source":NUMERIC_SOURCE,
             "frames":len(data),"fire_frame":data[fire]["frame"],
             "shot_frame":data[first]["frame"],"observed_positions":15,
-            "start_x_milli":start_x,"y_milli":197000,
+            "start_x_milli":start_x,"y_milli":expected_y,
             "velocity_milli_per_tick":5500*direction,
             "red":expected_red,"scope":"original_free_reference_city_NRO_pad_game_core"}
 
