@@ -17,6 +17,7 @@ from genesis_blue_roi_components import blue_roi_components_numeric
 
 MAX_ROM_BYTES = 8 * 1024 * 1024
 MAX_FRAMES = 10000
+MAX_CPU_TRACE_WINDOW = 128
 RETRO_MEMORY_SYSTEM_RAM = 2
 RETRO_DEVICE_JOYPAD = 1
 BUTTONS = {
@@ -170,7 +171,113 @@ def parse_frame_indices(spec, frame_count, limit=128):
     return sorted(frames)
 
 
-def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=()):
+
+def parse_cpu_trace_window(spec, frame_count, limit=MAX_CPU_TRACE_WINDOW):
+    """Parse an inclusive bounded frame window for opt-in C-side CPU tracing."""
+    if type(spec) is not str or type(frame_count) is not int or frame_count < 1:
+        raise ValueError("invalid CPU trace frame window")
+    if spec == "":
+        return None
+    parts = spec.split(":")
+    if (len(parts) != 2 or any(not p.isascii() or not p.isdecimal()
+                               for p in parts)):
+        raise ValueError("CPU trace window must be FIRST:LAST decimal frame indices")
+    first, last = (int(p) for p in parts)
+    if (first < 0 or first > last or last >= frame_count or
+            last - first + 1 > limit):
+        raise ValueError("CPU trace window must be in range and at most 128 frames")
+    return first, last
+
+
+CPU_TRACE_WATCH_RANGES = (
+    (0x8F28, 0x8F32),
+    (0x8F52, 0x8F5A),
+    (0x9025, 0x9029),
+    (0x904E, 0x9052),
+    (0xA2D0, 0xA2E8),
+    (0xEE3F, 0xEE43),
+    (0xEF00, 0xEF04),
+    (0xF374, 0xF378),
+    (0xFEE8, 0xFEF0),
+)
+
+
+def _prepare_cpu_trace_api(core, window):
+    """Bind only the numeric, bounded CPU write-trace exports."""
+    names = (
+        "quackshot_research_cpu_trace_reset",
+        "quackshot_research_cpu_trace_set_frame",
+        "quackshot_research_cpu_trace_stop",
+        "quackshot_research_cpu_trace_count",
+        "quackshot_research_cpu_trace_overflow",
+        "quackshot_research_cpu_trace_read",
+    )
+    try:
+        api = {name: getattr(core, name) for name in names}
+    except AttributeError as error:
+        raise RuntimeError("CPU write trace requested but core lacks Stage219 trace exports") from error
+    api["quackshot_research_cpu_trace_reset"].argtypes = [C.c_uint32, C.c_uint32]
+    api["quackshot_research_cpu_trace_reset"].restype = C.c_int
+    api["quackshot_research_cpu_trace_set_frame"].argtypes = [C.c_uint32]
+    api["quackshot_research_cpu_trace_set_frame"].restype = None
+    api["quackshot_research_cpu_trace_stop"].argtypes = []
+    api["quackshot_research_cpu_trace_stop"].restype = None
+    api["quackshot_research_cpu_trace_count"].argtypes = []
+    api["quackshot_research_cpu_trace_count"].restype = C.c_uint32
+    api["quackshot_research_cpu_trace_overflow"].argtypes = []
+    api["quackshot_research_cpu_trace_overflow"].restype = C.c_uint32
+    api["quackshot_research_cpu_trace_read"].argtypes = (
+        [C.c_uint32] + [C.POINTER(C.c_uint32)] * 5
+    )
+    api["quackshot_research_cpu_trace_read"].restype = C.c_int
+    if not api["quackshot_research_cpu_trace_reset"](*window):
+        raise RuntimeError("CPU trace core rejected the bounded frame window")
+    return api
+
+
+def _collect_cpu_trace(api, window):
+    """Read numeric write events only; no opcode, ROM, RAM or pixel bytes."""
+    api["quackshot_research_cpu_trace_stop"]()
+    count = int(api["quackshot_research_cpu_trace_count"]())
+    overflow = int(api["quackshot_research_cpu_trace_overflow"]())
+    events = []
+    for index in range(count):
+        slots = [C.c_uint32() for _ in range(5)]
+        ok = api["quackshot_research_cpu_trace_read"](
+            index, *(C.byref(slot) for slot in slots)
+        )
+        if not ok:
+            raise RuntimeError("CPU trace event disappeared while reading")
+        frame, pc, address, width, value = (int(slot.value) for slot in slots)
+        events.append({
+            "frame": frame,
+            "instruction_pc": pc,
+            "cpu_address": address,
+            "ram_offset": address & 0xFFFF,
+            "width_bytes": width,
+            "write_value": value,
+        })
+    return {
+        "schema": "quackshot_private_m68k_cpu_write_trace_v1",
+        "status": "COMPLETE" if overflow == 0 else "OVERFLOW",
+        "frame_window_inclusive": list(window),
+        "watch_ranges": [
+            {"start_inclusive": f"0x{start:04X}",
+             "end_exclusive": f"0x{end:04X}"}
+            for start, end in CPU_TRACE_WATCH_RANGES
+        ],
+        "event_count": count,
+        "overflow_count": overflow,
+        "events": events,
+        "raw_rom_exported": False,
+        "raw_ram_exported": False,
+        "instruction_bytes_exported": False,
+        "player_identity_verified": False,
+        "collision_geometry_verified": False,
+        "safe_to_modify_switch_physics": False,
+    }
+
+def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_path=None, video_stride=60, checkpoint_sink=None, ram_window=None, video_roi=None, video_roi_frames=(), video_roi_vdp_hook=None, video_roi_components=False, video_digest_frames=(), cpu_write_trace_window=None):
     if metadata["need_fullpath"] and private_rom_path is None:
         raise ValueError("Core requires a private local ROM path")
     if not 1 <= video_stride <= 600:
@@ -208,6 +315,16 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             len(set(video_digest_frames)) != len(video_digest_frames)):
         raise ValueError("video_digest_frames requires up to 128 unique valid frame indices")
     digest_frame_set = set(video_digest_frames)
+    trace_window = cpu_write_trace_window
+    if trace_window is not None:
+        if (type(trace_window) not in (tuple, list) or len(trace_window) != 2 or
+                any(type(f) is not int for f in trace_window)):
+            raise ValueError("cpu_write_trace_window must be a pair of integer frame indices")
+        trace_window = (trace_window[0], trace_window[1])
+        if (trace_window[0] < 0 or trace_window[0] > trace_window[1] or
+                trace_window[1] >= frames or
+                trace_window[1] - trace_window[0] + 1 > MAX_CPU_TRACE_WINDOW):
+            raise ValueError("cpu_write_trace_window must be in range and at most 128 frames")
     state = {"frame": 0, "video_frames": 0, "pixel_format": 0,
              "frame_checksums": [], "pressed": set(),
              "inside_retro_run": False, "video_callbacks_current_step": 0,
@@ -350,6 +467,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
     core.retro_set_input_poll(input_poll)
     core.retro_set_input_state(input_state)
     initialized, loaded = False, False
+    cpu_trace_api, cpu_trace_active, cpu_trace_result = None, False, None
     ram_change_counts = Counter()
     checkpoints = []
     try:
@@ -358,6 +476,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
         if not core.retro_load_game(C.byref(game)):
             raise RuntimeError("libretro core rejected the private Mega Drive ROM")
         loaded = True
+        if trace_window is not None:
+            cpu_trace_api = _prepare_cpu_trace_api(core, trace_window)
+            cpu_trace_active = True
         core.retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD)
         av = AvInfo()
         core.retro_get_system_av_info(C.byref(av))
@@ -366,6 +487,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             raise RuntimeError("Core reported unexpectedly large system RAM")
         previous_ram = None
         for frame in range(frames):
+            if cpu_trace_active:
+                cpu_trace_api["quackshot_research_cpu_trace_set_frame"](frame)
             state["frame"] = frame
             active = buttons_at(frame, schedule)
             state["pressed"] = {BUTTONS[name] for name in active}
@@ -397,6 +520,9 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                     "ram_changed_address_count": len(changed),
                     # Neither RAM values nor ROM bytes are exported.
                 })
+        if cpu_trace_active:
+            cpu_trace_result = _collect_cpu_trace(cpu_trace_api, trace_window)
+            cpu_trace_active = False
         if digest_frame_set:
             if (state["video_digest_error"] is not None or
                     sorted(row["frame"] for row in state["video_frame_digests"]) !=
@@ -443,6 +569,7 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
             "video_digest_frames_requested": sorted(digest_frame_set),
             "video_frame_digests": (state["video_frame_digests"]
                                     if digest_frame_set else None),
+            "cpu_write_trace": cpu_trace_result,
             "video_roi_blue_numeric": (state["video_roi_samples"]
                                         if video_roi is not None else None),
             "video_roi_vdp_numeric": (state["video_roi_vdp_samples"]
@@ -460,6 +587,8 @@ def run_core(core, metadata, rom_data, rom_hash, frames, schedule, private_rom_p
                             "Unattended emulation may remain in menus or title screen."),
         }
     finally:
+        if cpu_trace_active and cpu_trace_api is not None:
+            cpu_trace_api["quackshot_research_cpu_trace_stop"]()
         if loaded:
             core.retro_unload_game()
         if initialized:
@@ -504,6 +633,8 @@ def main():
                         help="Save frame checksums every N frames; use 1 for precise input-response timing")
     parser.add_argument("--video-digest-frames", default="",
                         help="Comma-separated frames to SHA-256 hash transiently; pixels are not saved")
+    parser.add_argument("--cpu-write-trace-window", default="",
+                        help="Optional inclusive FIRST:LAST frame window for numeric 68000 RAM-write PC tracing (max 128 frames)")
     parser.add_argument("--input", default="120:132:START,450:462:START,900:960:RIGHT,970:1000:B,1040:1060:A")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -520,10 +651,12 @@ def main():
                 raise ValueError(f"--frames must be 1..{MAX_FRAMES}")
             schedule = parse_script(args.input)
             digest_frames = parse_frame_indices(args.video_digest_frames, args.frames)
+            cpu_trace_window = parse_cpu_trace_window(args.cpu_write_trace_window, args.frames)
             data, checksum = safe_rom(args.rom, args.expected_sha256)
             result = run_core(core, metadata, data, checksum, args.frames, schedule,
                               private_rom_path=args.rom, video_stride=args.video_stride,
-                              video_digest_frames=digest_frames)
+                              video_digest_frames=digest_frames,
+                              cpu_write_trace_window=cpu_trace_window)
             if args.compare_to_idle:
                 idle = run_core(core, metadata, data, checksum, args.frames, [],
                                 private_rom_path=args.rom, video_stride=args.video_stride)
