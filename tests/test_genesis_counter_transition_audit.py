@@ -114,7 +114,7 @@ class CounterTransitionTests(unittest.TestCase):
             counter.audit(self.data)
 
     def test_different_trace_windows_rejected(self):
-        self.data["cpu_control_flow_trace"]["frame_window_inclusive"] = [101, 227]
+        self.data["cpu_control_flow_trace"]["frame_window_inclusive"] = [100, 226]
         with self.assertRaisesRegex(counter.AuditError, "windows differ"):
             counter.audit(self.data)
 
