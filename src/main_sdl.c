@@ -5488,9 +5488,9 @@ int main(int argc, char **argv) {
         }
 #endif
 #ifdef __SWITCH__
-        /* Stage275: actual SDL framebuffer positive and same-frame
-         * background-only negative control of the first right-facing
-         * yellow horizontal projectile from the real gamepad. Sampling
+        /* Stage276: actual SDL framebuffer positive and same-frame
+         * background-only negative control of the first horizontal
+         * projectile, including left-facing and red variants. Sampling
          * every other shot frame keeps headless software GPU pressure
          * bounded; all observations retain exact game-frame linkage. */
         if(city_horizontal_raster_file && pad &&
@@ -5503,8 +5503,7 @@ int main(int argc, char **argv) {
            game.frames!=city_horizontal_raster_last_frame &&
            city_horizontal_raster_records<18u) {
             const QsShot *shot=&game.shots[0];
-            if(shot->active && !shot->attached && !shot->red &&
-               shot->vx>0.0f) {
+            if(shot->active && !shot->attached && shot->vx!=0.0f) {
                 QsParallax parallax=qs_parallax_offsets(&game);
                 SDL_Rect vp={0,0,0,0},p={0,0,1,1};
                 float sx=0.0f,sy=0.0f;

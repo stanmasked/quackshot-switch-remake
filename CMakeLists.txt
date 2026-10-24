@@ -355,6 +355,9 @@ if(Python3_EXECUTABLE)
     add_test(NAME city_horizontal_guest_sdl_raster_protocol
              COMMAND ${Python3_EXECUTABLE} -m unittest discover
                      -s ${CMAKE_SOURCE_DIR}/tests -p test_city_horizontal_guest.py)
+    add_test(NAME city_horizontal_variant_guest_protocol
+             COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                     -s ${CMAKE_SOURCE_DIR}/tests -p test_city_horizontal_variant.py)
     add_test(NAME rooftop_touch_guest_trace_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_touch_trace.py)
