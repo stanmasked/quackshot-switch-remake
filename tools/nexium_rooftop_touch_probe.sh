@@ -7,7 +7,8 @@ nro="$(realpath "$1")"; out="$(realpath -m "$2")"; profile="$3"
 case "$profile" in 1|2) ;; *) echo "invalid repeat" >&2; exit 2;; esac
 mkdir -p "$out"
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-expected=c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
+# Pinned to GitHub release asset digest verified on 2026-10-23; keep fail-closed.
+expected=8a6e7a72da657255b0523071fc065ccd560712af0c6b9895aadcb9df65207642
 {
  echo "profile=$profile"
  echo "source=real_virtual_controller_rooftop_touch_guest"
@@ -17,6 +18,7 @@ expected=c933fbbcf8d1b011de8d4a79c9d8eb55c0678a305947af9388ddb40ce5960a66
 curl -fL --retry 3 --connect-timeout 20 --max-time 240 \
  https://github.com/nexium-emu/nexium-nightly/releases/download/nightly/nexium-linux-x86_64.tar.gz \
  -o "$tmp/emulator.tgz" > "$out/download.log" 2>&1
+printf 'emulator_sha256_observed=%s\n' "$(sha256sum "$tmp/emulator.tgz" | cut -d ' ' -f1)" >> "$out/metadata.txt"
 echo "$expected  $tmp/emulator.tgz" | sha256sum -c - > "$out/checksum.txt"
 mkdir -p "$tmp/bin"
 tar -xzf "$tmp/emulator.tgz" -C "$tmp/bin" --no-same-owner
