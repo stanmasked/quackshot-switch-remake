@@ -1,0 +1,113 @@
+name: NeXium CITY Horizontal Variants
+on:
+  pull_request:
+    paths:
+      - "src/main_sdl.c"
+      - "src/qs_game.c"
+      - "include/**"
+      - "Makefile"
+      - "CMakeLists.txt"
+      - "tools/nexium_city_horizontal_variant_probe.sh"
+      - "tools/verify_city_horizontal_variant.py"
+      - "tools/verify_city_horizontal_variant_repeats.py"
+      - "tests/test_city_horizontal_variant.py"
+      - ".github/workflows/nexium-city-horizontal-variants.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: quackshot-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure devkitPro tools
+        run: |
+          echo "$DEVKITPRO/devkitA64/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/portlibs/switch/bin" >> "$GITHUB_PATH"
+      - name: Build verified NRO from this commit
+        run: |
+          make -j2
+          python3 tools/verify_nro.py quackshot-prototype.nro --require-nacp
+          sha256sum quackshot-prototype.nro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-variant-probe-nro
+          path: quackshot-prototype.nro
+          retention-days: 7
+          if-no-files-found: error
+
+  guest:
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [left-yellow, left-red]
+        repeat: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: city-horizontal-probe-nro
+          path: emulator-input
+      - name: Verify syntax and adversarial synthetic tests
+        run: |
+          bash -n tools/nexium_city_horizontal_variant_probe.sh
+          python3 -m py_compile tools/verify_city_horizontal_guest.py tools/verify_city_horizontal_variant.py tools/verify_city_horizontal_variant_repeats.py
+          python3 -m unittest discover -s tests -p test_city_horizontal_variant.py -v
+      - name: Install headless software Vulkan dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool mesa-vulkan-drivers libvulkan1 vulkan-tools \
+            libgtk-3-0 libasound2t64 libudev1 libxkbcommon0 libxkbcommon-x11-0 \
+            libfontconfig1 libx11-xcb1 libegl1 libgles2 libgl1 libpulse0
+      - name: Drive actual controller for selected left-facing yellow/red variant
+        run: bash tools/nexium_city_horizontal_variant_probe.sh emulator-input/quackshot-prototype.nro city-horizontal-variant-evidence/${{ matrix.variant }}-${{ matrix.repeat }} ${{ matrix.variant }} ${{ matrix.repeat }}
+      - name: Save diagnostic files on success or failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-variant-${{ matrix.variant }}-${{ matrix.repeat }}
+          path: city-horizontal-variant-evidence/${{ matrix.variant }}-${{ matrix.repeat }}/
+          retention-days: 7
+          if-no-files-found: warn
+
+  compare:
+    needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: city-horizontal-variant-*
+          path: collected-evidence
+      - name: Independently authenticate two left-yellow guests
+        run: python3 tools/verify_city_horizontal_variant_repeats.py collected-evidence left-yellow left-yellow-two-run-summary.json
+      - name: Independently authenticate two left-red guests
+        run: python3 tools/verify_city_horizontal_variant_repeats.py collected-evidence left-red left-red-two-run-summary.json
+      - name: Save left-yellow comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-variant-left-yellow-summary
+          path: left-yellow-two-run-summary.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Save left-red comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: city-horizontal-variant-left-red-summary
+          path: left-red-two-run-summary.json
+          retention-days: 7
+          if-no-files-found: warn
