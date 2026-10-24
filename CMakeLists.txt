@@ -346,6 +346,9 @@ if(Python3_EXECUTABLE)
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_guest_trace.py)
 endif()
 if(Python3_EXECUTABLE)
+    add_test(NAME city_up_guest_numeric_protocol
+             COMMAND ${Python3_EXECUTABLE} -m unittest discover
+                     -s ${CMAKE_SOURCE_DIR}/tests -p test_city_up_guest.py)
     add_test(NAME rooftop_touch_guest_trace_protocol
         COMMAND ${Python3_EXECUTABLE} -m unittest discover
                 -s ${CMAKE_SOURCE_DIR}/tests -p test_rooftop_touch_trace.py)
